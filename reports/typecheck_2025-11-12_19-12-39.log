@@ -1,0 +1,33 @@
+app/dashboard-responsavel/correspondencias/page.tsx(131,34): error TS2322: Type 'Timestamp | undefined' is not assignable to type 'Timestamp | null'.
+  Type 'undefined' is not assignable to type 'Timestamp | null'.
+app/dashboard-responsavel/correspondencias/page.tsx(132,41): error TS2322: Type 'Timestamp | undefined' is not assignable to type 'Timestamp | null'.
+  Type 'undefined' is not assignable to type 'Timestamp | null'.
+app/dashboard-responsavel/correspondencias/page.tsx(184,9): error TS2322: Type 'string | undefined' is not assignable to type 'string'.
+  Type 'undefined' is not assignable to type 'string'.
+app/dashboard-responsavel/correspondencias/page.tsx(185,9): error TS2322: Type 'string | undefined' is not assignable to type 'string'.
+  Type 'undefined' is not assignable to type 'string'.
+app/dashboard-responsavel/correspondencias/page.tsx(186,9): error TS2322: Type 'string | undefined' is not assignable to type 'string'.
+  Type 'undefined' is not assignable to type 'string'.
+app/dashboard-responsavel/correspondencias/page.tsx(314,35): error TS2339: Property 'condominioNome' does not exist on type 'UserData'.
+app/dashboard-responsavel/correspondencias/page.tsx(315,39): error TS2339: Property 'condominioEndereco' does not exist on type 'UserData'.
+app/dashboard-responsavel/nova-correspondencia/page.tsx(186,7): error TS2322: Type 'string | null' is not assignable to type 'string'.
+  Type 'null' is not assignable to type 'string'.
+app/dashboard-responsavel/nova-correspondencia/page.tsx(213,7): error TS2322: Type 'string | null' is not assignable to type 'string'.
+  Type 'null' is not assignable to type 'string'.
+app/dashboard-responsavel/nova-correspondencia/page.tsx(225,15): error TS2322: Type '{ role: string; }' is not assignable to type 'IntrinsicAttributes'.
+  Property 'role' does not exist on type 'IntrinsicAttributes'.
+components/AssinaturaModal.tsx(223,37): error TS2345: Argument of type 'string | null | undefined' is not assignable to parameter of type 'string | undefined'.
+  Type 'null' is not assignable to type 'string | undefined'.
+components/ModalRetiradaProfissional.tsx(10,38): error TS2305: Module '"@/types/retirada.types"' has no exported member 'DadosRetirada'.
+components/ModalRetiradaProfissional.tsx(30,5): error TS2353: Object literal may only specify known properties, and 'assinaturaObrigatoria' does not exist in type 'ConfiguracoesRetirada | (() => ConfiguracoesRetirada)'.
+components/ModalRetiradaProfissional.tsx(120,16): error TS2551: Property 'assinaturaObrigatoria' does not exist on type 'ConfiguracoesRetirada'. Did you mean 'assinaturaMoradorObrigatoria'?
+components/ModalRetiradaProfissional.tsx(313,21): error TS2551: Property 'assinaturaObrigatoria' does not exist on type 'ConfiguracoesRetirada'. Did you mean 'assinaturaMoradorObrigatoria'?
+components/ModalRetiradaProfissional.tsx(320,19): error TS2322: Type '{ onSave: (dataUrl: string) => void; assinaturaPadrao: string; }' is not assignable to type 'IntrinsicAttributes & AssinaturaDigitalProProps'.
+  Property 'assinaturaPadrao' does not exist on type 'IntrinsicAttributes & AssinaturaDigitalProProps'.
+components/ModalRetiradaProfissional.tsx(332,17): error TS2322: Type '{ onSave: (dataUrl: string) => void; assinaturaPadrao: string; onSavePadrao: (assinaturaDataUrl: string) => Promise<void>; }' is not assignable to type 'IntrinsicAttributes & AssinaturaDigitalProProps'.
+  Property 'assinaturaPadrao' does not exist on type 'IntrinsicAttributes & AssinaturaDigitalProProps'.
+components/withAuth.tsx(8,13): error TS2322: Type 'T' is not assignable to type 'IntrinsicAttributes & T'.
+  Type 'T' is not assignable to type 'IntrinsicAttributes'.
+hooks/useCorrespondencias.ts(552,9): error TS1117: An object literal cannot have multiple properties with the same name.
+utils/gerarReciboPDF.ts(3,15): error TS2305: Module '"@/types/retirada.types"' has no exported member 'DadosRetirada'.
+

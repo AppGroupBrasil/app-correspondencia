@@ -1,0 +1,284 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Tutorial App Correspondência</title>
+
+  <style>
+    :root {
+      --bg-color: #e6f9ef;
+      --primary-green: #007032;
+      --accent-green: #25D366;
+      --white: #ffffff;
+      --hotspot-size: 35px;
+    }
+
+    body {
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+      background-color: var(--bg-color);
+      margin: 0;
+      padding: 10px;
+      height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      overflow: hidden;
+    }
+
+    h1 {
+      color: var(--primary-green);
+      text-align: center;
+      margin: 10px 0 5px 0;
+      font-size: 1.5rem;
+      z-index: 5;
+    }
+
+    p.intro {
+      text-align: center;
+      color: #555;
+      margin-bottom: 15px;
+      font-size: 0.9rem;
+      z-index: 5;
+    }
+
+    .tutorial-container {
+      position: relative;
+      height: 85vh;
+      aspect-ratio: 9/16;
+      border-radius: 20px;
+      box-shadow: 0 10px 40px rgba(0,0,0,0.2);
+      background-color: var(--white);
+      overflow: hidden;
+    }
+
+    /* Imagem do app */
+    .app-screen {
+      width: 100%;
+      height: 100%;
+      object-fit: contain;
+      background-color: #fff;
+      display: block;
+      pointer-events: none; /* não rouba clique */
+    }
+
+    /* Hotspots */
+    .hotspot {
+      position: absolute;
+      transform: translate(-50%, -50%) scale(var(--s, 1));
+      width: var(--hotspot-size);
+      height: var(--hotspot-size);
+      background-color: var(--primary-green);
+      border-radius: 50%;
+      cursor: pointer;
+
+      z-index: 8000;
+      pointer-events: auto;
+
+      display: flex;
+      align-items: center;
+      justify-content: center;
+
+      color: white;
+      font-weight: bold;
+      font-size: 18px;
+      border: 2px solid white;
+
+      animation: pulse-green 2s infinite;
+    }
+
+    @keyframes pulse-green {
+      0%   { --s: 0.95; box-shadow: 0 0 0 0 rgba(0, 112, 50, 0.7); }
+      70%  { --s: 1;    box-shadow: 0 0 0 10px rgba(0, 112, 50, 0); }
+      100% { --s: 0.95; box-shadow: 0 0 0 0 rgba(0, 112, 50, 0); }
+    }
+
+    .hotspot:hover {
+      background-color: var(--accent-green);
+      --s: 1.1;
+    }
+
+    .hotspot i { font-style: normal; }
+
+    /* Cards (SOLUÇÃO DEFINITIVA) */
+    .info-card {
+      position: fixed; /* ✅ essencial */
+      left: 50%;
+      bottom: 90px;
+      transform: translateX(-50%) translateY(40px);
+
+      width: min(520px, calc(100% - 24px));
+      background: white;
+      padding: 20px;
+      border-radius: 12px;
+      box-shadow: 0 5px 25px rgba(0,0,0,0.4);
+      border-left: 6px solid var(--primary-green);
+
+      opacity: 0;
+      visibility: hidden;
+      transition: all 0.3s ease;
+
+      z-index: 10000;
+      pointer-events: none;
+    }
+
+    .info-card.active {
+      opacity: 1;
+      visibility: visible;
+      transform: translateX(-50%) translateY(0);
+      pointer-events: auto;
+    }
+
+    .info-card h3 {
+      margin: 0 0 10px 0;
+      color: var(--primary-green);
+      font-size: 18px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    .info-card p {
+      margin: 0;
+      font-size: 14px;
+      line-height: 1.5;
+      color: #333;
+    }
+
+    .btn-tutorial {
+      display: inline-block;
+      margin-top: 15px;
+      padding: 8px 16px;
+      background-color: var(--primary-green);
+      color: white;
+      text-decoration: none;
+      font-size: 13px;
+      border-radius: 6px;
+      font-weight: bold;
+    }
+
+    .btn-tutorial:hover { background-color: #005a28; }
+
+    .close-btn {
+      background: none;
+      border: none;
+      color: #999;
+      cursor: pointer;
+      font-size: 20px;
+    }
+
+    /* Overlay (não rouba clique quando está escondido) */
+    .overlay {
+      position: fixed;
+      inset: 0;
+      background: rgba(0,0,0,0.5);
+      opacity: 0;
+      visibility: hidden;
+      transition: 0.3s;
+      z-index: 9000;
+      backdrop-filter: blur(2px);
+      pointer-events: none;
+    }
+    .overlay.active {
+      opacity: 1;
+      visibility: visible;
+      pointer-events: auto;
+    }
+
+    @media (max-width: 768px) {
+      body { padding: 0; }
+      h1, .intro { display: none; }
+
+      .tutorial-container {
+        height: 100vh;
+        width: 100vw;
+        aspect-ratio: auto;
+        border-radius: 0;
+      }
+
+      .info-card {
+        bottom: 90px;
+        padding: 16px;
+      }
+    }
+  </style>
+</head>
+
+<body>
+  <h1>Tutorial App Correspondência</h1>
+  <p class="intro">Clique nos ícones <strong>(?)</strong> para ver os detalhes.</p>
+
+  <div class="tutorial-container">
+    <img src="tela-login.png" alt="Tela de Login" class="app-screen" id="mainImage">
+
+    <div class="overlay" id="overlay" onclick="closeAll()"></div>
+
+    <!-- HOTSPOTS -->
+    <div class="hotspot" style="top: 44%; left: 15%;" onclick="showInfo('info-login')"><i>?</i></div>
+    <div class="hotspot" style="top: 54%; left: 15%;" onclick="showInfo('info-senha2')"><i>?</i></div>
+    <div class="hotspot" style="top: 50%; left: 86%;" onclick="showInfo('info-senha')"><i>?</i></div>
+    <div class="hotspot" style="top: 57%; left: 50%;" onclick="showInfo('info-entrar')"><i>?</i></div>
+    <div class="hotspot" style="top: 75%; left: 15%;" onclick="showInfo('info-condo')"><i>?</i></div>
+    <div class="hotspot" style="top: 82%; left: 15%;" onclick="showInfo('info-morador')"><i>?</i></div>
+    <div class="hotspot" style="top: 89%; left: 15%;" onclick="showInfo('info-suporte')"><i>?</i></div>
+  </div>
+
+  <!-- CARDS (fora do container, pode ficar aqui) -->
+  <div class="info-card" id="info-login">
+    <h3>Login <button class="close-btn" onclick="closeAll()">&times;</button></h3>
+    <p>O acesso é feito sempre por e-mail, para todos os perfis síndico(responsável), portaria e morador.</p>
+  </div>
+
+  <div class="info-card" id="info-senha2">
+    <h3>Senha <button class="close-btn" onclick="closeAll()">&times;</button></h3>
+    <p>Digite sua senha ela sempre será de 6 dígitos. Se não lembrar, use "Esqueci a Senha".</p>
+  </div>
+
+  <div class="info-card" id="info-senha">
+    <h3>Esqueci a Senha <button class="close-btn" onclick="closeAll()">&times;</button></h3>
+    <p>Clique aqui para receber um link de redefinição de senha no seu e-mail. Se não lembrar o seu e-mail ou não tiver mais acesso a ele, entre em contato com a sua administração.</p>
+  </div>
+
+  <div class="info-card" id="info-entrar">
+    <h3>Acessar <button class="close-btn" onclick="closeAll()">&times;</button></h3>
+    <p>Botão para entrar no sistema após preencher seu e-mail e senha.</p>
+  </div>
+
+  <div class="info-card" id="info-condo">
+    <h3>Cadastro do Condomínio <button class="close-btn" onclick="closeAll()">&times;</button></h3>
+    <p>Área exclusiva para o responsável criar o condomínio.</p>
+    <a href="https://www.youtube.com/watch?v=SEU_VIDEO_ID" class="btn-tutorial" target="_blank" rel="noopener">Ver Vídeo</a>
+  </div>
+
+  <div class="info-card" id="info-morador">
+    <h3>Cadastro do Morador <button class="close-btn" onclick="closeAll()">&times;</button></h3>
+    <p>Informe o CNPJ do condomínio e preencha seus dados pessoais.</p>
+    <a href="https://www.youtube.com/watch?v=SEU_VIDEO_ID_MORADOR" class="btn-tutorial" target="_blank" rel="noopener">Ver Vídeo</a>
+  </div>
+
+  <div class="info-card" id="info-suporte">
+    <h3>Suporte <button class="close-btn" onclick="closeAll()">&times;</button></h3>
+    <p>Fale com um atendente humano agora mesmo.</p>
+  </div>
+
+  <script>
+    function showInfo(id) {
+      closeAll();
+
+      const card = document.getElementById(id);
+      if (!card) {
+        alert("Não encontrei o card com id: " + id);
+        return;
+      }
+
+      card.classList.add('active');
+      document.getElementById('overlay').classList.add('active');
+    }
+
+    function closeAll() {
+      document.querySelectorAll('.info-card').forEach(c => c.classList.remove('active'));
+      document.getElementById('overlay').classList.remove('active');
+    }
+  </script>
+</body>
+</html>

@@ -1,0 +1,605 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Tutorial App Correspondência - Completo</title>
+
+  <style>
+    :root{
+      --bg-color:#e6f9ef;
+      --primary-green:#007032;
+      --accent-green:#25D366;
+      --white:#ffffff;
+      --hotspot-size:35px;
+    }
+
+    body{
+      font-family:'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+      background-color:var(--bg-color);
+      margin:0;
+      padding:16px 10px 60px;
+      min-height:100vh;
+      overflow-y:auto;    /* ✅ scroll tipo PDF */
+      overflow-x:hidden;
+      display:flex;
+      flex-direction:column;
+      align-items:center;
+      gap:18px;
+    }
+
+    .page-title{
+      margin:6px 0 0 0;
+      color:var(--primary-green);
+      font-size:1.4rem;
+      text-align:center;
+    }
+
+    .page-subtitle{
+      margin:0 0 10px 0;
+      color:#555;
+      text-align:center;
+      font-size:0.95rem;
+    }
+
+    .tutorial-page{
+      width:100%;
+      display:flex;
+      flex-direction:column;
+      align-items:center;
+      gap:42px;
+    }
+
+    .screen-section{
+      width:100%;
+      display:flex;
+      flex-direction:column;
+      align-items:center;
+      gap:10px;
+    }
+
+    .screen-title{
+      width:min(520px, calc(100% - 24px));
+      margin:0;
+      color:var(--primary-green);
+      font-size:1.05rem;
+      font-weight:700;
+    }
+
+    .tutorial-container{
+      position:relative;
+      width:min(520px, calc(100% - 24px));
+      aspect-ratio:9/16;
+      border-radius:20px;
+      box-shadow:0 10px 40px rgba(0,0,0,0.2);
+      background:var(--white);
+      overflow:hidden;
+    }
+
+    .app-screen{
+      width:100%;
+      height:100%;
+      object-fit:contain;
+      background:#fff;
+      display:block;
+      pointer-events:none; /* ✅ imagem não rouba clique */
+    }
+
+    .hotspot{
+      position:absolute;
+      transform:translate(-50%, -50%) scale(var(--s, 1));
+      width:var(--hotspot-size);
+      height:var(--hotspot-size);
+      border-radius:50%;
+      background:var(--primary-green);
+      border:2px solid #fff;
+      cursor:pointer;
+      z-index:8000;
+      display:flex;
+      align-items:center;
+      justify-content:center;
+      color:#fff;
+      font-weight:700;
+      font-size:18px;
+      animation:pulse-green 2s infinite;
+      pointer-events:auto;
+    }
+
+    @keyframes pulse-green{
+      0%   { --s:0.95; box-shadow:0 0 0 0 rgba(0,112,50,0.7); }
+      70%  { --s:1;    box-shadow:0 0 0 10px rgba(0,112,50,0); }
+      100% { --s:0.95; box-shadow:0 0 0 0 rgba(0,112,50,0); }
+    }
+
+    .hotspot:hover{
+      background:var(--accent-green);
+      --s:1.1;
+    }
+
+    .overlay{
+      position:absolute;
+      inset:0;
+      background:rgba(0,0,0,0.5);
+      opacity:0;
+      visibility:hidden;
+      transition:.25s;
+      z-index:9000;
+      backdrop-filter:blur(2px);
+      pointer-events:none;
+    }
+
+    .overlay.active{
+      opacity:1;
+      visibility:visible;
+      pointer-events:auto;
+    }
+
+    /* Cards fixos (sempre aparecem) */
+    .info-card{
+      position:fixed;
+      left:50%;
+      bottom:90px;
+      transform:translateX(-50%) translateY(40px);
+      width:min(520px, calc(100% - 24px));
+      background:#fff;
+      padding:18px;
+      border-radius:12px;
+      box-shadow:0 5px 25px rgba(0,0,0,0.4);
+      border-left:6px solid var(--primary-green);
+      opacity:0;
+      visibility:hidden;
+      transition:all .25s ease;
+      z-index:10000;
+      pointer-events:none;
+    }
+
+    .info-card.active{
+      opacity:1;
+      visibility:visible;
+      transform:translateX(-50%) translateY(0);
+      pointer-events:auto;
+    }
+
+    .info-card h3{
+      margin:0 0 10px 0;
+      color:var(--primary-green);
+      font-size:18px;
+      display:flex;
+      justify-content:space-between;
+      align-items:center;
+      gap:10px;
+    }
+
+    .info-card p{
+      margin:0;
+      font-size:14px;
+      line-height:1.5;
+      color:#333;
+    }
+
+    .btn-tutorial{
+      display:inline-block;
+      margin-top:14px;
+      padding:8px 14px;
+      background:var(--primary-green);
+      color:#fff;
+      text-decoration:none;
+      font-size:13px;
+      border-radius:6px;
+      font-weight:700;
+    }
+
+    .btn-tutorial:hover{ background:#005a28; }
+
+    .close-btn{
+      background:none;
+      border:none;
+      color:#999;
+      cursor:pointer;
+      font-size:20px;
+      line-height:1;
+    }
+
+    @media (max-width:768px){
+      body{ padding:10px 0 60px; }
+      .tutorial-container{
+        width:100vw;
+        border-radius:0;
+        aspect-ratio:auto;
+        height:100vh;
+      }
+      .screen-title{
+        width:calc(100% - 24px);
+      }
+      .info-card{
+        bottom:90px;
+        padding:16px;
+      }
+    }
+  </style>
+</head>
+
+<body>
+  <h1 class="page-title">Tutorial App Correspondência</h1>
+  <p class="page-subtitle">Role a página e clique nos ícones (?) para ver as explicações.</p>
+
+  <div class="tutorial-page">
+
+    <!-- =======================
+      1) TELA LOGIN
+    ======================= -->
+    <section class="screen-section" id="tela-login">
+      <h2 class="screen-title">Tela: Login</h2>
+
+      <div class="tutorial-container">
+        <img src="tela-login.png" class="app-screen" alt="Tela Login">
+        <div class="overlay" onclick="closeAll()"></div>
+
+        <div class="hotspot" style="top: 44%; left: 15%;" onclick="showInfo('login-info-1', this)"><i>?</i></div>
+        <div class="hotspot" style="top: 54%; left: 15%;" onclick="showInfo('login-info-2', this)"><i>?</i></div>
+        <div class="hotspot" style="top: 50%; left: 86%;" onclick="showInfo('login-info-3', this)"><i>?</i></div>
+        <div class="hotspot" style="top: 57%; left: 50%;" onclick="showInfo('login-info-4', this)"><i>?</i></div>
+        <div class="hotspot" style="top: 75%; left: 15%;" onclick="showInfo('login-info-5', this)"><i>?</i></div>
+        <div class="hotspot" style="top: 82%; left: 15%;" onclick="showInfo('login-info-6', this)"><i>?</i></div>
+        <div class="hotspot" style="top: 89%; left: 15%;" onclick="showInfo('login-info-7', this)"><i>?</i></div>
+      </div>
+
+      <div class="info-card" id="login-info-1">
+        <h3>Login <button class="close-btn" onclick="closeAll()">&times;</button></h3>
+        <p>Texto genérico: informe seu e-mail para acessar o sistema.</p>
+      </div>
+
+      <div class="info-card" id="login-info-2">
+        <h3>Senha <button class="close-btn" onclick="closeAll()">&times;</button></h3>
+        <p>Texto genérico: digite sua senha (ex.: 6 dígitos). Se não lembrar, use “Esqueci a senha”.</p>
+      </div>
+
+      <div class="info-card" id="login-info-3">
+        <h3>Esqueci a Senha <button class="close-btn" onclick="closeAll()">&times;</button></h3>
+        <p>Texto genérico: receba um link para redefinir sua senha no e-mail cadastrado.</p>
+      </div>
+
+      <div class="info-card" id="login-info-4">
+        <h3>Entrar <button class="close-btn" onclick="closeAll()">&times;</button></h3>
+        <p>Texto genérico: toque para acessar após preencher e-mail e senha.</p>
+      </div>
+
+      <div class="info-card" id="login-info-5">
+        <h3>Cadastrar Condomínio <button class="close-btn" onclick="closeAll()">&times;</button></h3>
+        <p>Texto genérico: área exclusiva para cadastro inicial do condomínio.</p>
+        <a href="https://www.youtube.com/watch?v=SEU_VIDEO_ID_CONDOMINIO" class="btn-tutorial" target="_blank" rel="noopener">Ver Vídeo</a>
+      </div>
+
+      <div class="info-card" id="login-info-6">
+        <h3>Cadastrar Morador <button class="close-btn" onclick="closeAll()">&times;</button></h3>
+        <p>Texto genérico: informe o CNPJ do condomínio e preencha seus dados para cadastro.</p>
+        <a href="https://www.youtube.com/watch?v=SEU_VIDEO_ID_MORADOR" class="btn-tutorial" target="_blank" rel="noopener">Ver Vídeo</a>
+      </div>
+
+      <div class="info-card" id="login-info-7">
+        <h3>Suporte <button class="close-btn" onclick="closeAll()">&times;</button></h3>
+        <p>Texto genérico: canal para falar com atendimento/suporte.</p>
+        <a href="https://www.youtube.com/watch?v=SEU_VIDEO_ID_SUPORTE" class="btn-tutorial" target="_blank" rel="noopener">Ver Vídeo</a>
+      </div>
+    </section>
+
+<!-- =======================
+  2) GESTÃO DE CADASTROS E CONFIGURAÇÕES (RESPONSÁVEL)
+  11 interrogações (texto + vídeo)
+======================= -->
+
+<section class="screen-section" id="tela-gestao-config">
+  <h2 class="screen-title">Tela: Gestão de Cadastros e Configurações</h2>
+
+  <div class="tutorial-container">
+    <!-- ✅ caminho ABSOLUTO (resolve a imagem não aparecer) -->
+    <img src="/tutorial/gestao-config.jpg" class="app-screen" alt="Gestão de Cadastros e Configurações">
+    <div class="overlay" onclick="closeAll()"></div>
+
+    <!-- 11 HOTSPOTS -->
+    <div class="hotspot" style="top: 15%; left: 10%;" onclick="showInfo('blocos1', this)"><i>?</i></div>
+    <div class="hotspot" style="top: 15%; left: 90%;" onclick="showInfo('moradores1', this)"><i>?</i></div>
+    <div class="hotspot" style="top: 25%; left: 10%;" onclick="showInfo('porteiros1', this)"><i>?</i></div>
+    <div class="hotspot" style="top: 25%; left: 90%;" onclick="showInfo('aprovar1', this)"><i>?</i></div>
+    <div class="hotspot" style="top: 35%; left: 10%;" onclick="showInfo('mensagens1', this)"><i>?</i></div>
+    <div class="hotspot" style="top: 35%; left: 90%;" onclick="showInfo('link1', this)"><i>?</i></div>
+    <div class="hotspot" style="top: 45%; left: 10%;" onclick="showInfo('impressao1', this)"><i>?</i></div>
+
+    <div class="hotspot" style="top: 60%; left: 8%;" onclick="showInfo('novo-aviso1', this)"><i>?</i></div>
+    <div class="hotspot" style="top: 60%; left: 92%;" onclick="showInfo('avisos-rapidos1', this)"><i>?</i></div>
+    <div class="hotspot" style="top: 80%; left: 8%;" onclick="showInfo('registrar-retirada1', this)"><i>?</i></div>
+    <div class="hotspot" style="top: 80%; left: 92%;" onclick="showInfo('avisos-enviados1', this)"><i>?</i></div>
+  </div>
+
+  <!-- 11 CARDS -->
+  <div class="info-card" id="blocos1">
+    <h3>Blocos <button class="close-btn" onclick="closeAll()">&times;</button></h3>
+    <p>Texto genérico: cadastre/gerencie os blocos do condomínio.</p>
+    <a href="https://www.youtube.com/watch?v=SEU_VIDEO_ID_GC_1" class="btn-tutorial" target="_blank" rel="noopener">Ver Vídeo</a>
+  </div>
+
+  <div class="info-card" id="moradores1">
+    <h3>Moradores <button class="close-btn" onclick="closeAll()">&times;</button></h3>
+    <p>Texto genérico: gerencie moradores cadastrados, unidades e dados.</p>
+    <a href="https://www.youtube.com/watch?v=SEU_VIDEO_ID_GC_2" class="btn-tutorial" target="_blank" rel="noopener">Ver Vídeo</a>
+  </div>
+
+  <div class="info-card" id="porteiros1">
+    <h3>Porteiros <button class="close-btn" onclick="closeAll()">&times;</button></h3>
+    <p>Texto genérico: cadastre/gerencie usuários do perfil porteiro.</p>
+    <a href="https://www.youtube.com/watch?v=SEU_VIDEO_ID_GC_3" class="btn-tutorial" target="_blank" rel="noopener">Ver Vídeo</a>
+  </div>
+
+  <div class="info-card" id="aprovar1">
+    <h3>Aprovar <button class="close-btn" onclick="closeAll()">&times;</button></h3>
+    <p>Texto genérico: aprove cadastros/solicitações pendentes no sistema.</p>
+    <a href="https://www.youtube.com/watch?v=SEU_VIDEO_ID_GC_4" class="btn-tutorial" target="_blank" rel="noopener">Ver Vídeo</a>
+  </div>
+
+  <div class="info-card" id="mensagens1">
+    <h3>Mensagens <button class="close-btn" onclick="closeAll()">&times;</button></h3>
+    <p>Texto genérico: gerencie mensagens e comunicações internas.</p>
+    <a href="https://www.youtube.com/watch?v=SEU_VIDEO_ID_GC_5" class="btn-tutorial" target="_blank" rel="noopener">Ver Vídeo</a>
+  </div>
+
+  <div class="info-card" id="link1">
+    <h3>Link Cadastro <button class="close-btn" onclick="closeAll()">&times;</button></h3>
+    <p>Texto genérico: gere e compartilhe o link para cadastro de moradores.</p>
+    <a href="https://www.youtube.com/watch?v=SEU_VIDEO_ID_GC_6" class="btn-tutorial" target="_blank" rel="noopener">Ver Vídeo</a>
+  </div>
+
+  <div class="info-card" id="impressao1">
+    <h3>Impressão <button class="close-btn" onclick="closeAll()">&times;</button></h3>
+    <p>Texto genérico: imprima relatórios, etiquetas ou documentos do sistema.</p>
+    <a href="https://www.youtube.com/watch?v=SEU_VIDEO_ID_GC_7" class="btn-tutorial" target="_blank" rel="noopener">Ver Vídeo</a>
+  </div>
+
+  <div class="info-card" id="novo-aviso1">
+    <h3>Novo Aviso <button class="close-btn" onclick="closeAll()">&times;</button></h3>
+    <p>Texto genérico: crie um aviso e envie para moradores.</p>
+    <a href="https://www.youtube.com/watch?v=SEU_VIDEO_ID_GC_8" class="btn-tutorial" target="_blank" rel="noopener">Ver Vídeo</a>
+  </div>
+
+  <div class="info-card" id="avisos-rapidos1">
+    <h3>Avisos Rápidos <button class="close-btn" onclick="closeAll()">&times;</button></h3>
+    <p>Texto genérico: use modelos prontos para enviar avisos rapidamente.</p>
+    <a href="https://www.youtube.com/watch?v=SEU_VIDEO_ID_GC_9" class="btn-tutorial" target="_blank" rel="noopener">Ver Vídeo</a>
+  </div>
+
+  <div class="info-card" id="registrar-retirada1">
+    <h3>Registrar Retirada <button class="close-btn" onclick="closeAll()">&times;</button></h3>
+    <p>Texto genérico: registre retirada por nome, apartamento ou QR Code.</p>
+    <a href="https://www.youtube.com/watch?v=SEU_VIDEO_ID_GC_10" class="btn-tutorial" target="_blank" rel="noopener">Ver Vídeo</a>
+  </div>
+
+  <div class="info-card" id="avisos-enviados1">
+    <h3>Avisos Enviados <button class="close-btn" onclick="closeAll()">&times;</button></h3>
+    <p>Texto genérico: consulte o histórico de avisos já enviados.</p>
+    <a href="https://www.youtube.com/watch?v=SEU_VIDEO_ID_GC_11" class="btn-tutorial" target="_blank" rel="noopener">Ver Vídeo</a>
+  </div>
+</section>
+
+
+    <!-- =======================
+      2) DASHBOARD RESPONSÁVEL (12: 5 texto + 7 vídeo)
+    ======================= -->
+    <section class="screen-section" id="tela-responsavel">
+      <h2 class="screen-title">Tela: Dashboard do Responsável (Síndico)</h2>
+
+      <div class="tutorial-container">
+        <img src="dashboard-responsavel.jpg" class="app-screen" alt="Dashboard Responsável">
+        <div class="overlay" onclick="closeAll()"></div>
+
+        <!-- 1 a 5 – TEXTO -->
+        <div class="hotspot" style="top: 12%; left: 12%;" onclick="showInfo('blocos2', this)"><i>?</i></div>
+        <div class="hotspot" style="top: 22%; left: 12%;" onclick="showInfo('web', this)"><i>?</i></div>
+        <div class="hotspot" style="top: 8%; left: 50%;" onclick="showInfo('moradores', this)"><i>?</i></div>
+        <div class="hotspot" style="top: 33%; left: 8%;" onclick="showInfo('envio-inteligente', this)"><i>?</i></div>
+        <div class="hotspot" style="top: 45%; left: 8%;" onclick="showInfo('gestao-configuracao', this)"><i>?</i></div>
+
+        <!-- 6 a 12 – TEXTO + VÍDEO -->
+        <div class="hotspot" style="top: 60%; left: 8%;" onclick="showInfo('novo-aviso', this)"><i>?</i></div>
+        <div class="hotspot" style="top: 60%; left: 92%;" onclick="showInfo('avisos-rapidos', this)"><i>?</i></div>
+        <div class="hotspot" style="top: 80%; left: 8%;" onclick="showInfo('registrar-retirada', this)"><i>?</i></div>
+        <div class="hotspot" style="top: 80%; left: 92%;" onclick="showInfo('avisos-enviados', this)"><i>?</i></div>
+        <div class="hotspot" style="top: 12%; left: 88%;" onclick="showInfo('pendente', this)"><i>?</i></div>
+        <div class="hotspot" style="top: 25%; left: 50%;" onclick="showInfo('coluna', this)"><i>?</i></div>
+        <div class="hotspot" style="top: 22%; left: 88%;" onclick="showInfo('celular', this)"><i>?</i></div>
+      </div>
+
+      <div class="info-card" id="blocos2">
+        <h3>Blocos <button class="close-btn" onclick="closeAll()">&times;</button></h3>
+        <p>Texto genérico: resumo com números principais (blocos, moradores, pendentes etc.).</p>
+      </div>
+      <div class="info-card" id="web">
+        <h3>Web<button class="close-btn" onclick="closeAll()">&times;</button></h3>
+        <p>Texto genérico: total de blocos cadastrados no condomínio.</p>
+      </div>
+      <div class="info-card" id="moradores">
+        <h3>Moradores<button class="close-btn" onclick="closeAll()">&times;</button></h3>
+        <p>Texto genérico: itens pendentes aguardando ação.</p>
+      </div>
+      <div class="info-card" id="envio-inteligente">
+        <h3>Envio Inteligente <button class="close-btn" onclick="closeAll()">&times;</button></h3>
+        <p>Texto genérico: automatiza envio de avisos/documentos (WhatsApp/E-mail/QR).</p>
+      </div>
+      <div class="info-card" id="gestao-configuracao">
+        <h3>Gestão e Configurações <button class="close-btn" onclick="closeAll()">&times;</button></h3>
+        <p>Texto genérico: área para cadastros e configurações administrativas.</p>
+      </div>
+
+      <div class="info-card" id="novo-aviso">
+        <h3>Novo Aviso <button class="close-btn" onclick="closeAll()">&times;</button></h3>
+        <p>Texto genérico: criar e enviar um aviso para moradores.</p>
+        <a href="https://www.youtube.com/watch?v=SEU_VIDEO_ID" class="btn-tutorial" target="_blank" rel="noopener">Ver Vídeo</a>
+      </div>
+      <div class="info-card" id="avisos-rapidos">
+        <h3>Avisos Rápidos <button class="close-btn" onclick="closeAll()">&times;</button></h3>
+        <p>Texto genérico: atalhos de avisos pré-configurados.</p>
+        <a href="https://www.youtube.com/watch?v=SEU_VIDEO_ID" class="btn-tutorial" target="_blank" rel="noopener">Ver Vídeo</a>
+      </div>
+      <div class="info-card" id="registrar-retirada">
+        <h3>Registrar Retirada <button class="close-btn" onclick="closeAll()">&times;</button></h3>
+        <p>Texto genérico: registrar retirada de correspondências/encomendas.</p>
+        <a href="https://www.youtube.com/watch?v=SEU_VIDEO_ID" class="btn-tutorial" target="_blank" rel="noopener">Ver Vídeo</a>
+      </div>
+      <div class="info-card" id="avisos-enviados">
+        <h3>Avisos Enviados <button class="close-btn" onclick="closeAll()">&times;</button></h3>
+        <p>Texto genérico: histórico de avisos enviados.</p>
+        <a href="https://www.youtube.com/watch?v=SEU_VIDEO_ID" class="btn-tutorial" target="_blank" rel="noopener">Ver Vídeo</a>
+      </div>
+      <div class="info-card" id="pendente">
+        <h3>Pendentes<button class="close-btn" onclick="closeAll()">&times;</button></h3>
+        <p>Texto genérico: ajustes e preferências do condomínio.</p>
+        <a href="https://www.youtube.com/watch?v=SEU_VIDEO_ID" class="btn-tutorial" target="_blank" rel="noopener">Ver Vídeo</a>
+      </div>
+      <div class="info-card" id="coluna">
+        <h3>Coluna<button class="close-btn" onclick="closeAll()">&times;</button></h3>
+        <p>Texto genérico: visualizar relatórios e indicadores.</p>
+        <a href="https://www.youtube.com/watch?v=SEU_VIDEO_ID" class="btn-tutorial" target="_blank" rel="noopener">Ver Vídeo</a>
+      </div>
+      <div class="info-card" id="celular">
+        <h3>Celular<button class="close-btn" onclick="closeAll()">&times;</button></h3>
+        <p>Texto genérico: acesso rápido ao tutorial/ajuda.</p>
+        <a href="https://www.youtube.com/watch?v=SEU_VIDEO_ID" class="btn-tutorial" target="_blank" rel="noopener">Ver Vídeo</a>
+      </div>
+    </section>
+
+
+    <!-- =======================
+      3) PORTEIRO (2 partes) – 6 com vídeo (3 em cada parte)
+    ======================= -->
+    <section class="screen-section" id="tela-porteiro-1">
+      <h2 class="screen-title">Tela: Dashboard do Porteiro (1/2)</h2>
+
+      <div class="tutorial-container">
+        <img src="porteiro-01.jpg" class="app-screen" alt="Dashboard Porteiro 1">
+        <div class="overlay" onclick="closeAll()"></div>
+
+        <div class="hotspot" style="top: 23%; left: 8%;" onclick="showInfo('nova', this)"><i>?</i></div>
+        <div class="hotspot" style="top: 50%; left: 8%;" onclick="showInfo('avisos-rapidos', this)"><i>?</i></div>
+        <div class="hotspot" style="top: 78%; left: 8%;" onclick="showInfo('avisos-enviados', this)"><i>?</i></div>
+      </div>
+
+      <div class="info-card" id="nova">
+        <h3>Nova Correspondência <button class="close-btn" onclick="closeAll()">&times;</button></h3>
+        <p>Texto genérico: registrar chegada de correspondência/encomenda.</p>
+        <a href="https://www.youtube.com/watch?v=SEU_VIDEO_ID_PORTEIRO_1" class="btn-tutorial" target="_blank" rel="noopener">Ver Vídeo</a>
+      </div>
+
+      <div class="info-card" id="avisos-rapidos">
+        <h3>Avisos Rápidos <button class="close-btn" onclick="closeAll()">&times;</button></h3>
+        <p>Texto genérico: enviar avisos via WhatsApp e consultar histórico.</p>
+        <a href="https://www.youtube.com/watch?v=SEU_VIDEO_ID_PORTEIRO_2" class="btn-tutorial" target="_blank" rel="noopener">Ver Vídeo</a>
+      </div>
+
+      <div class="info-card" id="aviso-enviados">
+        <h3>aviso-enviados<button class="close-btn" onclick="closeAll()">&times;</button></h3>
+        <p>Texto genérico: abrir ajuda/tutoriais do porteiro.</p>
+        <a href="https://www.youtube.com/watch?v=SEU_VIDEO_ID_PORTEIRO_3" class="btn-tutorial" target="_blank" rel="noopener">Ver Vídeo</a>
+      </div>
+    </section>
+
+    <section class="screen-section" id="tela-porteiro-2">
+      <h2 class="screen-title">Tela: Dashboard do Porteiro (2/2)</h2>
+
+      <div class="tutorial-container">
+        <img src="porteiro-02.jpg" class="app-screen" alt="Dashboard Porteiro 2">
+        <div class="overlay" onclick="closeAll()"></div>
+
+        <div class="hotspot" style="top: 20%; left: 8%;" onclick="showInfo('avisos-rapidos2', this)"><i>?</i></div>
+        <div class="hotspot" style="top: 47%; left: 8%;" onclick="showInfo('avisos-enviados2', this)"><i>?</i></div>
+        <div class="hotspot" style="top: 74%; left: 8%;" onclick="showInfo('registrar-retiradas', this)"><i>?</i></div>
+      </div>
+
+      <div class="info-card" id="avisos-rapidos2">
+        <h3>Avisos Rápidos<button class="close-btn" onclick="closeAll()">&times;</button></h3>
+        <p>Texto genérico: visualizar avisos/correspondências já enviados.</p>
+        <a href="https://www.youtube.com/watch?v=SEU_VIDEO_ID_PORTEIRO_4" class="btn-tutorial" target="_blank" rel="noopener">Ver Vídeo</a>
+      </div>
+
+      <div class="info-card" id="avisos-enviados2">
+        <h3>Avisos Enviados<button class="close-btn" onclick="closeAll()">&times;</button></h3>
+        <p>Texto genérico: registrar retirada por nome/apto/QR Code.</p>
+        <a href="https://www.youtube.com/watch?v=SEU_VIDEO_ID_PORTEIRO_5" class="btn-tutorial" target="_blank" rel="noopener">Ver Vídeo</a>
+      </div>
+
+      <div class="info-card" id="registrar-retiradas">
+        <h3>Registrar Retiradas<button class="close-btn" onclick="closeAll()">&times;</button></h3>
+        <p>Texto genérico: acesso rápido a suporte e tutoriais.</p>
+        <a href="https://www.youtube.com/watch?v=SEU_VIDEO_ID_PORTEIRO_6" class="btn-tutorial" target="_blank" rel="noopener">Ver Vídeo</a>
+      </div>
+    </section>
+
+
+    <!-- =======================
+      4) MORADOR – 5 com vídeo
+    ======================= -->
+    <section class="screen-section" id="tela-morador">
+      <h2 class="screen-title">Tela: Dashboard do Morador</h2>
+
+      <div class="tutorial-container">
+        <img src="morador-01.jpg" class="app-screen" alt="Dashboard do Morador">
+        <div class="overlay" onclick="closeAll()"></div>
+
+        <div class="hotspot" style="top: 36%; left: 12%;" onclick="showInfo('pendentes', this)"><i>?</i></div>
+        <div class="hotspot" style="top: 52%; left: 12%;" onclick="showInfo('historico', this)"><i>?</i></div>
+        <div class="hotspot" style="top: 70%; left: 12%;" onclick="showInfo('compartilhar', this)"><i>?</i></div>
+        <div class="hotspot" style="top: 86%; left: 12%;" onclick="showInfo('minhas-encomendas', this)"><i>?</i></div>
+        <div class="hotspot" style="top: 5%; left: 90%;" onclick="showInfo('minha-conta', this)"><i>?</i></div>
+      </div>
+
+      <div class="info-card" id="pendentes"> 
+        <h3>Pendentes<button class="close-btn" onclick="closeAll()">&times;</button></h3>
+        <p>Texto genérico: ver itens pendentes aguardando retirada.</p>
+        <a href="https://www.youtube.com/watch?v=SEU_VIDEO_ID_MRD_1" class="btn-tutorial" target="_blank" rel="noopener">Ver Vídeo</a>
+      </div>
+
+      <div class="info-card" id="historico">
+        <h3>Histórico Completo de correspondências<button class="close-btn" onclick="closeAll()">&times;</button></h3>
+        <p>Texto genérico: acessar histórico de correspondências recebidas.</p>
+        <a href="https://www.youtube.com/watch?v=SEU_VIDEO_ID_MRD_2" class="btn-tutorial" target="_blank" rel="noopener">Ver Vídeo</a>
+      </div>
+
+      <div class="info-card" id="compartilhar">
+        <h3>Compartilhar link de cadastro<button class="close-btn" onclick="closeAll()">&times;</button></h3>
+        <p>Texto genérico: enviar link de cadastro e gerenciar acessos/autorizações (se disponível).</p>
+        <a href="https://www.youtube.com/watch?v=SEU_VIDEO_ID_MRD_3" class="btn-tutorial" target="_blank" rel="noopener">Ver Vídeo</a>
+      </div>
+
+      <div class="info-card" id="minhas-encomendas">
+        <h3>Minhas Encomendas <button class="close-btn" onclick="closeAll()">&times;</button></h3>
+        <p>Texto genérico: abrir lista completa de encomendas/correspondências.</p>
+        <a href="https://www.youtube.com/watch?v=SEU_VIDEO_ID_MRD_4" class="btn-tutorial" target="_blank" rel="noopener">Ver Vídeo</a>
+      </div>
+
+      <div class="info-card" id="minha-conta">
+        <h3>Minha Conta<button class="close-btn" onclick="closeAll()">&times;</button></h3>
+        <p>Texto genérico: acessar ajuda e tutoriais em vídeo.</p>
+        <a href="https://www.youtube.com/watch?v=SEU_VIDEO_ID_MRD_5" class="btn-tutorial" target="_blank" rel="noopener">Ver Vídeo</a>
+      </div>
+    </section>
+
+  </div>
+
+  <script>
+    function showInfo(id, el) {
+      closeAll();
+
+      const card = document.getElementById(id);
+      if (!card) return;
+
+      card.classList.add('active');
+
+      const container = el.closest('.tutorial-container');
+      const overlay = container.querySelector('.overlay');
+      overlay.classList.add('active');
+    }
+
+    function closeAll() {
+      document.querySelectorAll('.info-card').forEach(c => c.classList.remove('active'));
+      document.querySelectorAll('.overlay').forEach(o => o.classList.remove('active'));
+    }
+  </script>
+</body>
+</html>

@@ -1,0 +1,502 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* ============================================
+   CORRESPONDÊNCIA MANUS - Estilos Globais
+   Padrão Premium de Qualidade
+   ============================================ */
+
+/* Configurações globais */
+html, body, :root { 
+  height: 100%;
+  scroll-behavior: smooth;
+  overflow-x: hidden;
+}
+
+body { 
+  @apply bg-gray-50 text-gray-900 antialiased;
+  font-feature-settings: "cv02", "cv03", "cv04", "cv11";
+}
+
+/* ============================================
+   COMPONENTES BASE
+   ============================================ */
+
+/* Container principal */
+.container-app { 
+  @apply max-w-6xl mx-auto p-6; 
+}
+
+/* Cards Premium */
+.card { 
+  @apply bg-white rounded-2xl shadow-card p-6 transition-shadow duration-300; 
+}
+
+.card-hover:hover {
+  @apply shadow-card-hover;
+}
+
+.card-premium {
+  @apply bg-white rounded-2xl shadow-premium p-6 border border-gray-100;
+}
+
+/* ============================================
+   BOTÕES
+   ============================================ */
+
+.btn { 
+  @apply inline-flex items-center justify-center gap-2 rounded-xl px-4 py-2.5 font-medium transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-offset-2; 
+}
+
+.btn-primary { 
+  @apply bg-gradient-to-br from-[#057321] to-[#046119] text-white shadow-sm focus:ring-primary-500;
+}
+
+.btn-primary:active {
+  @apply scale-[0.98];
+}
+
+.btn-secondary {
+  @apply bg-white text-gray-700 border border-gray-300 shadow-sm focus:ring-gray-500;
+}
+
+.btn-outline { 
+  @apply border-2 border-primary-500 text-primary-600 bg-transparent focus:ring-primary-500;
+}
+
+.btn-success { 
+  @apply bg-gradient-to-br from-[#057321] to-[#046119] text-white shadow-sm focus:ring-primary-500; 
+}
+
+.btn-danger {
+  @apply bg-gradient-to-br from-red-500 to-red-600 text-white shadow-sm focus:ring-red-500;
+}
+
+.btn-ghost {
+  @apply text-gray-600 bg-transparent;
+}
+
+/* Tamanhos de botão */
+.btn-sm {
+  @apply text-sm px-3 py-1.5;
+}
+
+.btn-lg {
+  @apply text-lg px-6 py-3;
+}
+
+/* ============================================
+   LINKS
+   ============================================ */
+
+a.link-primary {
+  @apply text-primary-500 transition-colors duration-200;
+}
+
+a.link-primary:hover {
+  @apply text-primary-600;
+}
+
+/* ============================================
+   BADGES E STATUS
+   ============================================ */
+
+.badge {
+  @apply inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold;
+}
+
+.badge-primary {
+  @apply bg-primary-100 text-primary-700;
+}
+
+.badge-success {
+  @apply bg-green-100 text-green-700;
+}
+
+.badge-warning {
+  @apply bg-amber-100 text-amber-700;
+}
+
+.badge-danger {
+  @apply bg-red-100 text-red-700;
+}
+
+.badge-info {
+  @apply bg-blue-100 text-blue-700;
+}
+
+/* Status indicators */
+.status-active {
+  @apply bg-primary-100 text-primary-800;
+}
+
+.status-pending {
+  @apply bg-amber-100 text-amber-800;
+}
+
+.status-delivered {
+  @apply bg-green-100 text-green-800;
+}
+
+/* ============================================
+   INPUTS E FORMS
+   ============================================ */
+
+.input-base {
+  @apply w-full border border-gray-300 rounded-xl px-4 py-3 text-base transition-all duration-200;
+  @apply focus:border-primary-500 focus:ring-2 focus:ring-primary-500/20 focus:outline-none;
+}
+
+.input-primary:focus {
+  @apply border-primary-500 ring-2 ring-primary-500/20;
+}
+
+.label-base {
+  @apply block text-sm font-medium text-gray-700 mb-1.5;
+}
+
+/* ============================================
+   TABELAS PREMIUM
+   ============================================ */
+
+.table-premium {
+  @apply w-full bg-white rounded-2xl overflow-hidden shadow-card;
+}
+
+.table-premium thead {
+  @apply bg-gray-50 border-b border-gray-200;
+}
+
+.table-premium th {
+  @apply px-6 py-4 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider;
+}
+
+.table-premium td {
+  @apply px-6 py-4 text-sm text-gray-900;
+}
+
+.table-premium tbody tr {
+  @apply border-b border-gray-100 transition-colors duration-150;
+}
+
+.table-premium tbody tr:last-child {
+  @apply border-b-0;
+}
+
+/* ============================================
+   ANIMAÇÕES
+   ============================================ */
+
+.animate-fade-in {
+  animation: fadeIn 0.3s ease-out;
+}
+
+.animate-fade-in-up {
+  animation: fadeInUp 0.4s ease-out;
+}
+
+.animate-slide-in-right {
+  animation: slideInRight 0.3s ease-out;
+}
+
+/* Skeleton loading */
+.skeleton {
+  @apply bg-gray-200 rounded animate-pulse;
+}
+
+/* ============================================
+   UTILITÁRIOS
+   ============================================ */
+
+/* Hover effects */
+.hover-lift {
+  @apply transition-transform duration-200;
+}
+
+.hover-lift:hover {
+  @apply -translate-y-0.5;
+}
+
+/* Text colors */
+.text-primary {
+  @apply text-primary-500;
+}
+
+.text-primary-dark {
+  @apply text-primary-700;
+}
+
+/* Gradientes de texto */
+.text-gradient-primary {
+  @apply bg-gradient-to-r from-[#057321] to-[#046119] bg-clip-text text-transparent;
+}
+
+/* Divisores */
+.divider {
+  @apply border-t border-gray-200 my-6;
+}
+
+/* ============================================
+   SCROLLBAR CUSTOMIZADA
+   ============================================ */
+
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  @apply bg-gray-100 rounded-full;
+}
+
+::-webkit-scrollbar-thumb {
+  @apply bg-gray-300 rounded-full;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  @apply bg-gray-400;
+}
+
+/* ============================================
+   RESPONSIVIDADE
+   ============================================ */
+
+/* Safe area para dispositivos móveis */
+.safe-area-top {
+  padding-top: env(safe-area-inset-top);
+}
+
+.safe-area-bottom {
+  padding-bottom: env(safe-area-inset-bottom);
+}
+
+/* ============================================
+   ESTADOS DE LOADING
+   ============================================ */
+
+.loading-spinner {
+  @apply animate-spin rounded-full border-2 border-gray-300 border-t-primary-500;
+}
+
+.loading-dots::after {
+  content: '';
+  animation: dots 1.5s steps(4, end) infinite;
+}
+
+@keyframes dots {
+  0%, 20% { content: ''; }
+  40% { content: '.'; }
+  60% { content: '..'; }
+  80%, 100% { content: '...'; }
+}
+
+/* ============================================
+   DARK MODE
+   ============================================ */
+
+/* Cores base para dark mode */
+.dark {
+  color-scheme: dark;
+}
+
+.dark body {
+  @apply bg-gray-900 text-gray-100;
+}
+
+/* Cards em dark mode */
+.dark .card,
+.dark .card-premium {
+  @apply bg-gray-800 border-gray-700;
+}
+
+/* Tabelas em dark mode */
+.dark .table-premium {
+  @apply bg-gray-800;
+}
+
+.dark .table-premium thead {
+  @apply bg-gray-700 border-gray-600;
+}
+
+.dark .table-premium th {
+  @apply text-gray-300;
+}
+
+.dark .table-premium td {
+  @apply text-gray-200;
+}
+
+.dark .table-premium tbody tr {
+  @apply border-gray-700;
+}
+
+/* Inputs em dark mode */
+.dark .input-base {
+  @apply bg-gray-800 border-gray-600 text-gray-100;
+}
+
+.dark .input-base::placeholder {
+  @apply text-gray-400;
+}
+
+/* Labels em dark mode */
+.dark .label-base {
+  @apply text-gray-300;
+}
+
+/* Botões secundários em dark mode */
+.dark .btn-secondary {
+  @apply bg-gray-700 text-gray-200 border-gray-600;
+}
+
+/* Badges em dark mode */
+.dark .badge-primary {
+  @apply bg-primary-900/50 text-primary-300;
+}
+
+.dark .badge-success {
+  @apply bg-green-900/50 text-green-300;
+}
+
+.dark .badge-warning {
+  @apply bg-amber-900/50 text-amber-300;
+}
+
+.dark .badge-danger {
+  @apply bg-red-900/50 text-red-300;
+}
+
+.dark .badge-info {
+  @apply bg-blue-900/50 text-blue-300;
+}
+
+/* Scrollbar em dark mode */
+.dark ::-webkit-scrollbar-track {
+  @apply bg-gray-800;
+}
+
+.dark ::-webkit-scrollbar-thumb {
+  @apply bg-gray-600;
+}
+
+.dark ::-webkit-scrollbar-thumb:hover {
+  @apply bg-gray-500;
+}
+
+/* Skeleton em dark mode */
+.dark .skeleton {
+  @apply bg-gray-700;
+}
+
+/* Divisor em dark mode */
+.dark .divider {
+  @apply border-gray-700;
+}
+
+/* ============================================
+   ANIMAÇÕES ADICIONAIS
+   ============================================ */
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes fadeInUp {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes slideInRight {
+  from {
+    opacity: 0;
+    transform: translateX(100%);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+@keyframes slideInLeft {
+  from {
+    opacity: 0;
+    transform: translateX(-100%);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+@keyframes scaleIn {
+  from {
+    opacity: 0;
+    transform: scale(0.95);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+@keyframes pulse-soft {
+  0%, 100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.7;
+  }
+}
+
+.animate-scale-in {
+  animation: scaleIn 0.2s ease-out;
+}
+
+.animate-pulse-soft {
+  animation: pulse-soft 2s ease-in-out infinite;
+}
+
+/* ============================================
+   ACESSIBILIDADE
+   ============================================ */
+
+/* Focus visible para navegação por teclado */
+.focus-visible:focus-visible {
+  @apply outline-none ring-2 ring-primary-500 ring-offset-2;
+}
+
+.dark .focus-visible:focus-visible {
+  @apply ring-offset-gray-900;
+}
+
+/* Reduzir movimento para usuários que preferem */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
+/* Skip link para acessibilidade */
+.skip-link {
+  @apply absolute -top-10 left-0 bg-primary-500 text-white px-4 py-2 z-[9999] transition-all;
+}
+
+.skip-link:focus {
+  @apply top-0;
+}

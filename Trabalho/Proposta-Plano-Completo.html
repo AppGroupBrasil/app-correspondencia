@@ -1,0 +1,494 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<title>App Limpeza & Manutenção - Plano Completo</title>
+<style>
+  @page { size: A4; margin: 15mm; }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { font-family: 'Segoe UI', Arial, sans-serif; color: #2d3436; line-height: 1.6; padding: 40px; max-width: 800px; margin: 0 auto; }
+  
+  .header { background: linear-gradient(135deg, #6c5ce7, #e17055); color: white; padding: 40px; border-radius: 16px; text-align: center; margin-bottom: 30px; }
+  .header h1 { font-size: 28px; margin-bottom: 5px; }
+  .header .subtitle { font-size: 16px; opacity: 0.9; }
+  .header .badge { display: inline-block; background: rgba(255,255,255,0.25); padding: 6px 20px; border-radius: 20px; margin-top: 15px; font-weight: bold; font-size: 18px; }
+  
+  .intro { background: #f8f9fa; padding: 25px; border-radius: 12px; margin-bottom: 25px; border-left: 4px solid #6c5ce7; }
+  .intro h2 { color: #6c5ce7; font-size: 18px; margin-bottom: 10px; }
+  .intro p { font-size: 14px; color: #636e72; }
+  
+  .section { margin-bottom: 25px; page-break-inside: avoid; }
+  .section-title { font-size: 20px; color: #6c5ce7; border-bottom: 2px solid #6c5ce7; padding-bottom: 8px; margin-bottom: 15px; display: flex; align-items: center; gap: 10px; }
+  .section-title .icon { font-size: 24px; }
+  
+  .feature-grid { display: grid; grid-template-columns: 1fr; gap: 10px; }
+  .feature-card { background: #fff; border: 1px solid #e0e0e0; border-radius: 10px; padding: 14px; display: flex; gap: 15px; align-items: flex-start; }
+  .feature-card .emoji { font-size: 26px; min-width: 36px; text-align: center; }
+  .feature-card h3 { font-size: 14px; color: #2d3436; margin-bottom: 3px; }
+  .feature-card p { font-size: 12px; color: #636e72; }
+  .feature-card.premium { border-left: 3px solid #e17055; background: #fff5f3; }
+  .feature-card.premium h3::after { content: " ★ PREMIUM"; color: #e17055; font-size: 10px; font-weight: bold; }
+  
+  .how-it-works { background: #f0f0ff; padding: 25px; border-radius: 12px; margin-bottom: 25px; }
+  .how-it-works h2 { color: #6c5ce7; font-size: 20px; margin-bottom: 15px; text-align: center; }
+  .steps { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; text-align: center; }
+  .step { padding: 12px; }
+  .step .number { display: inline-flex; align-items: center; justify-content: center; width: 36px; height: 36px; background: #6c5ce7; color: white; border-radius: 50%; font-size: 16px; font-weight: bold; margin-bottom: 8px; }
+  .step h4 { font-size: 13px; color: #2d3436; margin-bottom: 4px; }
+  .step p { font-size: 11px; color: #636e72; }
+
+  .comparison { margin: 25px 0; }
+  .comparison table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  .comparison th { background: #6c5ce7; color: white; padding: 10px; text-align: left; }
+  .comparison td { padding: 8px 10px; border-bottom: 1px solid #e0e0e0; }
+  .comparison tr:nth-child(even) { background: #f8f9fa; }
+  .comparison .check { color: #00b894; font-weight: bold; text-align: center; }
+  .comparison .no { color: #ccc; text-align: center; }
+  
+  .pricing-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 15px; margin: 25px 0; }
+  .pricing-card { border: 2px solid #e0e0e0; border-radius: 14px; padding: 25px; text-align: center; }
+  .pricing-card.featured { border-color: #6c5ce7; background: linear-gradient(180deg, #f0f0ff 0%, #fff 100%); transform: scale(1.03); }
+  .pricing-card h3 { font-size: 16px; color: #6c5ce7; margin-bottom: 5px; }
+  .pricing-card .price { font-size: 36px; font-weight: bold; color: #2d3436; margin: 10px 0; }
+  .pricing-card .price span { font-size: 14px; color: #636e72; font-weight: normal; }
+  .pricing-card ul { list-style: none; text-align: left; font-size: 12px; margin-top: 12px; }
+  .pricing-card ul li { padding: 4px 0; border-bottom: 1px solid #f0f0f0; }
+  .pricing-card ul li::before { content: "✅ "; }
+  .pricing-card.featured h3 { color: #e17055; }
+  
+  .highlight-box { background: #e8f5e9; border: 1px solid #4caf50; border-radius: 10px; padding: 15px; margin: 20px 0; }
+  .highlight-box h3 { color: #2e7d32; font-size: 15px; margin-bottom: 5px; }
+  .highlight-box p { font-size: 13px; color: #2e7d32; }
+  
+  .footer { text-align: center; margin-top: 30px; padding-top: 20px; border-top: 1px solid #e0e0e0; }
+  .footer p { font-size: 12px; color: #b2bec3; }
+  .footer .company { font-size: 14px; color: #636e72; font-weight: bold; }
+
+  @media print {
+    body { padding: 0; }
+    .header, .how-it-works, .pricing-card.featured { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+    .comparison th { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+    .feature-card.premium { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+  }
+</style>
+</head>
+<body>
+
+<div class="header">
+  <h1>🧹 App Limpeza & Manutenção</h1>
+  <div class="subtitle">Gestão inteligente de limpeza condominial via QR Code</div>
+  <div class="badge">PLANO COMPLETO — TODAS AS FUNCIONALIDADES</div>
+</div>
+
+<div class="intro">
+  <h2>Solução completa para empresas de limpeza e manutenção</h2>
+  <p>Sistema que conecta moradores, funcionários, síndicos e a empresa de limpeza através de QR Codes inteligentes. Gerencie múltiplos condomínios, controle presença, estoque, financeiro e gere relatórios automáticos — tudo em um só lugar.</p>
+</div>
+
+<div class="how-it-works">
+  <h2>Como Funciona?</h2>
+  <div class="steps">
+    <div class="step">
+      <div class="number">1</div>
+      <h4>QR Code no espaço</h4>
+      <p>Adesivo em cada ambiente</p>
+    </div>
+    <div class="step">
+      <div class="number">2</div>
+      <h4>Morador escaneia</h4>
+      <p>Abre no navegador, sem app</p>
+    </div>
+    <div class="step">
+      <div class="number">3</div>
+      <h4>Interage e avalia</h4>
+      <p>Mensagens, fotos e estrelas</p>
+    </div>
+    <div class="step">
+      <div class="number">4</div>
+      <h4>Empresa gerencia</h4>
+      <p>Painel completo em tempo real</p>
+    </div>
+  </div>
+</div>
+
+<!-- MORADOR -->
+<div class="section">
+  <div class="section-title"><span class="icon">👤</span> Funcionalidades para o Morador (via QR Code)</div>
+  <div class="feature-grid">
+    <div class="feature-card">
+      <div class="emoji">📋</div>
+      <div>
+        <h3>Checklist de Tarefas do Dia</h3>
+        <p>Visualizar tarefas programadas e status em tempo real (pendente, em andamento, concluída).</p>
+      </div>
+    </div>
+    <div class="feature-card">
+      <div class="emoji">📢</div>
+      <div>
+        <h3>Comunicados</h3>
+        <p>Avisos da empresa ou do síndico visíveis ao escanear o QR Code.</p>
+      </div>
+    </div>
+    <div class="feature-card">
+      <div class="emoji">💬</div>
+      <div>
+        <h3>Enviar Mensagens + Fotos</h3>
+        <p>Reclamação, elogio, dúvida — texto e imagens. A empresa recebe em tempo real.</p>
+      </div>
+    </div>
+    <div class="feature-card">
+      <div class="emoji">⭐</div>
+      <div>
+        <h3>Avaliar Limpeza e Organização</h3>
+        <p>Nota de 1 a 5 estrelas para cada espaço. Rápido e intuitivo.</p>
+      </div>
+    </div>
+    <div class="feature-card">
+      <div class="emoji">🚨</div>
+      <div>
+        <h3>Reportar Urgências</h3>
+        <p>Botão de emergência com notificação imediata (vazamento, vidro quebrado, etc.).</p>
+      </div>
+    </div>
+    <div class="feature-card premium">
+      <div class="emoji">📸</div>
+      <div>
+        <h3>Antes e Depois</h3>
+        <p>Comparar fotos do espaço antes e depois da limpeza — transparência total.</p>
+      </div>
+    </div>
+    <div class="feature-card premium">
+      <div class="emoji">🔔</div>
+      <div>
+        <h3>Notificação "Limpeza Concluída"</h3>
+        <p>Receba aviso por push ou WhatsApp quando o espaço foi limpo.</p>
+      </div>
+    </div>
+    <div class="feature-card premium">
+      <div class="emoji">📅</div>
+      <div>
+        <h3>Agendar Serviço Extra</h3>
+        <p>Solicitar limpeza fora do horário (pós-festa, mudança, etc.).</p>
+      </div>
+    </div>
+    <div class="feature-card premium">
+      <div class="emoji">📊</div>
+      <div>
+        <h3>Ranking de Satisfação</h3>
+        <p>Ver nota média do espaço nos últimos 30 dias.</p>
+      </div>
+    </div>
+    <div class="feature-card premium">
+      <div class="emoji">📝</div>
+      <div>
+        <h3>Pesquisa de Satisfação Mensal</h3>
+        <p>Formulário rápido para avaliar o serviço geral da empresa.</p>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- EMPRESA -->
+<div class="section">
+  <div class="section-title"><span class="icon">🏢</span> Painel da Empresa de Limpeza (Admin)</div>
+  <div class="feature-grid">
+    <div class="feature-card">
+      <div class="emoji">🗺️</div>
+      <div>
+        <h3>Gerenciar Espaços + QR Codes</h3>
+        <p>Cadastrar ambientes e gerar QR Codes automaticamente para impressão.</p>
+      </div>
+    </div>
+    <div class="feature-card">
+      <div class="emoji">📅</div>
+      <div>
+        <h3>Cronograma de Tarefas</h3>
+        <p>Checklists diários/semanais por espaço com horários e responsáveis.</p>
+      </div>
+    </div>
+    <div class="feature-card">
+      <div class="emoji">📨</div>
+      <div>
+        <h3>Mensagens em Tempo Real</h3>
+        <p>Receber e responder todas as interações dos moradores instantaneamente.</p>
+      </div>
+    </div>
+    <div class="feature-card">
+      <div class="emoji">📊</div>
+      <div>
+        <h3>Dashboard de Avaliações</h3>
+        <p>Notas médias, ranking de espaços e gráficos de satisfação.</p>
+      </div>
+    </div>
+    <div class="feature-card">
+      <div class="emoji">📢</div>
+      <div>
+        <h3>Publicar Comunicados</h3>
+        <p>Avisos visíveis para moradores ao escanearem o QR Code.</p>
+      </div>
+    </div>
+    <div class="feature-card premium">
+      <div class="emoji">🏘️</div>
+      <div>
+        <h3>Múltiplos Condomínios</h3>
+        <p>Gerenciar vários clientes (condomínios) em um único painel centralizado.</p>
+      </div>
+    </div>
+    <div class="feature-card premium">
+      <div class="emoji">⏰</div>
+      <div>
+        <h3>Controle de Ponto por QR Code</h3>
+        <p>Funcionário escaneia QR ao chegar/sair — comprova presença no local.</p>
+      </div>
+    </div>
+    <div class="feature-card premium">
+      <div class="emoji">📄</div>
+      <div>
+        <h3>Relatório Mensal Automático (PDF)</h3>
+        <p>Relatório com métricas, avaliações e tarefas cumpridas — envio automático ao síndico.</p>
+      </div>
+    </div>
+    <div class="feature-card premium">
+      <div class="emoji">📦</div>
+      <div>
+        <h3>Gestão de Estoque</h3>
+        <p>Controle de produtos de limpeza: quantidade, validade e pedidos de reposição.</p>
+      </div>
+    </div>
+    <div class="feature-card premium">
+      <div class="emoji">👥</div>
+      <div>
+        <h3>Escala de Funcionários</h3>
+        <p>Montar escala semanal/mensal por condomínio e espaço.</p>
+      </div>
+    </div>
+    <div class="feature-card premium">
+      <div class="emoji">🔥</div>
+      <div>
+        <h3>Mapa de Calor de Reclamações</h3>
+        <p>Identificar visualmente quais espaços geram mais problemas.</p>
+      </div>
+    </div>
+    <div class="feature-card premium">
+      <div class="emoji">⏱️</div>
+      <div>
+        <h3>SLA — Tempo de Resposta</h3>
+        <p>Medir quanto tempo a equipe leva para atender cada reclamação.</p>
+      </div>
+    </div>
+    <div class="feature-card premium">
+      <div class="emoji">✍️</div>
+      <div>
+        <h3>Assinatura Digital</h3>
+        <p>Síndico assina digitalmente que o serviço foi executado conforme contrato.</p>
+      </div>
+    </div>
+    <div class="feature-card premium">
+      <div class="emoji">💰</div>
+      <div>
+        <h3>Módulo Financeiro</h3>
+        <p>Controle de contratos, valor mensal por condomínio e serviços extras cobrados.</p>
+      </div>
+    </div>
+    <div class="feature-card premium">
+      <div class="emoji">📱</div>
+      <div>
+        <h3>WhatsApp Integrado</h3>
+        <p>Notificações e reclamações enviadas diretamente pelo WhatsApp.</p>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- FUNCIONÁRIO -->
+<div class="section">
+  <div class="section-title"><span class="icon">👷</span> Painel do Funcionário</div>
+  <div class="feature-grid">
+    <div class="feature-card">
+      <div class="emoji">✅</div>
+      <div>
+        <h3>Minhas Tarefas do Dia</h3>
+        <p>Lista organizada por espaço e horário.</p>
+      </div>
+    </div>
+    <div class="feature-card">
+      <div class="emoji">📱</div>
+      <div>
+        <h3>Marcar como Concluído</h3>
+        <p>Atualizar status direto pelo celular.</p>
+      </div>
+    </div>
+    <div class="feature-card">
+      <div class="emoji">⚠️</div>
+      <div>
+        <h3>Registrar Ocorrências</h3>
+        <p>Reportar problemas encontrados (lâmpada queimada, torneira gotejando, etc.).</p>
+      </div>
+    </div>
+    <div class="feature-card premium">
+      <div class="emoji">📸</div>
+      <div>
+        <h3>Checklist com Fotos Obrigatórias</h3>
+        <p>Tirar foto ao completar cada tarefa — prova de execução.</p>
+      </div>
+    </div>
+    <div class="feature-card premium">
+      <div class="emoji">🗣️</div>
+      <div>
+        <h3>Chat com Supervisor</h3>
+        <p>Comunicação direta para tirar dúvidas em tempo real.</p>
+      </div>
+    </div>
+    <div class="feature-card premium">
+      <div class="emoji">🎓</div>
+      <div>
+        <h3>Treinamentos</h3>
+        <p>Vídeos curtos de procedimento de limpeza por tipo de espaço.</p>
+      </div>
+    </div>
+    <div class="feature-card premium">
+      <div class="emoji">🗺️</div>
+      <div>
+        <h3>Roteiro Otimizado</h3>
+        <p>Ordem sugerida dos espaços para limpar de forma mais eficiente.</p>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- SÍNDICO -->
+<div class="section">
+  <div class="section-title"><span class="icon">🏠</span> Painel do Síndico / Administradora</div>
+  <div class="feature-grid">
+    <div class="feature-card premium">
+      <div class="emoji">📊</div>
+      <div>
+        <h3>Dashboard Exclusivo</h3>
+        <p>Acompanhar o desempenho da empresa de limpeza no seu condomínio.</p>
+      </div>
+    </div>
+    <div class="feature-card premium">
+      <div class="emoji">✔️</div>
+      <div>
+        <h3>Aprovar Serviços Extras</h3>
+        <p>Autorizar solicitações de moradores antes da execução.</p>
+      </div>
+    </div>
+    <div class="feature-card premium">
+      <div class="emoji">📜</div>
+      <div>
+        <h3>Histórico Completo</h3>
+        <p>Todas as avaliações, reclamações e resoluções em um só lugar.</p>
+      </div>
+    </div>
+    <div class="feature-card premium">
+      <div class="emoji">📈</div>
+      <div>
+        <h3>Comparativo Mensal</h3>
+        <p>Gráficos de evolução da satisfação mês a mês.</p>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- DIFERENCIAIS -->
+<div class="highlight-box">
+  <h3>🏆 Diferenciais Competitivos</h3>
+  <p>
+    <strong>QR Code inteligente</strong> — morador não precisa baixar app, abre no navegador &nbsp;|&nbsp;
+    <strong>IA para classificar reclamações</strong> — categoriza automaticamente por tipo e urgência &nbsp;|&nbsp;
+    <strong>Painel em TV na portaria</strong> — status dos espaços em tempo real &nbsp;|&nbsp;
+    <strong>Selo de qualidade</strong> — badge mensal "Espaço 5 estrelas" baseado em avaliações
+  </p>
+</div>
+
+<!-- TABELA COMPARATIVA -->
+<div class="comparison">
+  <div class="section-title"><span class="icon">📋</span> Comparativo de Planos</div>
+  <table>
+    <tr>
+      <th>Funcionalidade</th>
+      <th style="text-align:center">Básico</th>
+      <th style="text-align:center">Profissional</th>
+      <th style="text-align:center">Premium</th>
+    </tr>
+    <tr><td>QR Codes ilimitados</td><td class="check">✅</td><td class="check">✅</td><td class="check">✅</td></tr>
+    <tr><td>Checklist de tarefas</td><td class="check">✅</td><td class="check">✅</td><td class="check">✅</td></tr>
+    <tr><td>Mensagens + fotos</td><td class="check">✅</td><td class="check">✅</td><td class="check">✅</td></tr>
+    <tr><td>Avaliação com estrelas</td><td class="check">✅</td><td class="check">✅</td><td class="check">✅</td></tr>
+    <tr><td>Comunicados</td><td class="check">✅</td><td class="check">✅</td><td class="check">✅</td></tr>
+    <tr><td>Dashboard básico</td><td class="check">✅</td><td class="check">✅</td><td class="check">✅</td></tr>
+    <tr><td>Reportar urgências</td><td class="check">✅</td><td class="check">✅</td><td class="check">✅</td></tr>
+    <tr><td>Relatório mensal (PDF)</td><td class="no">—</td><td class="check">✅</td><td class="check">✅</td></tr>
+    <tr><td>Controle de ponto</td><td class="no">—</td><td class="check">✅</td><td class="check">✅</td></tr>
+    <tr><td>Gestão de estoque</td><td class="no">—</td><td class="check">✅</td><td class="check">✅</td></tr>
+    <tr><td>Escala de funcionários</td><td class="no">—</td><td class="check">✅</td><td class="check">✅</td></tr>
+    <tr><td>Fotos antes/depois</td><td class="no">—</td><td class="check">✅</td><td class="check">✅</td></tr>
+    <tr><td>SLA de atendimento</td><td class="no">—</td><td class="check">✅</td><td class="check">✅</td></tr>
+    <tr><td>Múltiplos condomínios</td><td class="no">—</td><td class="no">—</td><td class="check">✅</td></tr>
+    <tr><td>WhatsApp integrado</td><td class="no">—</td><td class="no">—</td><td class="check">✅</td></tr>
+    <tr><td>Módulo financeiro</td><td class="no">—</td><td class="no">—</td><td class="check">✅</td></tr>
+    <tr><td>Assinatura digital</td><td class="no">—</td><td class="no">—</td><td class="check">✅</td></tr>
+    <tr><td>Painel do síndico</td><td class="no">—</td><td class="no">—</td><td class="check">✅</td></tr>
+    <tr><td>IA classificação</td><td class="no">—</td><td class="no">—</td><td class="check">✅</td></tr>
+    <tr><td>Treinamentos</td><td class="no">—</td><td class="no">—</td><td class="check">✅</td></tr>
+  </table>
+</div>
+
+<!-- PREÇOS -->
+<div class="pricing-grid">
+  <div class="pricing-card">
+    <h3>Básico</h3>
+    <div class="price" style="font-size:24px">Sob consulta</div>
+    <p style="font-size:12px; color:#636e72;">valor por condomínio</p>
+    <ul>
+      <li>QR Codes ilimitados</li>
+      <li>Checklist + avaliações</li>
+      <li>Mensagens + fotos</li>
+      <li>Comunicados</li>
+      <li>Dashboard básico</li>
+      <li>Suporte por e-mail</li>
+    </ul>
+  </div>
+  <div class="pricing-card featured">
+    <h3>⭐ Profissional</h3>
+    <div class="price" style="font-size:24px">Sob consulta</div>
+    <p style="font-size:12px; color:#636e72;">valor por condomínio</p>
+    <ul>
+      <li>Tudo do Básico</li>
+      <li>Relatórios PDF</li>
+      <li>Controle de ponto</li>
+      <li>Gestão de estoque</li>
+      <li>Escala funcionários</li>
+      <li>Fotos antes/depois</li>
+      <li>SLA de atendimento</li>
+      <li>Suporte prioritário</li>
+    </ul>
+  </div>
+  <div class="pricing-card">
+    <h3>Premium</h3>
+    <div class="price" style="font-size:24px">Sob consulta</div>
+    <p style="font-size:12px; color:#636e72;">valor por condomínio</p>
+    <ul>
+      <li>Tudo do Profissional</li>
+      <li>Múltiplos condomínios</li>
+      <li>WhatsApp integrado</li>
+      <li>Módulo financeiro</li>
+      <li>Painel do síndico</li>
+      <li>Assinatura digital</li>
+      <li>IA classificação</li>
+      <li>Treinamentos</li>
+      <li>Suporte dedicado</li>
+    </ul>
+  </div>
+</div>
+
+<div class="footer">
+  <br>
+  <div class="company">App Sindico Developers</div>
+  <p>Proposta comercial — Plano Completo com todas as funcionalidades</p>
+  <p>Documento gerado em março de 2026</p>
+</div>
+
+</body>
+</html>

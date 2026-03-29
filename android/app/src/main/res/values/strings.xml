@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">App Correspondência</string>
+    <string name="title_activity_main">App Correspondência</string>
+    <string name="package_name">com.appcorrespondencia.app</string>
+    <string name="custom_url_scheme">com.appcorrespondencia.app</string>
+</resources>

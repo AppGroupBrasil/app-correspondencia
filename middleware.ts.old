@@ -1,0 +1,58 @@
+// middleware.ts
+import { NextResponse } from 'next/server';
+import type { NextRequest } from 'next/server';
+
+export function middleware(request: NextRequest) {
+  const { pathname } = request.nextUrl;
+
+  // Rotas públicas que não precisam de autenticação
+  const publicRoutes = [
+    '/',
+    '/login',
+    '/cadastro-condominio',
+    '/cadastro-morador',
+  ];
+
+  // Verifica se a rota é pública
+  if (publicRoutes.includes(pathname)) {
+    return NextResponse.next();
+  }
+
+  // Verifica se a rota é de API
+  if (pathname.startsWith('/api/')) {
+    return NextResponse.next();
+  }
+
+  // Verifica se a rota é de assets estáticos
+  if (
+    pathname.startsWith('/_next') ||
+    pathname.startsWith('/static') ||
+    pathname.includes('.')
+  ) {
+    return NextResponse.next();
+  }
+
+  // Para rotas protegidas, adiciona headers de segurança
+  const response = NextResponse.next();
+
+  // Adiciona headers de segurança
+  response.headers.set('X-Frame-Options', 'SAMEORIGIN');
+  response.headers.set('X-Content-Type-Options', 'nosniff');
+  response.headers.set('Referrer-Policy', 'strict-origin-when-cross-origin');
+  response.headers.set('X-XSS-Protection', '1; mode=block');
+
+  return response;
+}
+
+// Configuração do matcher para aplicar o middleware apenas em rotas específicas
+export const config = {
+  matcher: [
+    /*
+     * Match all request paths except for the ones starting with:
+     * - _next/static (static files)
+     * - _next/image (image optimization files)
+     * - favicon.ico (favicon file)
+     */
+    '/((?!_next/static|_next/image|favicon.ico).*)',
+  ],
+};

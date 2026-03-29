@@ -1,0 +1,237 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<title>App Limpeza & Manutenção - Plano Básico</title>
+<style>
+  @page { size: A4; margin: 15mm; }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { font-family: 'Segoe UI', Arial, sans-serif; color: #2d3436; line-height: 1.6; padding: 40px; max-width: 800px; margin: 0 auto; }
+  
+  .header { background: linear-gradient(135deg, #0984e3, #00b894); color: white; padding: 40px; border-radius: 16px; text-align: center; margin-bottom: 30px; }
+  .header h1 { font-size: 28px; margin-bottom: 5px; }
+  .header .subtitle { font-size: 16px; opacity: 0.9; }
+  .header .badge { display: inline-block; background: rgba(255,255,255,0.25); padding: 6px 20px; border-radius: 20px; margin-top: 15px; font-weight: bold; font-size: 18px; }
+  
+  .intro { background: #f8f9fa; padding: 25px; border-radius: 12px; margin-bottom: 25px; border-left: 4px solid #0984e3; }
+  .intro h2 { color: #0984e3; font-size: 18px; margin-bottom: 10px; }
+  .intro p { font-size: 14px; color: #636e72; }
+  
+  .section { margin-bottom: 25px; }
+  .section-title { font-size: 20px; color: #0984e3; border-bottom: 2px solid #0984e3; padding-bottom: 8px; margin-bottom: 15px; display: flex; align-items: center; gap: 10px; }
+  .section-title .icon { font-size: 24px; }
+  
+  .feature-grid { display: grid; grid-template-columns: 1fr; gap: 12px; }
+  .feature-card { background: #fff; border: 1px solid #e0e0e0; border-radius: 10px; padding: 16px; display: flex; gap: 15px; align-items: flex-start; }
+  .feature-card .emoji { font-size: 28px; min-width: 40px; text-align: center; }
+  .feature-card h3 { font-size: 15px; color: #2d3436; margin-bottom: 4px; }
+  .feature-card p { font-size: 13px; color: #636e72; }
+  
+  .how-it-works { background: #f0f9ff; padding: 25px; border-radius: 12px; margin-bottom: 25px; }
+  .how-it-works h2 { color: #0984e3; font-size: 20px; margin-bottom: 15px; text-align: center; }
+  .steps { display: grid; grid-template-columns: repeat(3, 1fr); gap: 15px; text-align: center; }
+  .step { padding: 15px; }
+  .step .number { display: inline-flex; align-items: center; justify-content: center; width: 40px; height: 40px; background: #0984e3; color: white; border-radius: 50%; font-size: 18px; font-weight: bold; margin-bottom: 10px; }
+  .step h4 { font-size: 14px; color: #2d3436; margin-bottom: 5px; }
+  .step p { font-size: 12px; color: #636e72; }
+  
+  .pricing { background: linear-gradient(135deg, #0984e3, #00b894); color: white; padding: 35px; border-radius: 16px; text-align: center; margin-top: 30px; }
+  .pricing h2 { font-size: 22px; margin-bottom: 5px; }
+  .pricing .price { font-size: 48px; font-weight: bold; margin: 15px 0; }
+  .pricing .price span { font-size: 18px; font-weight: normal; }
+  .pricing .note { font-size: 13px; opacity: 0.85; }
+  
+  .footer { text-align: center; margin-top: 30px; padding-top: 20px; border-top: 1px solid #e0e0e0; }
+  .footer p { font-size: 12px; color: #b2bec3; }
+  .footer .company { font-size: 14px; color: #636e72; font-weight: bold; }
+
+  .highlight-box { background: #fff3cd; border: 1px solid #ffc107; border-radius: 10px; padding: 15px; margin-top: 20px; margin-bottom: 20px; }
+  .highlight-box h3 { color: #856404; font-size: 15px; margin-bottom: 5px; }
+  .highlight-box p { font-size: 13px; color: #856404; }
+
+  @media print {
+    body { padding: 0; }
+    .header { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+    .pricing { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+    .how-it-works { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+  }
+</style>
+</head>
+<body>
+
+<div class="header">
+  <h1>🧹 App Limpeza & Manutenção</h1>
+  <div class="subtitle">Gestão inteligente de limpeza condominial via QR Code</div>
+  <div class="badge">PLANO BÁSICO</div>
+</div>
+
+<div class="intro">
+  <h2>O que é?</h2>
+  <p>Um sistema inovador que conecta moradores, funcionários e a empresa de limpeza através de QR Codes instalados nos espaços do condomínio. O morador escaneia, avalia, envia reclamações ou elogios — e a empresa acompanha tudo em tempo real.</p>
+</div>
+
+<div class="how-it-works">
+  <h2>Como Funciona?</h2>
+  <div class="steps">
+    <div class="step">
+      <div class="number">1</div>
+      <h4>QR Code no espaço</h4>
+      <p>Adesivo com QR Code em cada ambiente (elevador, banheiro, salão, etc.)</p>
+    </div>
+    <div class="step">
+      <div class="number">2</div>
+      <h4>Morador escaneia</h4>
+      <p>Abre direto no navegador, sem precisar baixar aplicativo</p>
+    </div>
+    <div class="step">
+      <div class="number">3</div>
+      <h4>Interage e avalia</h4>
+      <p>Vê o checklist, envia mensagem, avalia o espaço com estrelas</p>
+    </div>
+  </div>
+</div>
+
+<!-- MORADOR -->
+<div class="section">
+  <div class="section-title"><span class="icon">👤</span> Funcionalidades para o Morador</div>
+  <div class="feature-grid">
+    <div class="feature-card">
+      <div class="emoji">📋</div>
+      <div>
+        <h3>Checklist de Tarefas do Dia</h3>
+        <p>Visualizar todas as tarefas programadas para aquele espaço e o status de cada uma (pendente, em andamento, concluída).</p>
+      </div>
+    </div>
+    <div class="feature-card">
+      <div class="emoji">📢</div>
+      <div>
+        <h3>Comunicados</h3>
+        <p>Ver avisos da empresa de limpeza ou do síndico (ex: "Manutenção do elevador amanhã das 8h às 12h").</p>
+      </div>
+    </div>
+    <div class="feature-card">
+      <div class="emoji">💬</div>
+      <div>
+        <h3>Enviar Mensagens</h3>
+        <p>Reclamação, elogio, dúvida ou apontamento — tudo com texto e envio de fotos. A empresa recebe em tempo real.</p>
+      </div>
+    </div>
+    <div class="feature-card">
+      <div class="emoji">📷</div>
+      <div>
+        <h3>Envio de Imagens</h3>
+        <p>Anexar fotos diretamente da câmera ou galeria para documentar problemas ou elogiar o serviço.</p>
+      </div>
+    </div>
+    <div class="feature-card">
+      <div class="emoji">⭐</div>
+      <div>
+        <h3>Avaliar Limpeza e Organização</h3>
+        <p>Nota de 1 a 5 estrelas para limpeza e organização de cada espaço. Rápido e intuitivo.</p>
+      </div>
+    </div>
+    <div class="feature-card">
+      <div class="emoji">🚨</div>
+      <div>
+        <h3>Reportar Urgências</h3>
+        <p>Botão especial para emergências (vazamento, vidro quebrado, etc.) com notificação imediata para a empresa.</p>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- EMPRESA -->
+<div class="section">
+  <div class="section-title"><span class="icon">🏢</span> Painel da Empresa de Limpeza</div>
+  <div class="feature-grid">
+    <div class="feature-card">
+      <div class="emoji">🗺️</div>
+      <div>
+        <h3>Gerenciar Espaços + QR Code</h3>
+        <p>Cadastrar cada ambiente do condomínio e gerar automaticamente o QR Code para impressão.</p>
+      </div>
+    </div>
+    <div class="feature-card">
+      <div class="emoji">📅</div>
+      <div>
+        <h3>Cronograma de Tarefas</h3>
+        <p>Criar checklists diários e semanais para cada espaço. Definir horários e responsáveis.</p>
+      </div>
+    </div>
+    <div class="feature-card">
+      <div class="emoji">📨</div>
+      <div>
+        <h3>Mensagens em Tempo Real</h3>
+        <p>Receber e responder todas as reclamações, elogios e dúvidas dos moradores instantaneamente.</p>
+      </div>
+    </div>
+    <div class="feature-card">
+      <div class="emoji">📊</div>
+      <div>
+        <h3>Dashboard de Avaliações</h3>
+        <p>Painel com notas médias, ranking de espaços e gráficos de satisfação dos moradores.</p>
+      </div>
+    </div>
+    <div class="feature-card">
+      <div class="emoji">📢</div>
+      <div>
+        <h3>Publicar Comunicados</h3>
+        <p>Enviar avisos visíveis para todos os moradores que escanearem o QR Code.</p>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- FUNCIONÁRIO -->
+<div class="section">
+  <div class="section-title"><span class="icon">👷</span> Painel do Funcionário</div>
+  <div class="feature-grid">
+    <div class="feature-card">
+      <div class="emoji">✅</div>
+      <div>
+        <h3>Minhas Tarefas do Dia</h3>
+        <p>Lista clara de tudo que precisa fazer, organizado por espaço e horário.</p>
+      </div>
+    </div>
+    <div class="feature-card">
+      <div class="emoji">📱</div>
+      <div>
+        <h3>Marcar como Concluído</h3>
+        <p>Atualizar status de cada tarefa direto pelo celular conforme for executando.</p>
+      </div>
+    </div>
+    <div class="feature-card">
+      <div class="emoji">⚠️</div>
+      <div>
+        <h3>Registrar Ocorrências</h3>
+        <p>Reportar problemas encontrados durante o trabalho (lâmpada queimada, torneira gotejando, etc.).</p>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="highlight-box">
+  <h3>✨ Diferencial: Sem necessidade de baixar app!</h3>
+  <p>O morador escaneia o QR Code e acessa tudo direto pelo navegador do celular. Simples, rápido e acessível para qualquer pessoa.</p>
+</div>
+
+<div class="pricing">
+  <h2>Plano Básico</h2>
+  <div class="price">Sob consulta</div>
+  <p>Valor personalizado por condomínio</p>
+  <br>
+  <div class="note">
+    ✅ QR Codes ilimitados &nbsp;|&nbsp; ✅ Mensagens ilimitadas &nbsp;|&nbsp; ✅ Avaliações &nbsp;|&nbsp; ✅ Checklist de tarefas<br>
+    ✅ Comunicados &nbsp;|&nbsp; ✅ Dashboard básico &nbsp;|&nbsp; ✅ Suporte por e-mail
+  </div>
+</div>
+
+<div class="footer">
+  <br>
+  <div class="company">App Sindico Developers</div>
+  <p>Proposta comercial — Plano Básico</p>
+  <p>Documento gerado em março de 2026</p>
+</div>
+
+</body>
+</html>

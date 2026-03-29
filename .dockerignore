@@ -1,0 +1,12 @@
+node_modules
+.next
+out
+.git
+android
+*.zip
+reports
+MANUS
+Trabalho
+__tests__
+.env.local
+.env
