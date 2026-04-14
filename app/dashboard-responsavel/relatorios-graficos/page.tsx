@@ -1,7 +1,6 @@
 "use client";
 
-import { useState, useEffect, useMemo } from "react";
-import { useRouter } from "next/navigation";
+import { useState, useEffect, useMemo, useCallback } from "react";
 import {
   BarChart3,
   Download,
@@ -14,8 +13,7 @@ import {
   Clock,
   Users,
 } from "lucide-react";
-import { collection, query, where, orderBy, getDocs } from "firebase/firestore";
-import { db } from "@/app/lib/firebase";
+import { supabase } from "@/app/lib/supabase";
 import { useAuth } from "@/hooks/useAuth";
 import Navbar from "@/components/Navbar";
 import {
@@ -49,41 +47,70 @@ interface Correspondencia {
 
 type PeriodoFiltro = "7dias" | "30dias" | "90dias" | "ano" | "todos";
 
+function normalizarStatus(status: string | null | undefined): string {
+  if (status === "retirado" || status === "retirada") {
+    return "retirada";
+  }
+
+  if (status === "devolvido" || status === "devolvida") {
+    return "devolvida";
+  }
+
+  return status || "pendente";
+}
+
+function normalizarCorrespondencia(d: any): Correspondencia {
+  return {
+    id: d.id,
+    moradorNome: d.morador_nome || d.moradorNome || "Morador não informado",
+    bloco: d.bloco_nome || d.bloco || "Sem bloco",
+    apartamento: d.apartamento || d.unidade || "-",
+    tipo: d.tipo || d.tipo_correspondencia || "outros",
+    status: normalizarStatus(d.status),
+    dataRegistro: d.criado_em || d.data_registro || d.dataRegistro,
+    dataRetirada: d.retirado_em || d.data_retirada || d.dataRetirada,
+    registradoPor: d.criado_por_nome || d.registrado_por || d.criado_por || "Sistema",
+    retiradoPor:
+      d.dados_retirada?.nomeQuemRetirou ||
+      d.dados_retirada?.nome_quem_retirou ||
+      d.retirado_por ||
+      undefined,
+    remetente: d.remetente || undefined,
+    codigoRastreio: d.codigo_rastreio || d.codigoRastreio || undefined,
+  };
+}
+
 export default function RelatoriosGraficosPage() {
-  const router = useRouter();
   const { user, loading: authLoading } = useAuth();
   const [correspondencias, setCorrespondencias] = useState<Correspondencia[]>([]);
   const [loading, setLoading] = useState(true);
   const [periodo, setPeriodo] = useState<PeriodoFiltro>("30dias");
   const [refreshing, setRefreshing] = useState(false);
 
-  // Buscar correspondências
-  useEffect(() => {
+  const fetchData = useCallback(async () => {
     if (!user?.condominioId) return;
 
-    const fetchData = async () => {
-      try {
-        const ref = collection(db, "correspondencias");
-        const q = query(
-          ref,
-          where("condominioId", "==", user.condominioId),
-          orderBy("dataRegistro", "desc")
-        );
-        const snapshot = await getDocs(q);
-        const data = snapshot.docs.map((doc) => ({
-          id: doc.id,
-          ...doc.data(),
-        })) as Correspondencia[];
-        setCorrespondencias(data);
-      } catch (error) {
-        console.error("Erro ao buscar correspondências:", error);
-      } finally {
-        setLoading(false);
-      }
-    };
+    try {
+      const { data, error } = await supabase
+        .from("correspondencias")
+        .select("*")
+        .eq("condominio_id", user.condominioId)
+        .order("criado_em", { ascending: false });
 
-    fetchData();
+      if (error) throw error;
+      setCorrespondencias((data || []).map(normalizarCorrespondencia));
+    } catch (error) {
+      console.error("Erro ao buscar correspondências:", error);
+    } finally {
+      setLoading(false);
+      setRefreshing(false);
+    }
   }, [user?.condominioId]);
+
+  useEffect(() => {
+    if (!user?.condominioId) return;
+    void fetchData();
+  }, [fetchData, user?.condominioId]);
 
   // Filtrar por período
   const correspondenciasFiltradas = useMemo(() => {
@@ -122,15 +149,15 @@ export default function RelatoriosGraficosPage() {
       (c) => c.status === "pendente"
     ).length;
     const retiradas = correspondenciasFiltradas.filter(
-      (c) => c.status === "retirado"
+      (c) => c.status === "retirada"
     ).length;
     const devolvidas = correspondenciasFiltradas.filter(
-      (c) => c.status === "devolvido"
+      (c) => c.status === "devolvida"
     ).length;
 
     // Tempo médio de retirada
     const retiradosComTempo = correspondenciasFiltradas.filter(
-      (c) => c.status === "retirado" && c.dataRetirada
+      (c) => c.status === "retirada" && c.dataRetirada
     );
     let tempoMedio = 0;
     if (retiradosComTempo.length > 0) {
@@ -210,6 +237,30 @@ export default function RelatoriosGraficosPage() {
       .map(([label, value]) => ({ label, value }))
       .sort((a, b) => b.value - a.value)
       .slice(0, 8);
+  }, [correspondenciasFiltradas]);
+
+  const dadosTopMoradores = useMemo(() => {
+    const porMorador = new Map<string, number>();
+    correspondenciasFiltradas.forEach((c) => {
+      porMorador.set(c.moradorNome, (porMorador.get(c.moradorNome) || 0) + 1);
+    });
+
+    return Array.from(porMorador.entries())
+      .map(([label, value]) => ({ label, value }))
+      .sort((a, b) => b.value - a.value)
+      .slice(0, 6);
+  }, [correspondenciasFiltradas]);
+
+  const dadosPorResponsavel = useMemo(() => {
+    const porResponsavel = new Map<string, number>();
+    correspondenciasFiltradas.forEach((c) => {
+      porResponsavel.set(c.registradoPor, (porResponsavel.get(c.registradoPor) || 0) + 1);
+    });
+
+    return Array.from(porResponsavel.entries())
+      .map(([label, value]) => ({ label, value }))
+      .sort((a, b) => b.value - a.value)
+      .slice(0, 6);
   }, [correspondenciasFiltradas]);
 
   // Handlers de exportação
@@ -294,9 +345,19 @@ export default function RelatoriosGraficosPage() {
 
   const handleRefresh = async () => {
     setRefreshing(true);
-    // Simular refresh
-    await new Promise((resolve) => setTimeout(resolve, 1000));
-    setRefreshing(false);
+    await fetchData();
+  };
+
+  const getStatusBadgeClass = (status: string) => {
+    if (status === "pendente") {
+      return "bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-400";
+    }
+
+    if (status === "retirada") {
+      return "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400";
+    }
+
+    return "bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400";
   };
 
   if (authLoading || loading) {
@@ -323,7 +384,7 @@ export default function RelatoriosGraficosPage() {
               Relatórios e Gráficos
             </h1>
             <p className="text-gray-600 dark:text-gray-400 mt-1">
-              Análise detalhada das correspondências
+              Painel executivo com métricas, pizza, barras e tendência operacional
             </p>
           </div>
 
@@ -479,10 +540,23 @@ export default function RelatoriosGraficosPage() {
           <ChartCard title="Correspondências por Bloco">
             <BlocosPieChart data={dadosPorBloco} title="" height={280} />
           </ChartCard>
+
+          <ChartCard title="Top Moradores" subtitle="Maior volume de recebimentos">
+            <CorrespondenciasBarChart data={dadosTopMoradores} title="" height={280} horizontal />
+          </ChartCard>
+
+          <ChartCard title="Produtividade por Responsável" subtitle="Quem mais registrou entradas">
+            <CorrespondenciasBarChart data={dadosPorResponsavel} title="" height={280} horizontal />
+          </ChartCard>
         </div>
 
         {/* Tabela resumida */}
         <ChartCard title="Últimas Correspondências" subtitle="10 mais recentes">
+          {correspondenciasFiltradas.length === 0 ? (
+            <div className="rounded-xl border border-dashed border-gray-300 dark:border-gray-700 p-10 text-center text-sm text-gray-500 dark:text-gray-400">
+              Nenhum registro encontrado para o período selecionado.
+            </div>
+          ) : (
           <div className="overflow-x-auto">
             <table className="w-full">
               <thead>
@@ -521,13 +595,7 @@ export default function RelatoriosGraficosPage() {
                     </td>
                     <td className="py-3 px-4">
                       <span
-                        className={`inline-flex px-2 py-1 text-xs font-medium rounded-full ${
-                          c.status === "pendente"
-                            ? "bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-400"
-                            : c.status === "retirado"
-                            ? "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400"
-                            : "bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400"
-                        }`}
+                        className={`inline-flex px-2 py-1 text-xs font-medium rounded-full ${getStatusBadgeClass(c.status)}`}
                       >
                         {c.status}
                       </span>
@@ -542,6 +610,7 @@ export default function RelatoriosGraficosPage() {
               </tbody>
             </table>
           </div>
+          )}
         </ChartCard>
       </main>
     </div>

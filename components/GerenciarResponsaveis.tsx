@@ -2,24 +2,8 @@
 
 import { useState, useEffect } from "react";
 import { Shield, Edit2, Trash2, UserCheck, UserX, Plus, X } from "lucide-react";
-import { db } from "@/app/lib/firebase";
-import {
-  collection,
-  getDocs,
-  updateDoc,
-  deleteDoc,
-  doc,
-  query,
-  where,
-  serverTimestamp,
-  setDoc,
-} from "firebase/firestore";
-import {
-  createUserWithEmailAndPassword,
-  signOut,
-  getAuth,
-} from "firebase/auth";
-import { deleteApp, initializeApp } from "firebase/app";
+import { supabase } from "@/app/lib/supabase";
+import { getApiUrl } from "@/utils/platform";
 
 interface Responsavel {
   id: string;
@@ -60,16 +44,19 @@ export default function GerenciarResponsaveis() {
       setLoading(true);
       
       // Carregar Condomínios
-      const condSnap = await getDocs(collection(db, "condominios"));
-      const listaCondominios = condSnap.docs.map(doc => ({ id: doc.id, nome: doc.data().nome }));
-      setCondominios(listaCondominios);
+      const { data: condData } = await supabase.from("condominios").select("id, nome");
+      setCondominios(condData || []);
 
       // Carregar Responsáveis
-      const q = query(collection(db, "users"), where("role", "==", "responsavel"));
-      const userSnap = await getDocs(q);
-      const listaResponsaveis = userSnap.docs.map(doc => ({ 
-        id: doc.id, 
-        ...doc.data() 
+      const { data: userData } = await supabase.from("users").select("*").eq("role", "responsavel");
+      const listaResponsaveis = (userData || []).map((u: any) => ({
+        id: u.id,
+        nome: u.nome,
+        email: u.email,
+        whatsapp: u.whatsapp,
+        condominioId: u.condominio_id,
+        status: u.status || "ativo",
+        criadoEm: u.criado_em,
       })) as Responsavel[];
       
       setResponsaveis(listaResponsaveis);
@@ -96,39 +83,34 @@ export default function GerenciarResponsaveis() {
 
       if (responsavelEditando) {
         // Atualizar
-        await updateDoc(doc(db, "users", responsavelEditando.id), {
+        await supabase.from("users").update({
           nome,
           email,
           whatsapp,
-          condominioId: condominioSelecionado,
-          atualizadoEm: serverTimestamp()
-        });
+          condominio_id: condominioSelecionado,
+          atualizado_em: new Date().toISOString()
+        }).eq("id", responsavelEditando.id);
         alert("Responsável atualizado com sucesso!");
       } else {
-        const config = db.app.options;
-        const secondaryApp = initializeApp(config, `SecondaryResponsavelApp${Date.now()}`);
-        const secondaryAuth = getAuth(secondaryApp);
-
-        try {
-          const userCredential = await createUserWithEmailAndPassword(secondaryAuth, email, senha);
-          const uid = userCredential.user.uid;
-
-          await setDoc(doc(db, "users", uid), {
-            uid,
-            nome,
+        // Criar via API (para não deslogar o admin)
+        const url = getApiUrl("/api/criar-usuario");
+        const res = await fetch(url, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
             email,
+            senha,
+            nome,
             whatsapp,
             role: "responsavel",
             condominioId: condominioSelecionado,
             status: "ativo",
-            criadoEm: serverTimestamp()
-          });
+          }),
+        });
 
-          await signOut(secondaryAuth);
-          alert("Responsável criado com sucesso!");
-        } finally {
-          await deleteApp(secondaryApp);
-        }
+        const result = await res.json();
+        if (!res.ok) throw new Error(result.error || "Erro ao criar responsável");
+        alert("Responsável criado com sucesso!");
       }
 
       setModalAberto(false);
@@ -146,7 +128,7 @@ export default function GerenciarResponsaveis() {
   const alternarStatus = async (responsavel: Responsavel) => {
     try {
       const novoStatus = responsavel.status === "ativo" ? "inativo" : "ativo";
-      await updateDoc(doc(db, "users", responsavel.id), { status: novoStatus });
+      await supabase.from("users").update({ status: novoStatus }).eq("id", responsavel.id);
       carregarDados();
     } catch (error) {
       console.error("Erro ao alterar status:", error);
@@ -156,7 +138,7 @@ export default function GerenciarResponsaveis() {
   const excluirResponsavel = async (responsavel: Responsavel) => {
     if (!confirm(`Tem certeza que deseja excluir ${responsavel.nome}?`)) return;
     try {
-      await deleteDoc(doc(db, "users", responsavel.id));
+      await supabase.from("users").delete().eq("id", responsavel.id);
       carregarDados();
     } catch (error) {
       console.error("Erro ao excluir:", error);

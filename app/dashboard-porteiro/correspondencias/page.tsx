@@ -18,13 +18,13 @@ import {
 } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
 import { useCorrespondencias } from "@/hooks/useCorrespondencias";
-import { db } from "@/app/lib/firebase";
-import { doc, getDoc, Timestamp, collection, query, where, getDocs, orderBy } from "firebase/firestore";
+import { supabase } from "@/app/lib/supabase";
 import ModalRetiradaProfissional from "@/components/ModalRetiradaProfissional";
 import withAuth from "@/components/withAuth";
 import Navbar from "@/components/Navbar";
 import BotaoVoltar from "@/components/BotaoVoltar";
 import { Browser } from "@capacitor/browser";
+import { getApiUrl } from "@/utils/platform";
 
 // Importações para Exportação
 import jsPDF from "jspdf";
@@ -62,8 +62,8 @@ interface Linha {
   imagemUrl?: string;
   pdfUrl?: string;
   reciboUrl?: string;
-  criadoEm?: Timestamp;
-  retiradoEm?: Timestamp;
+  criadoEm?: string | Date;
+  retiradoEm?: string | Date;
   compartilhadoVia?: string[];
   telefoneMorador?: string;
   emailMorador?: string;
@@ -94,10 +94,10 @@ function matchesTextSearch(d: Linha, busca: string): boolean {
   return alvo.includes(termo);
 }
 
-function matchesDateRange(criadoEm: Timestamp | undefined | null, dataInicio: string, dataFim: string): boolean {
+function matchesDateRange(criadoEm: string | Date | undefined | null, dataInicio: string, dataFim: string): boolean {
   if (!dataInicio && !dataFim) return true;
   if (!criadoEm) return false;
-  const dataItem = (criadoEm as any).toDate ? (criadoEm as any).toDate() : new Date(criadoEm as any);
+  const dataItem = new Date(criadoEm as any);
   dataItem.setHours(0, 0, 0, 0);
   if (dataInicio && dataItem < new Date(dataInicio + "T00:00:00")) return false;
   if (dataFim && dataItem > new Date(dataFim + "T00:00:00")) return false;
@@ -132,8 +132,13 @@ function getStatusLabel(filtroStatus: string): string {
   return "Todas";
 }
 
-function renderReciboContent(reciboUrl: string | undefined) {
-  if (!reciboUrl) {
+function getReciboPublicUrl(correspondenciaId: string): string {
+  const origin = globalThis.window?.location.origin || "";
+  return `${origin}/api/public-document?id=${encodeURIComponent(correspondenciaId)}&type=recibo&download=1`;
+}
+
+function renderReciboContent(reciboUrl: string | undefined, correspondenciaId?: string) {
+  if (!reciboUrl || !correspondenciaId) {
     return (
       <div className="text-center py-8">
         <CheckCircle size={48} className="text-[#057321] mx-auto mb-2" />
@@ -142,13 +147,14 @@ function renderReciboContent(reciboUrl: string | undefined) {
       </div>
     );
   }
+  const reciboPublicUrl = getReciboPublicUrl(correspondenciaId);
   if (reciboUrl.includes(".pdf")) {
     return (
       <div className="text-center w-full">
         <FileText size={48} className="text-gray-300 mx-auto mb-2" />
         <p className="text-gray-500 text-sm mb-4">O recibo está em formato PDF.</p>
         <button
-          onClick={() => abrirLinkExterno(reciboUrl)}
+          onClick={() => abrirLinkExterno(reciboPublicUrl)}
           className="w-full py-3 bg-[#057321] text-white rounded-xl font-bold flex items-center justify-center gap-2"
         >
           <ExternalLink size={20} /> Abrir PDF do Recibo
@@ -164,7 +170,7 @@ function renderReciboContent(reciboUrl: string | undefined) {
         className="w-full h-auto max-h-[300px] object-contain rounded-lg border border-gray-200"
       />
       <button
-        onClick={() => abrirLinkExterno(reciboUrl)}
+        onClick={() => abrirLinkExterno(reciboPublicUrl)}
         className="w-full mt-4 py-3 bg-gray-100 text-gray-700 rounded-xl font-bold flex items-center justify-center gap-2 hover:bg-gray-200"
       >
         <ExternalLink size={20} /> Ampliar Imagem
@@ -194,7 +200,7 @@ const TabelaInterna = ({
   onAbrirRetirada: (l: Linha) => void;
 }) => {
   const [busca, setBusca] = useState("");
-  const [filtroStatus, setFiltroStatus] = useState("pendente");
+  const [filtroStatus, setFiltroStatus] = useState("");
   const [dataInicio, setDataInicio] = useState("");
   const [dataFim, setDataFim] = useState("");
   const [filtroBloco, setFiltroBloco] = useState("todos");
@@ -227,9 +233,9 @@ const TabelaInterna = ({
     });
   }, [dados, filtroStatus, busca, filtroBloco, filtroUnidade, dataInicio, dataFim, blocos, unidades]);
 
-  const formatarData = (timestamp?: Timestamp) => {
+  const formatarData = (timestamp?: string | Date) => {
     if (!timestamp) return "-";
-    const date = timestamp.toDate ? timestamp.toDate() : new Date(timestamp as any);
+    const date = new Date(timestamp as any);
     return date.toLocaleString("pt-BR", {
       day: "2-digit",
       month: "2-digit",
@@ -574,6 +580,13 @@ const ModalAviso = ({
   const limparTelefone = (t: string) => (t ? t.replaceAll(/\D/g, "") : "");
   const baseUrl = globalThis.window === undefined ? "" : globalThis.window.location.origin;
   const linkCurto = `${baseUrl}/ver/${correspondencia.id}`;
+  const temSegundaVia = !!correspondencia.id;
+  const linkVisualizacao = temSegundaVia
+    ? getApiUrl(`/ver?id=${encodeURIComponent(correspondencia.id)}`)
+    : "";
+  const linkImpressao = temSegundaVia
+    ? getApiUrl(`/api/public-document?id=${encodeURIComponent(correspondencia.id)}&download=1`)
+    : "";
 
   const gerarTextoMensagem = () => {
     const nome = correspondencia.moradorNome || "Morador";
@@ -667,25 +680,25 @@ ${linkCurto}`;
           <div className="grid grid-cols-2 gap-3">
             <button
               onClick={() => {
-                if (correspondencia.pdfUrl) abrirLinkExterno(correspondencia.pdfUrl);
+                if (linkImpressao) abrirLinkExterno(linkImpressao);
                 else alert("PDF não disponível para impressão.");
               }}
-              disabled={!correspondencia.pdfUrl}
+              disabled={!temSegundaVia}
               className="flex items-center justify-center gap-2 py-3.5 rounded-xl bg-gray-100 text-gray-700 font-bold hover:bg-gray-200 transition-all border border-gray-200 disabled:opacity-50 disabled:cursor-not-allowed"
             >
               <Printer size={20} /> Imprimir
             </button>
 
             <button
-              onClick={() => abrirLinkExterno(correspondencia.pdfUrl)}
-              disabled={!correspondencia.pdfUrl}
+              onClick={() => abrirLinkExterno(linkVisualizacao)}
+              disabled={!temSegundaVia}
               className={`flex items-center justify-center gap-2 py-3.5 rounded-xl font-bold transition-all border ${
-                correspondencia.pdfUrl
+                temSegundaVia
                   ? "bg-gray-100 text-gray-700 hover:bg-gray-200 border-gray-200"
                   : "bg-gray-50 text-gray-400 border-gray-100 cursor-not-allowed"
               }`}
             >
-              <FileText size={20} /> {correspondencia.pdfUrl ? "Ver PDF" : "Sem PDF"}
+              <FileText size={20} /> {temSegundaVia ? "Ver Aviso" : "Sem Aviso"}
             </button>
           </div>
         </div>
@@ -714,7 +727,7 @@ const ModalRecibo = ({ correspondencia, onClose }: { correspondencia: any; onClo
         <p className="text-center text-sm text-gray-500 mb-6">Protocolo: #{correspondencia.protocolo}</p>
 
         <div className="flex flex-col items-center gap-4">
-          {renderReciboContent(correspondencia.reciboUrl)}
+          {renderReciboContent(correspondencia.reciboUrl, correspondencia.id)}
         </div>
       </div>
     </div>
@@ -751,9 +764,12 @@ function CorrespondenciasPorteiroPage() {
 
         if (c.moradorId && (!telefoneMorador || !emailMorador)) {
           try {
-            const uSnap = await getDoc(doc(db, "users", c.moradorId));
-            if (uSnap.exists()) {
-              const uData: any = uSnap.data();
+            const { data: uData } = await supabase
+              .from("users")
+              .select("*")
+              .eq("id", c.moradorId)
+              .single();
+            if (uData) {
               telefoneMorador = uData.whatsapp || uData.telefone || "";
               emailMorador = uData.email || "";
             }
@@ -792,29 +808,33 @@ function CorrespondenciasPorteiroPage() {
 
     try {
       // Blocos
-      const qBlocos = query(
-        collection(db, "blocos"),
-        where("condominioId", "==", user.condominioId),
-        orderBy("nome", "asc")
-      );
-      const snapBlocos = await getDocs(qBlocos);
-      const listaBlocos = snapBlocos.docs.map((d) => {
-        const data: any = d.data();
-        return { id: d.id, nome: String(data.nome ?? "") } as Bloco;
-      });
+      const { data: blocosData, error: blocosErr } = await supabase
+        .from("blocos")
+        .select("*")
+        .eq("condominio_id", user.condominioId)
+        .order("nome", { ascending: true });
+
+      if (blocosErr) throw blocosErr;
+
+      const listaBlocos = (blocosData || []).map((d: any) => ({
+        id: d.id,
+        nome: String(d.nome ?? ""),
+      } as Bloco));
       setBlocos(listaBlocos);
 
       // Unidades
-      const qUnidades = query(collection(db, "unidades"), where("condominioId", "==", user.condominioId));
-      const snapUnidades = await getDocs(qUnidades);
-      const listaUnidades = snapUnidades.docs.map((d) => {
-        const data: any = d.data();
-        return {
-          id: d.id,
-          identificacao: String(data.identificacao ?? ""),
-          blocoId: String(data.blocoId ?? ""),
-        } as Unidade;
-      });
+      const { data: unidadesData, error: unidadesErr } = await supabase
+        .from("unidades")
+        .select("*")
+        .eq("condominio_id", user.condominioId);
+
+      if (unidadesErr) throw unidadesErr;
+
+      const listaUnidades = (unidadesData || []).map((d: any) => ({
+        id: d.id,
+        identificacao: String(d.identificacao ?? ""),
+        blocoId: String(d.bloco_id ?? ""),
+      } as Unidade));
       setUnidades(listaUnidades);
     } catch (err) {
       console.error("Erro ao carregar filtros:", err);

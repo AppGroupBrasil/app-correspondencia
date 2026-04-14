@@ -2,9 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
-import { db, auth } from "@/app/lib/firebase";
-import { signOut } from "firebase/auth";
-import { collection, getCountFromServer, query, where } from "firebase/firestore";
+import { supabase } from "@/app/lib/supabase";
 import Navbar from "@/components/Navbar";
 import withAuth from "@/components/withAuth";
 import { 
@@ -29,24 +27,30 @@ function DashboardAdminPage() {
     const carregarDados = async () => {
       try {
         // Consultas otimizadas (apenas contagem)
-        const condominiosSnap = await getCountFromServer(collection(db, "condominios"));
-        
-        const responsaveisSnap = await getCountFromServer(
-            query(collection(db, "users"), where("role", "==", "responsavel"))
-        );
-        
-        const porteirosSnap = await getCountFromServer(
-            query(collection(db, "users"), where("role", "==", "porteiro"))
-        );
+        const { count: condominiosCount } = await supabase
+          .from("condominios")
+          .select("*", { count: "exact", head: true });
 
-        // Total de correspondências (opcional, pode ser pesado se tiver muitas)
-        const correspondenciasSnap = await getCountFromServer(collection(db, "correspondencias"));
+        const { count: responsaveisCount } = await supabase
+          .from("users")
+          .select("*", { count: "exact", head: true })
+          .eq("role", "responsavel");
+
+        const { count: porteirosCount } = await supabase
+          .from("users")
+          .select("*", { count: "exact", head: true })
+          .eq("role", "porteiro");
+
+        // Total de correspondências
+        const { count: correspondenciasCount } = await supabase
+          .from("correspondencias")
+          .select("*", { count: "exact", head: true });
 
         setStats({
-          condominios: condominiosSnap.data().count,
-          responsaveis: responsaveisSnap.data().count,
-          porteiros: porteirosSnap.data().count,
-          correspondencias: correspondenciasSnap.data().count
+          condominios: condominiosCount ?? 0,
+          responsaveis: responsaveisCount ?? 0,
+          porteiros: porteirosCount ?? 0,
+          correspondencias: correspondenciasCount ?? 0
         });
       } catch (error) {
         console.error("Erro ao carregar stats:", error);
@@ -57,7 +61,7 @@ function DashboardAdminPage() {
   }, []);
 
   const handleLogout = async () => {
-    await signOut(auth);
+    await supabase.auth.signOut();
     router.push("/login");
   };
 

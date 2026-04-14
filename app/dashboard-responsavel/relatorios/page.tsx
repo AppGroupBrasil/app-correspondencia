@@ -1,18 +1,30 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo, useCallback } from "react";
 import withAuth from "@/components/withAuth";
 import Navbar from "@/components/Navbar";
 import BotaoVoltar from "@/components/BotaoVoltar";
-import { db } from "@/app/lib/firebase";
-import { collection, query, where, getDocs, Timestamp, orderBy } from "firebase/firestore";
+import { supabase } from "@/app/lib/supabase";
 import { useAuth } from "@/hooks/useAuth";
+import {
+  CorrespondenciasLineChart,
+  CorrespondenciasBarChart,
+  StatusDoughnutChart,
+  BlocosPieChart,
+  ChartCard,
+} from "@/components/charts";
 import { 
-  FileText, Search, User, Filter, Printer, IdCard, FileSpreadsheet, Loader2, ArrowUpRight, ArrowDownLeft, MessageCircle
+  FileText, Search, User, Filter, Printer, IdCard, FileSpreadsheet, Loader2, ArrowUpRight, ArrowDownLeft, MessageCircle, BarChart3, Building2, ClipboardList, TrendingUp
 } from "lucide-react";
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
 import * as XLSX from "xlsx";
+
+function getDefaultStartDate(): string {
+  const date = new Date();
+  date.setDate(date.getDate() - 30);
+  return date.toISOString().split("T")[0];
+}
 
 // Interface unificada para o relatório de atividades
 interface ItemRelatorio {
@@ -33,7 +45,7 @@ function RelatoriosPage() {
   const [loading, setLoading] = useState(false);
   
   // Filtros
-  const [dataInicio, setDataInicio] = useState(new Date().toISOString().split('T')[0]);
+  const [dataInicio, setDataInicio] = useState(getDefaultStartDate());
   const [dataFim, setDataFim] = useState(new Date().toISOString().split('T')[0]);
   const [tipoFiltro, setTipoFiltro] = useState<"todos" | "entrada" | "saida" | "aviso">("todos");
   const [blocoFiltro, setBlocoFiltro] = useState("");
@@ -51,20 +63,21 @@ function RelatoriosPage() {
       const carregarDadosIniciais = async () => {
         try {
           // 1. Blocos
-          const qBlocos = query(collection(db, "blocos"), where("condominioId", "==", user.condominioId));
-          const snapBlocos = await getDocs(qBlocos);
-          const listaBlocos = snapBlocos.docs.map(d => ({ id: d.id, ...d.data() }));
+          const { data: blocosData } = await supabase
+            .from("blocos")
+            .select("*")
+            .eq("condominio_id", user.condominioId);
+          const listaBlocos = (blocosData || []).map((d: any) => ({ id: d.id, nome: d.nome }));
           listaBlocos.sort((a: any, b: any) => a.nome.localeCompare(b.nome, undefined, { numeric: true }));
           setBlocos(listaBlocos);
 
           // 2. Porteiros (Usuários)
-          const qUsers = query(
-            collection(db, "users"), 
-            where("condominioId", "==", user.condominioId),
-            where("role", "in", ["porteiro", "responsavel", "adminMaster"]) 
-          );
-          const snapUsers = await getDocs(qUsers);
-          const listaPorteiros = snapUsers.docs.map(d => ({ id: d.id, ...d.data() }));
+          const { data: usersData } = await supabase
+            .from("users")
+            .select("*")
+            .eq("condominio_id", user.condominioId)
+            .in("role", ["porteiro", "responsavel", "adminMaster"]);
+          const listaPorteiros = (usersData || []).map((d: any) => ({ id: d.id, nome: d.nome }));
           listaPorteiros.sort((a: any, b: any) => a.nome.localeCompare(b.nome));
           setPorteiros(listaPorteiros);
 
@@ -76,7 +89,7 @@ function RelatoriosPage() {
     }
   }, [user]);
 
-  const gerarRelatorio = async () => {
+  const gerarRelatorio = useCallback(async () => {
     if (!user?.condominioId) return;
     setLoading(true);
     setResultados([]);
@@ -90,36 +103,34 @@ function RelatoriosPage() {
       const end = new Date(dataFim);
       end.setHours(23, 59, 59, 999);
 
-      const timestampStart = Timestamp.fromDate(start);
-      const timestampEnd = Timestamp.fromDate(end);
+      const isoStart = start.toISOString();
+      const isoEnd = end.toISOString();
 
       // ==================================================
       // 1. ENTRADAS (Chegada de Encomendas)
       // ==================================================
       if (tipoFiltro === "todos" || tipoFiltro === "entrada") {
-        const qEntrada = query(
-          collection(db, "correspondencias"),
-          where("condominioId", "==", user.condominioId),
-          where("criadoEm", ">=", timestampStart),
-          where("criadoEm", "<=", timestampEnd)
-        );
+        const { data: entradasData } = await supabase
+          .from("correspondencias")
+          .select("*")
+          .eq("condominio_id", user.condominioId)
+          .gte("criado_em", isoStart)
+          .lte("criado_em", isoEnd);
         
-        const snapEntrada = await getDocs(qEntrada);
-        snapEntrada.forEach(doc => {
-          const data = doc.data();
-          const dateObj = data.criadoEm?.toDate ? data.criadoEm.toDate() : new Date();
+        (entradasData || []).forEach((d: any) => {
+          const dateObj = d.criado_em ? new Date(d.criado_em) : new Date();
           
           listaFinal.push({
-            id: `ent-${doc.id}`,
+            id: `ent-${d.id}`,
             data: dateObj.toLocaleString('pt-BR'),
             dataIso: dateObj.toISOString(),
             acao: "Recebimento",
             tipo: "Encomenda",
-            destinatario: data.moradorNome,
-            bloco: data.blocoNome,
-            apartamento: data.apartamento,
-            detalhe: `Protocolo: ${data.protocolo} (${data.status})`,
-            registradoPor: data.criadoPorNome || data.criadoPor || "Sistema"
+            destinatario: d.morador_nome,
+            bloco: d.bloco_nome,
+            apartamento: d.apartamento,
+            detalhe: `Protocolo: ${d.protocolo} (${d.status})`,
+            registradoPor: d.criado_por_nome || d.criado_por || "Sistema"
           });
         });
       }
@@ -128,30 +139,28 @@ function RelatoriosPage() {
       // 2. SAÍDAS (Retirada de Encomendas)
       // ==================================================
       if (tipoFiltro === "todos" || tipoFiltro === "saida") {
-        const qSaida = query(
-          collection(db, "correspondencias"),
-          where("condominioId", "==", user.condominioId),
-          where("status", "==", "retirada"),
-          where("retiradoEm", ">=", timestampStart),
-          where("retiradoEm", "<=", timestampEnd)
-        );
-        
         try {
-            const snapSaida = await getDocs(qSaida);
-            snapSaida.forEach(doc => {
-              const data = doc.data();
-              const dateObj = data.retiradoEm?.toDate ? data.retiradoEm.toDate() : new Date();
+            const { data: saidasData } = await supabase
+              .from("correspondencias")
+              .select("*")
+              .eq("condominio_id", user.condominioId)
+              .eq("status", "retirada")
+              .gte("retirado_em", isoStart)
+              .lte("retirado_em", isoEnd);
+            
+            (saidasData || []).forEach((d: any) => {
+              const dateObj = d.retirado_em ? new Date(d.retirado_em) : new Date();
               
               listaFinal.push({
-                id: `sai-${doc.id}`,
+                id: `sai-${d.id}`,
                 data: dateObj.toLocaleString('pt-BR'),
                 dataIso: dateObj.toISOString(),
                 acao: "Retirada",
                 tipo: "Encomenda",
-                destinatario: data.moradorNome,
-                bloco: data.blocoNome,
-                apartamento: data.apartamento,
-                detalhe: `Protocolo: ${data.protocolo}`,
+                destinatario: d.morador_nome,
+                bloco: d.bloco_nome,
+                apartamento: d.apartamento,
+                detalhe: `Protocolo: ${d.protocolo}`,
                 registradoPor: "Portaria" 
               });
             });
@@ -164,29 +173,27 @@ function RelatoriosPage() {
       // 3. AVISOS (WhatsApp)
       // ==================================================
       if (tipoFiltro === "todos" || tipoFiltro === "aviso") {
-        const qAvisos = query(
-          collection(db, "avisos_rapidos"),
-          where("condominioId", "==", user.condominioId),
-          where("criadoEm", ">=", timestampStart),
-          where("criadoEm", "<=", timestampEnd)
-        );
+        const { data: avisosData } = await supabase
+          .from("avisos_rapidos")
+          .select("*")
+          .eq("condominio_id", user.condominioId)
+          .gte("criado_em", isoStart)
+          .lte("criado_em", isoEnd);
         
-        const snapAvisos = await getDocs(qAvisos);
-        snapAvisos.forEach(doc => {
-          const data = doc.data();
-          const dateObj = data.criadoEm?.toDate ? data.criadoEm.toDate() : new Date();
+        (avisosData || []).forEach((d: any) => {
+          const dateObj = d.criado_em ? new Date(d.criado_em) : new Date();
 
           listaFinal.push({
-            id: `avi-${doc.id}`,
+            id: `avi-${d.id}`,
             data: dateObj.toLocaleString('pt-BR'),
             dataIso: dateObj.toISOString(),
             acao: "Aviso WhatsApp",
             tipo: "Aviso",
-            destinatario: data.moradorNome,
-            bloco: data.blocoNome,
-            apartamento: data.apartamento,
-            detalhe: data.mensagem ? `Msg: "${data.mensagem.substring(0, 20)}..."` : "Foto enviada",
-            registradoPor: data.enviadoPorNome || "Sistema"
+            destinatario: d.morador_nome,
+            bloco: d.bloco_nome,
+            apartamento: d.apartamento,
+            detalhe: d.mensagem ? `Msg: "${d.mensagem.substring(0, 20)}..."` : "Foto enviada",
+            registradoPor: d.enviado_por_nome || "Sistema"
           });
         });
       }
@@ -216,11 +223,79 @@ function RelatoriosPage() {
 
     } catch (error) {
       console.error("Erro geral ao gerar relatório:", error);
-      alert("Erro ao buscar dados. Verifique se os índices do Firebase estão criados.");
+      alert("Erro ao buscar dados. Verifique os filtros e tente novamente.");
     } finally {
       setLoading(false);
     }
-  };
+  }, [blocoFiltro, dataFim, dataInicio, moradorFiltro, porteiroFiltro, tipoFiltro, user?.condominioId]);
+
+  useEffect(() => {
+    if (!user?.condominioId) return;
+    void gerarRelatorio();
+  }, [gerarRelatorio, user?.condominioId]);
+
+  const resumo = useMemo(() => {
+    const entradas = resultados.filter((item) => item.acao === "Recebimento").length;
+    const retiradas = resultados.filter((item) => item.acao === "Retirada").length;
+    const avisos = resultados.filter((item) => item.acao === "Aviso WhatsApp").length;
+    const blocosAtivos = new Set(resultados.map((item) => item.bloco).filter(Boolean)).size;
+
+    return {
+      total: resultados.length,
+      entradas,
+      retiradas,
+      avisos,
+      blocosAtivos,
+      taxaSaida: entradas > 0 ? Math.round((retiradas / entradas) * 100) : 0,
+    };
+  }, [resultados]);
+
+  const dadosPorDia = useMemo(() => {
+    const porDia = new Map<string, number>();
+    resultados.forEach((item) => {
+      const key = item.dataIso
+        ? new Date(item.dataIso).toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit" })
+        : item.data;
+      porDia.set(key, (porDia.get(key) || 0) + 1);
+    });
+    return Array.from(porDia.entries()).map(([label, value]) => ({ label, value })).slice(-14);
+  }, [resultados]);
+
+  const dadosPorTipoAtividade = useMemo(() => {
+    const porTipo = new Map<string, number>();
+    resultados.forEach((item) => {
+      porTipo.set(item.acao, (porTipo.get(item.acao) || 0) + 1);
+    });
+    return Array.from(porTipo.entries()).map(([label, value]) => ({ label, value }));
+  }, [resultados]);
+
+  const dadosPorStatus = useMemo(() => [
+    { label: "Recebimentos", value: resumo.entradas, color: "#3B82F6" },
+    { label: "Retiradas", value: resumo.retiradas, color: "#10B981" },
+    { label: "Avisos", value: resumo.avisos, color: "#F59E0B" },
+  ], [resumo]);
+
+  const dadosPorBloco = useMemo(() => {
+    const porBloco = new Map<string, number>();
+    resultados.forEach((item) => {
+      porBloco.set(item.bloco || "Sem bloco", (porBloco.get(item.bloco || "Sem bloco") || 0) + 1);
+    });
+    return Array.from(porBloco.entries())
+      .map(([label, value]) => ({ label, value }))
+      .sort((a, b) => b.value - a.value)
+      .slice(0, 8);
+  }, [resultados]);
+
+  const dadosPorResponsavel = useMemo(() => {
+    const porResponsavel = new Map<string, number>();
+    resultados.forEach((item) => {
+      porResponsavel.set(item.registradoPor || "Sistema", (porResponsavel.get(item.registradoPor || "Sistema") || 0) + 1);
+    });
+    return Array.from(porResponsavel.entries())
+      .map(([label, value]) => ({ label, value }))
+      .sort((a, b) => b.value - a.value)
+      .slice(0, 6);
+  }, [resultados]);
 
   // --- EXPORTAR PDF ---
   const handleExportPDF = () => {
@@ -313,8 +388,9 @@ function RelatoriosPage() {
             
             {/* Datas */}
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Data Início</label>
+              <label htmlFor="rel-data-inicio" className="block text-sm font-medium text-gray-700 mb-1">Data Início</label>
               <input 
+                id="rel-data-inicio"
                 type="date" 
                 value={dataInicio} 
                 onChange={(e) => setDataInicio(e.target.value)}
@@ -322,8 +398,9 @@ function RelatoriosPage() {
               />
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Data Fim</label>
+              <label htmlFor="rel-data-fim" className="block text-sm font-medium text-gray-700 mb-1">Data Fim</label>
               <input 
+                id="rel-data-fim"
                 type="date" 
                 value={dataFim} 
                 onChange={(e) => setDataFim(e.target.value)}
@@ -333,8 +410,9 @@ function RelatoriosPage() {
 
             {/* Tipo de Atividade */}
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Tipo de Atividade</label>
+              <label htmlFor="rel-tipo-atividade" className="block text-sm font-medium text-gray-700 mb-1">Tipo de Atividade</label>
               <select 
+                id="rel-tipo-atividade"
                 value={tipoFiltro}
                 onChange={(e) => setTipoFiltro(e.target.value as any)}
                 className="w-full border rounded-lg p-2 text-sm bg-white"
@@ -348,8 +426,9 @@ function RelatoriosPage() {
 
             {/* Bloco */}
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Bloco</label>
+              <label htmlFor="rel-bloco" className="block text-sm font-medium text-gray-700 mb-1">Bloco</label>
               <select 
+                id="rel-bloco"
                 value={blocoFiltro}
                 onChange={(e) => setBlocoFiltro(e.target.value)}
                 className="w-full border rounded-lg p-2 text-sm bg-white"
@@ -382,9 +461,10 @@ function RelatoriosPage() {
 
             {/* Morador */}
             <div className="md:col-span-1 lg:col-span-3">
-              <label className="block text-sm font-medium text-gray-700 mb-1">Filtrar por Morador (Nome ou Apto)</label>
+              <label htmlFor="rel-morador" className="block text-sm font-medium text-gray-700 mb-1">Filtrar por Morador (Nome ou Apto)</label>
               <div className="relative">
                 <input 
+                  id="rel-morador"
                   type="text"
                   value={moradorFiltro}
                   onChange={(e) => setMoradorFiltro(e.target.value)}
@@ -418,6 +498,99 @@ function RelatoriosPage() {
                     <FileSpreadsheet size={16} /> Exportar Excel
                 </button>
             </div>
+        )}
+
+        {resultados.length > 0 && (
+          <>
+            <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4 mb-6">
+              <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-5">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-sm text-gray-500">Total de eventos</p>
+                    <p className="text-3xl font-bold text-gray-900">{resumo.total}</p>
+                  </div>
+                  <div className="p-3 rounded-xl bg-[#057321]/10 text-[#057321]">
+                    <ClipboardList size={24} />
+                  </div>
+                </div>
+              </div>
+
+              <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-5">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-sm text-gray-500">Recebimentos</p>
+                    <p className="text-3xl font-bold text-blue-600">{resumo.entradas}</p>
+                  </div>
+                  <div className="p-3 rounded-xl bg-blue-50 text-blue-600">
+                    <ArrowDownLeft size={24} />
+                  </div>
+                </div>
+              </div>
+
+              <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-5">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-sm text-gray-500">Taxa de saída</p>
+                    <p className="text-3xl font-bold text-green-600">{resumo.taxaSaida}%</p>
+                  </div>
+                  <div className="p-3 rounded-xl bg-green-50 text-green-600">
+                    <TrendingUp size={24} />
+                  </div>
+                </div>
+              </div>
+
+              <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-5">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-sm text-gray-500">Blocos ativos</p>
+                    <p className="text-3xl font-bold text-amber-600">{resumo.blocosAtivos}</p>
+                  </div>
+                  <div className="p-3 rounded-xl bg-amber-50 text-amber-600">
+                    <Building2 size={24} />
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
+              <ChartCard title="Movimentação por Dia" subtitle="Últimos 14 pontos do período filtrado">
+                <CorrespondenciasLineChart data={dadosPorDia} title="" height={280} />
+              </ChartCard>
+
+              <ChartCard title="Distribuição dos Eventos">
+                <StatusDoughnutChart data={dadosPorStatus} title="" height={280} />
+              </ChartCard>
+
+              <ChartCard title="Eventos por Tipo">
+                <CorrespondenciasBarChart data={dadosPorTipoAtividade} title="" height={280} />
+              </ChartCard>
+
+              <ChartCard title="Volume por Bloco">
+                <BlocosPieChart data={dadosPorBloco} title="" height={280} />
+              </ChartCard>
+
+              <ChartCard title="Produtividade por Responsável" subtitle="Registros no período selecionado">
+                <CorrespondenciasBarChart data={dadosPorResponsavel} title="" height={280} horizontal />
+              </ChartCard>
+
+              <ChartCard title="Resumo Executivo" subtitle="Leitura rápida do período">
+                <div className="space-y-4 text-sm text-gray-700">
+                  <div className="flex items-center justify-between rounded-lg bg-gray-50 p-4">
+                    <span className="flex items-center gap-2 font-medium"><BarChart3 size={18} /> Média diária</span>
+                    <strong>{dadosPorDia.length > 0 ? (resumo.total / dadosPorDia.length).toFixed(1) : "0.0"}</strong>
+                  </div>
+                  <div className="flex items-center justify-between rounded-lg bg-gray-50 p-4">
+                    <span className="flex items-center gap-2 font-medium"><MessageCircle size={18} /> Avisos enviados</span>
+                    <strong>{resumo.avisos}</strong>
+                  </div>
+                  <div className="flex items-center justify-between rounded-lg bg-gray-50 p-4">
+                    <span className="flex items-center gap-2 font-medium"><ArrowUpRight size={18} /> Retiradas confirmadas</span>
+                    <strong>{resumo.retiradas}</strong>
+                  </div>
+                </div>
+              </ChartCard>
+            </div>
+          </>
         )}
 
         {/* TABELA DE RESULTADOS */}

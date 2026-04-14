@@ -4,9 +4,7 @@ import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import withAuth from "@/components/withAuth";
 import { useAuth } from "@/hooks/useAuth";
-import { doc, getDoc, setDoc } from "firebase/firestore";
-import { db, auth } from "@/app/lib/firebase";
-import { signOut } from "firebase/auth";
+import { supabase } from "@/app/lib/supabase";
 import { 
   Settings, 
   Save, 
@@ -57,11 +55,14 @@ function ConfiguracoesRetiradaPage() {
     }
 
     try {
-      const configRef = doc(db, "condominios", user.condominioId, "configuracoes", "retirada");
-      const configDoc = await getDoc(configRef);
+      const { data, error } = await supabase
+        .from("configuracoes_retirada")
+        .select("*")
+        .eq("condominio_id", user.condominioId)
+        .single();
 
-      if (configDoc.exists()) {
-        setConfig(configDoc.data() as ConfiguracoesRetirada);
+      if (data && !error) {
+        setConfig(data as ConfiguracoesRetirada);
       }
     } catch (error) {
       console.error("Erro ao carregar configurações:", error);
@@ -81,8 +82,10 @@ function ConfiguracoesRetiradaPage() {
     setMessage(null);
 
     try {
-      const configRef = doc(db, "condominios", user.condominioId, "configuracoes", "retirada");
-      await setDoc(configRef, config);
+      const { error } = await supabase
+        .from("configuracoes_retirada")
+        .upsert({ ...config, condominio_id: user.condominioId }, { onConflict: "condominio_id" });
+      if (error) throw error;
 
       setMessage({ type: "success", text: "Configurações salvas com sucesso!" });
 

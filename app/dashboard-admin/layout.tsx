@@ -1,8 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { db } from "@/app/lib/firebase";
-import { collection, getDocs } from "firebase/firestore";
+import { supabase } from "@/app/lib/supabase";
 import Image from "next/image";
 import { Home, Building2, Users, Building, UserCheck, DoorOpen, CheckCircle, LogOut } from "lucide-react";
 import { useRouter, usePathname } from "next/navigation";
@@ -25,15 +24,20 @@ function DashboardAdminLayout({
 
   const carregarCondominios = async () => {
     try {
-      const snapshot = await getDocs(collection(db, "condominios"));
-      const lista = snapshot.docs.map((doc) => ({
-        id: doc.id,
-        ...doc.data(),
+      const { data, error } = await supabase
+        .from("condominios")
+        .select("*")
+        .order("nome", { ascending: true });
+
+      if (error) throw error;
+
+      const lista = (data || []).map((item: any) => ({
+        id: item.id,
+        nome: item.nome,
+        cnpj: item.cnpj,
+        ...item,
       }));
-      
-      // Ordenar alfabeticamente
-      lista.sort((a: any, b: any) => a.nome.localeCompare(b.nome));
-      
+
       setCondominios(lista);
       
       if (lista.length > 0) {

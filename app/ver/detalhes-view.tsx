@@ -1,8 +1,8 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { db } from "@/app/lib/firebase";
-import { doc, getDoc } from "firebase/firestore";
+import { supabase } from "@/app/lib/supabase";
+import { getApiUrl } from "@/utils/platform";
 import {
   Loader2,
   FileX,
@@ -10,36 +10,86 @@ import {
   Image as ImageIcon,
   FileDown,
   MessageSquare,
+  Printer,
+  Share2,
 } from "lucide-react";
 
 interface DetalhesViewProps {
   readonly id: string;
+  readonly documentType?: "aviso" | "recibo";
 }
 
-export default function DetalhesView({ id }: DetalhesViewProps) {
+export default function DetalhesView({ id, documentType }: DetalhesViewProps) {
   const [loading, setLoading] = useState(true);
   const [dados, setDados] = useState<any>(null);
   const [erro, setErro] = useState("");
   const [isImage, setIsImage] = useState(false);
   const [isPdf, setIsPdf] = useState(false);
   const [isTextOnly, setIsTextOnly] = useState(false);
+  const [statusAcao, setStatusAcao] = useState("");
+
+  const mostrarStatusAcao = (mensagem: string) => {
+    setStatusAcao(mensagem);
+    globalThis.window.setTimeout(() => {
+      setStatusAcao((atual) => (atual === mensagem ? "" : atual));
+    }, 2500);
+  };
+
+  const resolverUrlPublica = async (recordId: string, fallbackUrl: string) => {
+    try {
+      const params = new URLSearchParams({ id: recordId });
+      if (documentType) {
+        params.set("type", documentType);
+      }
+
+      const response = await fetch(`${getApiUrl("/api/public-document")}?${params.toString()}`);
+      if (!response.ok) {
+        return fallbackUrl;
+      }
+
+      const result = await response.json();
+      return result?.url || fallbackUrl;
+    } catch {
+      return fallbackUrl;
+    }
+  };
 
   const colecoesPublicas = ["correspondencias", "avisos_rapidos"];
 
   const buscarDocumento = async (colecao: string, idLimpo: string) => {
     try {
-      const docRef = doc(db, colecao, idLimpo);
-      const docSnap = await getDoc(docRef);
-      if (docSnap.exists()) {
-        return { dados: docSnap.data(), colecao };
+      const { data, error } = await supabase
+        .from(colecao)
+        .select("*")
+        .eq("id", idLimpo)
+        .single();
+
+      if (error) {
+        if (error.code === "PGRST116") return null; // Not found
+        console.warn(`⚠️ Erro ao consultar ${colecao}:`, error.message);
+        return null;
+      }
+
+      if (data) {
+        // Map snake_case → camelCase for display fields
+        return {
+          dados: {
+            ...data,
+            moradorNome: data.morador_nome ?? data.moradorNome,
+            moradorId: data.morador_id ?? data.moradorId,
+            imagemUrl: data.imagem_url ?? data.imagemUrl,
+            pdfUrl: data.pdf_url ?? data.pdfUrl,
+            reciboUrl: data.recibo_url ?? data.reciboUrl,
+            fotoUrl: data.foto_url ?? data.fotoUrl,
+            dadosRetirada: data.dados_retirada ?? data.dadosRetirada,
+          },
+          colecao,
+        };
       }
       return null;
     } catch (error: any) {
-      if (error?.code === "permission-denied") {
-        console.warn(`⚠️ Sem permissão para consultar ${colecao}. Ignorando coleção.`);
-        return null;
-      }
-      throw error;
+      console.warn(`⚠️ Erro ao consultar ${colecao}:`, error.message);
+      return null;
     }
   };
 
@@ -55,7 +105,11 @@ export default function DetalhesView({ id }: DetalhesViewProps) {
 
   const analisarTipoArquivo = (urlArquivo: string) => {
     const urlLower = urlArquivo.toLowerCase();
-    const ehPdf = urlLower.includes(".pdf") || urlLower.includes("application/pdf") || urlLower.includes("alt=media&token");
+    const ehPdf =
+      urlLower.includes(".pdf") ||
+      urlLower.includes("application/pdf") ||
+      urlLower.includes("alt=media&token") ||
+      urlLower.includes("/api/public-document");
     const ehImagem = !ehPdf && (urlLower.includes(".jpg") || urlLower.includes(".jpeg") || urlLower.includes(".png") || urlLower.includes("image/"));
     return { ehPdf, ehImagem };
   };
@@ -117,7 +171,22 @@ export default function DetalhesView({ id }: DetalhesViewProps) {
           return;
         }
 
-        const { ehPdf, ehImagem } = temArquivo ? analisarTipoArquivo(String(urlArquivo)) : { ehPdf: false, ehImagem: false };
+        const urlResolvida = temArquivo
+          ? await resolverUrlPublica(idLimpo, String(urlArquivo))
+          : "";
+
+        const urlParaAnalise = [
+          String(dadosEncontrados?.reciboUrl || ""),
+          String(dadosEncontrados?.pdfUrl || ""),
+          String(dadosEncontrados?.fotoUrl || ""),
+          String(dadosEncontrados?.imagemUrl || ""),
+          String(urlResolvida || ""),
+          String(urlArquivo || ""),
+        ].find(Boolean) || "";
+
+        const { ehPdf, ehImagem } = temArquivo
+          ? analisarTipoArquivo(urlParaAnalise)
+          : { ehPdf: false, ehImagem: false };
 
         setIsPdf(ehPdf);
         setIsImage(ehImagem);
@@ -126,7 +195,7 @@ export default function DetalhesView({ id }: DetalhesViewProps) {
         setDados({
           ...dadosEncontrados,
           mensagem: textoMensagem, // Garante que a mensagem vá para o campo certo
-          urlFinal: urlArquivo,
+          urlFinal: urlResolvida || urlArquivo,
           moradorNome: dadosEncontrados?.moradorNome || dadosEncontrados?.destinatario || "Morador",
         });
 
@@ -140,7 +209,7 @@ export default function DetalhesView({ id }: DetalhesViewProps) {
     };
 
     buscar();
-  }, [id]);
+  }, [id, documentType]);
 
   const handleAbrirArquivo = (e: React.MouseEvent) => {
     if (!dados?.urlFinal) return;
@@ -149,6 +218,45 @@ export default function DetalhesView({ id }: DetalhesViewProps) {
         e.preventDefault();
         globalThis.window.open(dados.urlFinal, "_system");
     }
+  };
+
+  const handleCompartilhar = async () => {
+    const urlCompartilhamento = dados?.urlFinal || globalThis.window.location.href;
+    const payload = {
+      title: getHeaderTitle(),
+      text: `Protocolo #${dados?.protocolo ?? "-"}`,
+      url: urlCompartilhamento,
+    };
+
+    try {
+      if (globalThis.navigator.share) {
+        await globalThis.navigator.share(payload);
+        return;
+      }
+
+      await globalThis.navigator.clipboard.writeText(urlCompartilhamento);
+      mostrarStatusAcao("Link copiado para compartilhamento.");
+    } catch {
+      mostrarStatusAcao("Nao foi possivel compartilhar agora.");
+    }
+  };
+
+  const handleImprimir = () => {
+    if (isTextOnly || !dados?.urlFinal) {
+      globalThis.window.print();
+      return;
+    }
+
+    const janelaImpressao = globalThis.window.open(dados.urlFinal, "_blank");
+    if (!janelaImpressao) {
+      mostrarStatusAcao("Libere pop-ups para imprimir o documento.");
+      return;
+    }
+
+    janelaImpressao.addEventListener("load", () => {
+      janelaImpressao.focus();
+      janelaImpressao.print();
+    }, { once: true });
   };
 
   if (loading) {
@@ -212,19 +320,45 @@ export default function DetalhesView({ id }: DetalhesViewProps) {
               Documento validado para visualização pública
             </span>
 
-            {!isTextOnly && dados?.urlFinal && (
-              <a
-                href={dados.urlFinal}
-                onClick={handleAbrirArquivo}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="text-xs font-bold text-[#057321] hover:underline uppercase tracking-wide flex items-center gap-1 whitespace-nowrap cursor-pointer"
+            <div className="flex items-center gap-2 shrink-0">
+              <button
+                type="button"
+                onClick={handleCompartilhar}
+                className="inline-flex items-center gap-2 rounded-full border border-[#057321]/20 bg-white px-3 py-2 text-xs font-semibold text-[#057321] transition hover:bg-[#057321]/5"
               >
-                {isImage ? <ImageIcon size={14} /> : <FileDown size={14} />}
-                Abrir {isImage ? "Imagem" : "PDF"}
-              </a>
-            )}
+                <Share2 size={14} />
+                Compartilhar
+              </button>
+
+              <button
+                type="button"
+                onClick={handleImprimir}
+                className="inline-flex items-center gap-2 rounded-full bg-[#057321] px-3 py-2 text-xs font-semibold text-white transition hover:bg-[#04601c]"
+              >
+                <Printer size={14} />
+                Imprimir
+              </button>
+
+              {!isTextOnly && !isPdf && dados?.urlFinal && (
+                <a
+                  href={dados.urlFinal}
+                  onClick={handleAbrirArquivo}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-xs font-bold text-[#057321] hover:underline uppercase tracking-wide flex items-center gap-1 whitespace-nowrap cursor-pointer"
+                >
+                  {isImage ? <ImageIcon size={14} /> : <FileDown size={14} />}
+                  Abrir {isImage ? "Imagem" : "PDF"}
+                </a>
+              )}
+            </div>
           </div>
+
+          {statusAcao && (
+            <div className="border-b border-gray-200 bg-green-50 px-4 py-2 text-sm font-medium text-[#057321]">
+              {statusAcao}
+            </div>
+          )}
 
           <div className="flex-1 bg-black/5 overflow-auto flex items-center justify-center p-2 min-h-[60vh]">
             
@@ -254,36 +388,11 @@ export default function DetalhesView({ id }: DetalhesViewProps) {
 
             {/* PDF */}
             {isPdf && (
-              <>
-                <div className="w-full flex flex-col items-center justify-center gap-4 p-6 md:hidden">
-                  <div className="w-full bg-white border border-gray-200 rounded-2xl shadow-md p-6 text-center">
-                    <div className="mx-auto w-16 h-16 rounded-full bg-green-50 flex items-center justify-center mb-3">
-                      <FileDown className="text-[#057321]" size={30} />
-                    </div>
-                    <h2 className="text-lg font-bold text-gray-900 mb-1">
-                      PDF Disponível
-                    </h2>
-                    <p className="text-sm text-gray-600">
-                      Toque no botão abaixo para abrir o recibo.
-                    </p>
-                    <a
-                      href={dados.urlFinal}
-                      onClick={handleAbrirArquivo}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="mt-5 inline-flex items-center justify-center gap-2 w-full bg-[#057321] hover:bg-[#046119] text-white font-bold py-3 rounded-xl shadow-lg transition cursor-pointer"
-                    >
-                      <FileDown size={18} />
-                      Abrir PDF
-                    </a>
-                  </div>
-                </div>
-                <iframe
-                  src={dados.urlFinal}
-                  className="w-full h-[80vh] hidden md:block"
-                  title="Comprovante PDF"
-                />
-              </>
+              <iframe
+                src={dados.urlFinal}
+                className="w-full h-[80vh] bg-white"
+                title="Comprovante PDF"
+              />
             )}
 
             {!isImage && !isPdf && !isTextOnly && (

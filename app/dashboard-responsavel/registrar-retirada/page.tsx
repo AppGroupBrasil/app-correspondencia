@@ -4,8 +4,7 @@ import { useState, useEffect, useRef, useMemo, useCallback } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import withAuth from "@/components/withAuth";
 import ModalRetiradaProfissional from "@/components/ModalRetiradaProfissional";
-import { collection, query, where, getDocs, DocumentData } from "firebase/firestore";
-import { db } from "@/app/lib/firebase";
+import { supabase } from "@/app/lib/supabase";
 import {
   Package,
   Search,
@@ -38,7 +37,7 @@ import MessageTemplateButton from "@/components/MessageTemplateButton";
 import { useTemplates } from "@/hooks/useTemplates";
 import { formatPtBrDateTime } from "@/utils/messageFormat";
 
-interface CorrespondenciaDocument extends DocumentData {
+interface CorrespondenciaDocument {
   id: string;
   protocolo: string;
   moradorNome: string;
@@ -113,16 +112,32 @@ function RegistrarRetiradaResponsavelPage() {
   const carregarDadosIniciais = async () => {
     setLoading(true);
     try {
-      const q = query(
-        collection(db, "correspondencias"),
-        where("condominioId", "==", user?.condominioId),
-        where("status", "==", "pendente")
-      );
-      const snapshot = await getDocs(q);
-      const dados: CorrespondenciaDocument[] = [];
-      snapshot.forEach((doc) =>
-        dados.push({ id: doc.id, ...doc.data() } as CorrespondenciaDocument)
-      );
+      const { data, error } = await supabase
+        .from("correspondencias")
+        .select("*")
+        .eq("condominio_id", user?.condominioId)
+        .eq("status", "pendente");
+
+      if (error) throw error;
+      const dados: CorrespondenciaDocument[] = (data || []).map((d: any) => ({
+        id: d.id,
+        protocolo: d.protocolo,
+        moradorNome: d.morador_nome,
+        blocoNome: d.bloco_nome,
+        apartamento: d.apartamento,
+        condominioId: d.condominio_id,
+        condominioNome: d.condominio_nome,
+        moradorId: d.morador_id,
+        status: d.status,
+        dataChegada: d.data_chegada,
+        tipoCorrespondencia: d.tipo_correspondencia,
+        moradorTelefone: d.morador_telefone,
+        moradorEmail: d.morador_email,
+        compartilhadoVia: d.compartilhado_via,
+        compartilhadoEm: d.compartilhado_em,
+        criadoEm: d.criado_em,
+        dataHora: d.data_hora,
+      }));
       setTodosPendentes(dados);
 
       const paramQ = searchParams.get("q");
@@ -254,15 +269,14 @@ function RegistrarRetiradaResponsavelPage() {
       if (Number.isNaN(termoNumero)) {
         setError("Nada encontrado.");
       } else {
-        const q = query(
-          collection(db, "correspondencias"),
-          where("condominioId", "==", user?.condominioId),
-          where("protocolo", "==", String(termoNumero)),
-          where("status", "==", "retirada")
-        );
-        const snap = await getDocs(q);
+        const { data: snap } = await supabase
+          .from("correspondencias")
+          .select("id")
+          .eq("condominio_id", user?.condominioId)
+          .eq("protocolo", String(termoNumero))
+          .eq("status", "retirada");
 
-        if (snap.empty) {
+        if (!snap || snap.length === 0) {
           setError("Nada encontrado.");
         } else {
           setError(`Protocolo #${busca} JÁ RETIRADO.`);

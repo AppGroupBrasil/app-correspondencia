@@ -1,19 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { db } from "@/app/lib/firebase";
-import {
-  collection,
-  addDoc,
-  Timestamp,
-  query,
-  where,
-  orderBy,
-  getDocs,
-  limit,
-  doc,
-  updateDoc,
-} from "firebase/firestore";
+import { supabase } from "@/app/lib/supabase";
 import { useAuth } from "@/hooks/useAuth";
 
 export interface CriarAvisoRapidoDTO {
@@ -73,17 +61,25 @@ export function useAvisosRapidos() {
     setError("");
 
     try {
-      const payload = {
-        ...dados,
-        criadoEm: Timestamp.now(),
-        dataEnvio: Timestamp.now(),
+      const { data, error: insertError } = await supabase.from("avisos_rapidos").insert({
+        enviado_por_id: dados.enviadoPorId,
+        enviado_por_nome: dados.enviadoPorNome,
+        enviado_por_role: dados.enviadoPorRole,
+        morador_id: dados.moradorId,
+        morador_nome: dados.moradorNome,
+        morador_telefone: dados.moradorTelefone,
+        condominio_id: dados.condominioId,
+        bloco_id: dados.blocoId,
+        bloco_nome: dados.blocoNome,
+        apartamento: dados.apartamento,
+        mensagem: dados.mensagem,
         protocolo: dados.protocolo || null,
-        fotoUrl: dados.fotoUrl || null,
-        status: "enviado" as const,
-      };
+        foto_url: dados.fotoUrl || null,
+        status: "enviado",
+      }).select("id").single();
 
-      const docRef = await addDoc(collection(db, "avisos_rapidos"), payload);
-      return docRef.id;
+      if (insertError) throw insertError;
+      return data!.id;
     } catch (err: any) {
       console.error("❌ Erro ao registrar aviso rápido:", err);
       setError(err?.message || "Falha ao registrar aviso.");
@@ -114,11 +110,12 @@ export function useAvisosRapidos() {
         mensagem: mensagemFinal,
       };
 
-      if (extras?.linkUrl !== undefined) updatePayload.linkUrl = extras.linkUrl;
+      if (extras?.linkUrl !== undefined) updatePayload.link_url = extras.linkUrl;
       if (extras?.status !== undefined) updatePayload.status = extras.status;
-      if (extras?.fotoUrl !== undefined) updatePayload.fotoUrl = extras.fotoUrl;
+      if (extras?.fotoUrl !== undefined) updatePayload.foto_url = extras.fotoUrl;
 
-      await updateDoc(doc(db, "avisos_rapidos", avisoId), updatePayload);
+      const { error: updateError } = await supabase.from("avisos_rapidos").update(updatePayload).eq("id", avisoId);
+      if (updateError) throw updateError;
       return true;
     } catch (err: any) {
       console.error("❌ Erro ao atualizar mensagem do aviso:", err);
@@ -137,16 +134,34 @@ export function useAvisosRapidos() {
     setError("");
 
     try {
-      const avisosRef = collection(db, "avisos_rapidos");
-      const q = query(
-        avisosRef,
-        where("condominioId", "==", targetCondominio),
-        orderBy("criadoEm", "desc"),
-        limit(limiteBusca)
-      );
+      const { data, error: queryError } = await supabase
+        .from("avisos_rapidos")
+        .select("*")
+        .eq("condominio_id", targetCondominio)
+        .order("criado_em", { ascending: false })
+        .limit(limiteBusca);
 
-      const snapshot = await getDocs(q);
-      return snapshot.docs.map((d) => normalizeAviso(d.id, d.data()));
+      if (queryError) throw queryError;
+      return (data || []).map((d: any) => normalizeAviso(d.id, {
+        ...d,
+        enviadoPorId: d.enviado_por_id,
+        enviadoPorNome: d.enviado_por_nome,
+        enviadoPorRole: d.enviado_por_role,
+        moradorId: d.morador_id,
+        moradorNome: d.morador_nome,
+        moradorTelefone: d.morador_telefone,
+        condominioId: d.condominio_id,
+        blocoId: d.bloco_id,
+        blocoNome: d.bloco_nome,
+        apartamento: d.apartamento,
+        mensagem: d.mensagem,
+        protocolo: d.protocolo,
+        fotoUrl: d.foto_url,
+        linkUrl: d.link_url,
+        status: d.status,
+        dataEnvio: d.data_envio,
+        criadoEm: d.criado_em,
+      }));
     } catch (err: any) {
       console.error("❌ Erro ao buscar avisos rápidos:", err);
       setError(err?.message || "Falha ao buscar avisos.");
@@ -170,16 +185,31 @@ export function useAvisosRapidos() {
       const amanha = new Date(hoje);
       amanha.setDate(hoje.getDate() + 1);
 
-      const q = query(
-        collection(db, "avisos_rapidos"),
-        where("condominioId", "==", condId),
-        where("criadoEm", ">=", Timestamp.fromDate(hoje)),
-        where("criadoEm", "<", Timestamp.fromDate(amanha)),
-        orderBy("criadoEm", "desc")
-      );
+      const { data, error: queryError } = await supabase
+        .from("avisos_rapidos")
+        .select("*")
+        .eq("condominio_id", condId)
+        .gte("criado_em", hoje.toISOString())
+        .lt("criado_em", amanha.toISOString())
+        .order("criado_em", { ascending: false });
 
-      const snapshot = await getDocs(q);
-      return snapshot.docs.map((d) => normalizeAviso(d.id, d.data()));
+      if (queryError) throw queryError;
+      return (data || []).map((d: any) => normalizeAviso(d.id, {
+        ...d,
+        enviadoPorId: d.enviado_por_id,
+        enviadoPorNome: d.enviado_por_nome,
+        enviadoPorRole: d.enviado_por_role,
+        moradorId: d.morador_id,
+        moradorNome: d.morador_nome,
+        moradorTelefone: d.morador_telefone,
+        condominioId: d.condominio_id,
+        blocoId: d.bloco_id,
+        blocoNome: d.bloco_nome,
+        fotoUrl: d.foto_url,
+        linkUrl: d.link_url,
+        dataEnvio: d.data_envio,
+        criadoEm: d.criado_em,
+      }));
     } catch (err: any) {
       console.error("❌ Erro ao buscar avisos de hoje:", err);
       setError(err?.message || "Falha ao buscar avisos de hoje.");

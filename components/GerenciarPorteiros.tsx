@@ -5,22 +5,10 @@ import {
   Edit2, Trash2, UserCheck, UserX, Phone, Mail, Plus, X, Search, 
   FileText, FileSpreadsheet, XCircle 
 } from "lucide-react";
-import { db, auth } from "@/app/lib/firebase";
-import {
-  collection,
-  getDocs,
-  updateDoc,
-  deleteDoc,
-  doc,
-  query,
-  where,
-  serverTimestamp,
-  setDoc,
-  getDoc,
-} from "firebase/firestore";
-import { createUserWithEmailAndPassword, signOut } from "firebase/auth";
+import { supabase } from "@/app/lib/supabase";
 import { useAuth } from "@/hooks/useAuth";
 import BotaoVoltar from "@/components/BotaoVoltar";
+import { getApiUrl } from "@/utils/platform";
 
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
@@ -66,9 +54,13 @@ export default function GerenciarPorteiros({ condominioId: adminCondominioId }: 
     async function garantirCondominioId() {
       if (user?.uid && !user.condominioId && !adminCondominioId) {
         try {
-          const snap = await getDoc(doc(db, "users", user.uid));
-          if (snap.exists()) {
-            setFetchedCondominioId(snap.data().condominioId);
+          const { data } = await supabase
+            .from("users")
+            .select("condominio_id")
+            .eq("id", user.uid)
+            .single();
+          if (data) {
+            setFetchedCondominioId(data.condominio_id);
           }
         } catch (error) {
           console.error("Erro ao buscar detalhes do usuário", error);
@@ -89,16 +81,22 @@ export default function GerenciarPorteiros({ condominioId: adminCondominioId }: 
     if (!targetCondominioId) return;
     try {
       setLoading(true);
-      const q = query(
-        collection(db, "users"),
-        where("role", "==", "porteiro"),
-        where("condominioId", "==", targetCondominioId)
-      );
-      const snapshot = await getDocs(q);
+      const { data, error } = await supabase
+        .from("users")
+        .select("*")
+        .eq("role", "porteiro")
+        .eq("condominio_id", targetCondominioId);
 
-      const lista = snapshot.docs.map((d) => ({
+      if (error) throw error;
+
+      const lista = (data || []).map((d: any) => ({
         id: d.id,
-        ...(d.data() as any),
+        nome: d.nome,
+        email: d.email,
+        whatsapp: d.whatsapp,
+        status: d.status || "ativo",
+        criadoEm: d.criado_em,
+        uid: d.uid,
       })) as Porteiro[];
 
       // Ordenação Alfabética
@@ -133,34 +131,37 @@ export default function GerenciarPorteiros({ condominioId: adminCondominioId }: 
           nome,
           email,
           whatsapp,
-          atualizadoEm: serverTimestamp(),
+          atualizado_em: new Date().toISOString(),
         };
 
         if (senha) {
              alert("A senha de acesso não foi alterada (requer redefinição por email). Apenas os dados cadastrais foram salvos.");
         }
 
-        await updateDoc(doc(db, "users", porteiroEditando.id), dadosAtualizacao);
+        await supabase.from("users").update(dadosAtualizacao).eq("id", porteiroEditando.id);
         alert("Dados do porteiro atualizados!");
       } else {
-        const userCredential = await createUserWithEmailAndPassword(auth, email, senha);
-        const uid = userCredential.user.uid;
-
-        await setDoc(doc(db, "users", uid), {
-          uid,
-          nome,
-          email,
-          whatsapp,
-          role: "porteiro",
-          condominioId: targetCondominioId,
-          status: "ativo",
-          criadoEm: serverTimestamp(),
+        // Criar via API route (server-side) para não deslogar o admin
+        const res = await fetch(getApiUrl('/api/criar-usuario'), {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            email,
+            senha,
+            nome,
+            role: 'porteiro',
+            condominioId: targetCondominioId,
+            dados: {
+              whatsapp,
+              status: 'ativo',
+            },
+          }),
         });
 
-        await signOut(auth);
-        alert("Porteiro cadastrado com sucesso! Por segurança, você foi desconectado. Faça login novamente.");
-        window.location.href = "/login";
-        return;
+        const result = await res.json();
+        if (!res.ok) throw new Error(result.error || 'Erro ao criar porteiro');
+
+        alert("Porteiro cadastrado com sucesso!");
       }
 
       limparFormulario();
@@ -168,7 +169,7 @@ export default function GerenciarPorteiros({ condominioId: adminCondominioId }: 
       carregarPorteiros();
     } catch (err: any) {
       console.error("Erro ao salvar:", err);
-      if (err.code === "auth/email-already-in-use") alert("Este email já está em uso.");
+      if (err.message?.includes("já está em uso") || err.message?.includes("already")) alert("Este email já está em uso.");
       else alert("Erro ao salvar: " + err.message);
     } finally {
       setLoading(false);
@@ -178,10 +179,10 @@ export default function GerenciarPorteiros({ condominioId: adminCondominioId }: 
   const alternarStatus = async (porteiro: Porteiro) => {
     try {
       const novoStatus = porteiro.status === "ativo" ? "inativo" : "ativo";
-      await updateDoc(doc(db, "users", porteiro.id), {
+      await supabase.from("users").update({
         status: novoStatus,
-        atualizadoEm: serverTimestamp(),
-      });
+        atualizado_em: new Date().toISOString(),
+      }).eq("id", porteiro.id);
       carregarPorteiros();
     } catch (err) {
       console.error("Erro status:", err);
@@ -192,7 +193,7 @@ export default function GerenciarPorteiros({ condominioId: adminCondominioId }: 
   const excluirPorteiro = async (porteiro: Porteiro) => {
     if (!confirm(`Deseja realmente excluir "${porteiro.nome}"? O acesso será removido.`)) return;
     try {
-      await deleteDoc(doc(db, "users", porteiro.id));
+      await supabase.from("users").delete().eq("id", porteiro.id);
       carregarPorteiros();
     } catch (err) {
       console.error("Erro exclusão:", err);

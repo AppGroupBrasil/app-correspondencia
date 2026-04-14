@@ -9,6 +9,10 @@ import DetalhesView from "./detalhes-view";
 function VisualizarConteudo() {
   const searchParams = useSearchParams();
   const id = searchParams.get("id");
+  const documentTypeParam = searchParams.get("type");
+  const documentType = documentTypeParam === "aviso" || documentTypeParam === "recibo"
+    ? documentTypeParam
+    : undefined;
 
   // Se não tiver ID na URL (?id=...), mostra aviso
   if (!id) {
@@ -20,7 +24,7 @@ function VisualizarConteudo() {
   }
 
   // Renderiza o componente que criamos
-  return <DetalhesView id={id} />;
+  return <DetalhesView id={id} documentType={documentType} />;
 }
 
 export default function VerPageRaiz() {

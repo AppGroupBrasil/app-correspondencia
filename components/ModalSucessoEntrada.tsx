@@ -5,6 +5,8 @@ import { CheckCircle, MessageCircle, Mail, FileText, Printer, Loader2, Copy } fr
 import { useAuth } from "@/hooks/useAuth";
 import { useTemplates } from "@/hooks/useTemplates";
 import { parseTemplate } from "@/utils/templateParser";
+import { buildWhatsAppUrl } from "@/services/whatsapp";
+import { abrirLink } from "@/utils/platform";
 
 interface Props {
   protocolo: string;
@@ -36,9 +38,6 @@ export default function ModalSucessoEntrada({
   
   const { user } = useAuth();
   const { templates } = useTemplates(user?.condominioId || "");
-
-  const limparTelefone = (telefone: string) => telefone.replace(/\D/g, "");
-
   const gerarMensagemPadrao = () => {
     const dataHoje = new Date().toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' });
     
@@ -83,19 +82,20 @@ Aguardamos a sua retirada`;
     return gerarMensagemPadrao();
   };
 
-  const handleWhatsApp = () => {
+  const handleWhatsApp = async () => {
     if (!telefoneMorador) return alert("Morador sem telefone cadastrado.");
     
     if (!linkPublico && !mensagemFormatada) return alert("O link público do PDF ainda está sendo gerado. Aguarde um momento.");
 
     const textoFinal = getTextoFinal();
-    
-    const telefoneFinal = limparTelefone(telefoneMorador);
-    const numeroComPrefixo = telefoneFinal.startsWith('55') ? `+${telefoneFinal}` : `+55${telefoneFinal}`;
-    
-    const whatsLink = `https://wa.me/${numeroComPrefixo}?text=${encodeURIComponent(textoFinal)}`;
-    
-    window.open(whatsLink, "_blank");
+    const whatsLink = buildWhatsAppUrl(telefoneMorador, textoFinal);
+
+    if (!whatsLink) {
+      alert("Não foi possível montar o link do WhatsApp.");
+      return;
+    }
+
+    await abrirLink(whatsLink);
   };
 
   const handleCopiarTexto = () => {

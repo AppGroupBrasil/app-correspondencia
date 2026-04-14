@@ -1,6 +1,7 @@
 import "./globals.css";
 import type { Metadata, Viewport } from "next";
 import Script from "next/script";
+import { AuthProvider } from "@/contexts/AuthContext";
 
 const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || 'https://www.appcorrespondencia.com.br';
 
@@ -120,7 +121,7 @@ export const viewport: Viewport = {
   viewportFit: "cover",
 };
 
-export default function RootLayout({ children }: { children: React.ReactNode }) {
+export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
   return (
     <html lang="pt-BR" translate="no" suppressHydrationWarning>
       <head>
@@ -185,9 +186,11 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
           `}
         </Script>
 
-        <main className="min-h-screen w-full overflow-x-hidden">
-          {children}
-        </main>
+        <AuthProvider>
+          <main className="min-h-screen w-full overflow-x-hidden">
+            {children}
+          </main>
+        </AuthProvider>
       </body>
     </html>
   );

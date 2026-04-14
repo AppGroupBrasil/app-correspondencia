@@ -1,0 +1,225 @@
+# ============================================
+# Supabase Self-Hosted — Docker Compose
+# Para Hetzner (46.225.191.114) com Traefik
+# ============================================
+# Uso: docker compose -f docker-compose.supabase.yml up -d
+
+version: "3.8"
+
+services:
+  # ============================================
+  # PostgreSQL — Banco de dados principal
+  # ============================================
+  supabase-db:
+    image: supabase/postgres:15.6.1.143
+    container_name: supabase-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-SuaS3nhaF0rt3Aqui!}
+      POSTGRES_DB: postgres
+      JWT_SECRET: ${JWT_SECRET:-sua-chave-jwt-super-secreta-com-pelo-menos-32-caracteres-aqui}
+      JWT_EXP: 3600
+    volumes:
+      - supabase-db-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ============================================
+  # GoTrue — Auth Server (login, registro, JWT)
+  # ============================================
+  supabase-auth:
+    image: supabase/gotrue:v2.164.0
+    container_name: supabase-auth
+    restart: unless-stopped
+    depends_on:
+      supabase-db:
+        condition: service_healthy
+    environment:
+      GOTRUE_API_HOST: 0.0.0.0
+      GOTRUE_API_PORT: 9999
+      API_EXTERNAL_URL: ${API_EXTERNAL_URL:-http://localhost:8000}
+      GOTRUE_DB_DRIVER: postgres
+      GOTRUE_DB_DATABASE_URL: postgres://supabase_auth_admin:${POSTGRES_PASSWORD:-SuaS3nhaF0rt3Aqui!}@supabase-db:5432/postgres
+      GOTRUE_SITE_URL: ${SITE_URL:-http://localhost:3000}
+      GOTRUE_URI_ALLOW_LIST: ""
+      GOTRUE_DISABLE_SIGNUP: "false"
+      GOTRUE_JWT_ADMIN_ROLES: service_role
+      GOTRUE_JWT_AUD: authenticated
+      GOTRUE_JWT_DEFAULT_GROUP_NAME: authenticated
+      GOTRUE_JWT_EXP: 3600
+      GOTRUE_JWT_SECRET: ${JWT_SECRET:-sua-chave-jwt-super-secreta-com-pelo-menos-32-caracteres-aqui}
+      GOTRUE_EXTERNAL_EMAIL_ENABLED: "true"
+      GOTRUE_MAILER_AUTOCONFIRM: "true"
+      GOTRUE_SMTP_HOST: ${SMTP_HOST:-smtp.gmail.com}
+      GOTRUE_SMTP_PORT: ${SMTP_PORT:-587}
+      GOTRUE_SMTP_USER: ${SMTP_USER:-}
+      GOTRUE_SMTP_PASS: ${SMTP_PASS:-}
+      GOTRUE_SMTP_ADMIN_EMAIL: ${SMTP_ADMIN_EMAIL:-noreply@appcorrespondencia.com.br}
+      GOTRUE_MAILER_URLPATHS_CONFIRMATION: /auth/v1/verify
+      GOTRUE_MAILER_URLPATHS_INVITE: /auth/v1/verify
+      GOTRUE_MAILER_URLPATHS_RECOVERY: /auth/v1/verify
+      GOTRUE_MAILER_URLPATHS_EMAIL_CHANGE: /auth/v1/verify
+
+  # ============================================
+  # PostgREST — REST API automática para PostgreSQL
+  # ============================================
+  supabase-rest:
+    image: postgrest/postgrest:v12.2.3
+    container_name: supabase-rest
+    restart: unless-stopped
+    depends_on:
+      supabase-db:
+        condition: service_healthy
+    environment:
+      PGRST_DB_URI: postgres://authenticator:${POSTGRES_PASSWORD:-SuaS3nhaF0rt3Aqui!}@supabase-db:5432/postgres
+      PGRST_DB_SCHEMAS: public,storage
+      PGRST_DB_ANON_ROLE: anon
+      PGRST_JWT_SECRET: ${JWT_SECRET:-sua-chave-jwt-super-secreta-com-pelo-menos-32-caracteres-aqui}
+      PGRST_DB_USE_LEGACY_GUCS: "false"
+
+  # ============================================
+  # Realtime — WebSocket para dados em tempo real
+  # ============================================
+  supabase-realtime:
+    image: supabase/realtime:v2.30.34
+    container_name: supabase-realtime
+    restart: unless-stopped
+    depends_on:
+      supabase-db:
+        condition: service_healthy
+    environment:
+      PORT: 4000
+      DB_HOST: supabase-db
+      DB_PORT: 5432
+      DB_USER: supabase_admin
+      DB_PASSWORD: ${POSTGRES_PASSWORD:-SuaS3nhaF0rt3Aqui!}
+      DB_NAME: postgres
+      DB_AFTER_CONNECT_QUERY: "SET search_path TO _realtime"
+      DB_ENC_KEY: supabaserealtime
+      API_JWT_SECRET: ${JWT_SECRET:-sua-chave-jwt-super-secreta-com-pelo-menos-32-caracteres-aqui}
+      SECRET_KEY_BASE: ${SECRET_KEY_BASE:-ChangeThisToAVeryLongStringAtLeast64Characters1234567890abcdef}
+      ERL_AFLAGS: "-proto_dist inet_tcp"
+      DNS_NODES: "''"
+      RLIMIT_NOFILE: 10000
+      APP_NAME: realtime
+      SEED_SELF_HOST: "true"
+
+  # ============================================
+  # Storage — Gerenciamento de arquivos (S3-compatible)
+  # ============================================
+  supabase-storage:
+    image: supabase/storage-api:v1.11.13
+    container_name: supabase-storage
+    restart: unless-stopped
+    depends_on:
+      supabase-db:
+        condition: service_healthy
+    environment:
+      ANON_KEY: ${ANON_KEY}
+      SERVICE_KEY: ${SERVICE_ROLE_KEY}
+      POSTGREST_URL: http://supabase-rest:3000
+      PGRST_JWT_SECRET: ${JWT_SECRET:-sua-chave-jwt-super-secreta-com-pelo-menos-32-caracteres-aqui}
+      DATABASE_URL: postgres://supabase_storage_admin:${POSTGRES_PASSWORD:-SuaS3nhaF0rt3Aqui!}@supabase-db:5432/postgres
+      FILE_SIZE_LIMIT: 52428800  # 50MB
+      STORAGE_BACKEND: file
+      FILE_STORAGE_BACKEND_PATH: /var/lib/storage
+      REGION: us-east-1
+      GLOBAL_S3_BUCKET: supabase
+    volumes:
+      - supabase-storage-data:/var/lib/storage
+
+  # ============================================
+  # Kong — API Gateway (proxy unificado)
+  # ============================================
+  supabase-kong:
+    image: kong:2.8.1
+    container_name: supabase-kong
+    restart: unless-stopped
+    depends_on:
+      - supabase-auth
+      - supabase-rest
+      - supabase-realtime
+      - supabase-storage
+    environment:
+      KONG_DATABASE: "off"
+      KONG_DECLARATIVE_CONFIG: /var/lib/kong/kong.yml
+      KONG_DNS_ORDER: LAST,A,CNAME
+      KONG_PLUGINS: request-transformer,cors,key-auth,acl
+      KONG_NGINX_PROXY_PROXY_BUFFER_SIZE: 160k
+      KONG_NGINX_PROXY_PROXY_BUFFERS: 64 160k
+      SUPABASE_ANON_KEY: ${ANON_KEY}
+      SUPABASE_SERVICE_KEY: ${SERVICE_ROLE_KEY}
+    volumes:
+      - ./supabase/kong.yml:/var/lib/kong/kong.yml:ro
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.supabase.rule=Host(`supabase.appcorrespondencia.com.br`)"
+      - "traefik.http.routers.supabase.entrypoints=https"
+      - "traefik.http.routers.supabase.tls=true"
+      - "traefik.http.routers.supabase.tls.certresolver=letsencrypt"
+      - "traefik.http.services.supabase.loadbalancer.server.port=8000"
+      - "traefik.http.routers.supabase-http.rule=Host(`supabase.appcorrespondencia.com.br`)"
+      - "traefik.http.routers.supabase-http.entrypoints=http"
+      - "traefik.http.routers.supabase-http.middlewares=redirect-to-https"
+
+  # ============================================
+  # Supabase Studio — Dashboard Admin (opcional)
+  # ============================================
+  supabase-studio:
+    image: supabase/studio:latest
+    container_name: supabase-studio
+    restart: unless-stopped
+    depends_on:
+      - supabase-kong
+    healthcheck:
+      disable: true
+    environment:
+      HOSTNAME: "0.0.0.0"
+      STUDIO_PG_META_URL: http://supabase-meta:8080
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-SuaS3nhaF0rt3Aqui!}
+      DEFAULT_ORGANIZATION_NAME: AppGroup
+      DEFAULT_PROJECT_NAME: "App Correspondencia"
+      SUPABASE_URL: http://supabase-kong:8000
+      SUPABASE_PUBLIC_URL: ${API_EXTERNAL_URL:-http://localhost:8000}
+      SUPABASE_ANON_KEY: ${ANON_KEY}
+      SUPABASE_SERVICE_KEY: ${SERVICE_ROLE_KEY}
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.supabase-studio.rule=Host(`studio.appcorrespondencia.com.br`)"
+      - "traefik.http.routers.supabase-studio.entrypoints=https"
+      - "traefik.http.routers.supabase-studio.tls=true"
+      - "traefik.http.routers.supabase-studio.tls.certresolver=letsencrypt"
+      - "traefik.http.services.supabase-studio.loadbalancer.server.port=3000"
+      - "traefik.http.routers.supabase-studio-http.rule=Host(`studio.appcorrespondencia.com.br`)"
+      - "traefik.http.routers.supabase-studio-http.entrypoints=http"
+      - "traefik.http.routers.supabase-studio-http.middlewares=redirect-to-https"
+
+  # ============================================
+  # PostgreSQL Meta — Metadata API (para Studio)
+  # ============================================
+  supabase-meta:
+    image: supabase/postgres-meta:v0.83.2
+    container_name: supabase-meta
+    restart: unless-stopped
+    depends_on:
+      supabase-db:
+        condition: service_healthy
+    environment:
+      PG_META_PORT: 8080
+      PG_META_DB_HOST: supabase-db
+      PG_META_DB_PORT: 5432
+      PG_META_DB_NAME: postgres
+      PG_META_DB_USER: supabase_admin
+      PG_META_DB_PASSWORD: ${POSTGRES_PASSWORD:-SuaS3nhaF0rt3Aqui!}
+
+volumes:
+  supabase-db-data:
+  supabase-storage-data:
+
+networks:
+  default:
+    name: coolify
+    external: true

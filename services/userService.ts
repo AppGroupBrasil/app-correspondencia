@@ -1,24 +1,4 @@
-import {
-  collection,
-  query,
-  where,
-  orderBy,
-  getDocs,
-  getDoc,
-  addDoc,
-  updateDoc,
-  deleteDoc,
-  doc,
-  Timestamp,
-  DocumentData,
-} from "firebase/firestore";
-import {
-  createUserWithEmailAndPassword,
-  sendPasswordResetEmail,
-  deleteUser as deleteAuthUser,
-  User as FirebaseUser,
-} from "firebase/auth";
-import { auth, db } from "@/app/lib/firebase";
+import { supabase } from "@/app/lib/supabase";
 
 // ============================================
 // TIPOS
@@ -44,8 +24,8 @@ export interface User {
   cpf?: string;
   ativo: boolean;
   aprovado: boolean;
-  dataCadastro: Timestamp;
-  ultimoAcesso?: Timestamp;
+  dataCadastro: string;
+  ultimoAcesso?: string;
   fotoUrl?: string;
 }
 
@@ -65,42 +45,42 @@ export interface NovoUsuario {
 // SERVIÇO DE USUÁRIOS
 // ============================================
 
-const COLLECTION_NAME = "users";
+const TABLE_NAME = "users";
+
+function mapUser(d: any): User {
+  return {
+    id: d.id,
+    uid: d.id,
+    email: d.email,
+    nome: d.nome,
+    role: d.role,
+    condominioId: d.condominio_id,
+    bloco: d.bloco_nome,
+    apartamento: d.apartamento,
+    telefone: d.telefone,
+    cpf: d.cpf,
+    ativo: d.ativo,
+    aprovado: d.aprovado,
+    dataCadastro: d.criado_em,
+    ultimoAcesso: d.atualizado_em,
+    fotoUrl: d.foto_url,
+  };
+}
 
 /**
  * Busca um usuário pelo ID
  */
 export async function buscarUsuarioPorId(userId: string): Promise<User | null> {
-  const ref = doc(db, COLLECTION_NAME, userId);
-  const snapshot = await getDoc(ref);
-
-  if (!snapshot.exists()) {
-    return null;
-  }
-
-  return {
-    id: snapshot.id,
-    ...snapshot.data(),
-  } as User;
+  const { data, error } = await supabase.from(TABLE_NAME).select("*").eq("id", userId).single();
+  if (error || !data) return null;
+  return mapUser(data);
 }
 
 /**
- * Busca um usuário pelo UID do Firebase Auth
+ * Busca um usuário pelo UID 
  */
 export async function buscarUsuarioPorUid(uid: string): Promise<User | null> {
-  const ref = collection(db, COLLECTION_NAME);
-  const q = query(ref, where("uid", "==", uid));
-  const snapshot = await getDocs(q);
-
-  if (snapshot.empty) {
-    return null;
-  }
-
-  const doc = snapshot.docs[0];
-  return {
-    id: doc.id,
-    ...doc.data(),
-  } as User;
+  return buscarUsuarioPorId(uid);
 }
 
 /**
@@ -110,30 +90,15 @@ export async function buscarUsuariosPorCondominio(
   condominioId: string,
   role?: UserRole
 ): Promise<User[]> {
-  const ref = collection(db, COLLECTION_NAME);
-  let q;
+  let query = supabase.from(TABLE_NAME).select("*").eq("condominio_id", condominioId).order("nome", { ascending: true });
 
   if (role) {
-    q = query(
-      ref,
-      where("condominioId", "==", condominioId),
-      where("role", "==", role),
-      orderBy("nome", "asc")
-    );
-  } else {
-    q = query(
-      ref,
-      where("condominioId", "==", condominioId),
-      orderBy("nome", "asc")
-    );
+    query = query.eq("role", role);
   }
 
-  const snapshot = await getDocs(q);
-
-  return snapshot.docs.map((doc) => ({
-    id: doc.id,
-    ...doc.data(),
-  })) as User[];
+  const { data, error } = await query;
+  if (error || !data) return [];
+  return data.map(mapUser);
 }
 
 /**
@@ -149,53 +114,46 @@ export async function buscarMoradores(condominioId: string): Promise<User[]> {
 export async function buscarMoradoresPendentes(
   condominioId: string
 ): Promise<User[]> {
-  const ref = collection(db, COLLECTION_NAME);
-  const q = query(
-    ref,
-    where("condominioId", "==", condominioId),
-    where("role", "==", "morador"),
-    where("aprovado", "==", false),
-    orderBy("dataCadastro", "desc")
-  );
+  const { data, error } = await supabase
+    .from(TABLE_NAME)
+    .select("*")
+    .eq("condominio_id", condominioId)
+    .eq("role", "morador")
+    .eq("aprovado", false)
+    .order("criado_em", { ascending: false });
 
-  const snapshot = await getDocs(q);
-
-  return snapshot.docs.map((doc) => ({
-    id: doc.id,
-    ...doc.data(),
-  })) as User[];
+  if (error || !data) return [];
+  return data.map(mapUser);
 }
 
 /**
  * Cria um novo usuário
  */
 export async function criarUsuario(dados: NovoUsuario): Promise<string> {
-  // Cria o usuário no Firebase Auth
-  const userCredential = await createUserWithEmailAndPassword(
-    auth,
-    dados.email,
-    dados.senha
-  );
+  // Cria o usuário no Supabase Auth
+  const { data: authData, error: authError } = await supabase.auth.signUp({
+    email: dados.email,
+    password: dados.senha,
+  });
 
-  const usuario = {
-    uid: userCredential.user.uid,
+  if (authError || !authData.user) throw authError || new Error("Erro ao criar usuário");
+
+  const { error: insertError } = await supabase.from(TABLE_NAME).insert({
+    id: authData.user.id,
     email: dados.email,
     nome: dados.nome,
     role: dados.role,
-    condominioId: dados.condominioId,
-    bloco: dados.bloco || null,
+    condominio_id: dados.condominioId,
+    bloco_nome: dados.bloco || null,
     apartamento: dados.apartamento || null,
     telefone: dados.telefone || null,
     cpf: dados.cpf || null,
     ativo: true,
-    aprovado: dados.role !== "morador", // Moradores precisam de aprovação
-    dataCadastro: Timestamp.now(),
-  };
+    aprovado: dados.role !== "morador",
+  });
 
-  const ref = collection(db, COLLECTION_NAME);
-  const docRef = await addDoc(ref, usuario);
-
-  return docRef.id;
+  if (insertError) throw insertError;
+  return authData.user.id;
 }
 
 /**
@@ -205,15 +163,25 @@ export async function atualizarUsuario(
   userId: string,
   dados: Partial<User>
 ): Promise<void> {
-  const ref = doc(db, COLLECTION_NAME, userId);
-  await updateDoc(ref, dados as DocumentData);
+  const updateData: Record<string, any> = {};
+  if (dados.nome !== undefined) updateData.nome = dados.nome;
+  if (dados.telefone !== undefined) updateData.telefone = dados.telefone;
+  if (dados.bloco !== undefined) updateData.bloco_nome = dados.bloco;
+  if (dados.apartamento !== undefined) updateData.apartamento = dados.apartamento;
+  if (dados.ativo !== undefined) updateData.ativo = dados.ativo;
+  if (dados.aprovado !== undefined) updateData.aprovado = dados.aprovado;
+  if (dados.fotoUrl !== undefined) updateData.foto_url = dados.fotoUrl;
+  if (dados.role !== undefined) updateData.role = dados.role;
+
+  const { error } = await supabase.from(TABLE_NAME).update(updateData).eq("id", userId);
+  if (error) throw error;
 }
 
 /**
  * Aprova um morador
  */
 export async function aprovarMorador(userId: string): Promise<void> {
-  await atualizarUsuario(userId, { aprovado: true });
+  await atualizarUsuario(userId, { aprovado: true } as Partial<User>);
 }
 
 /**
@@ -230,29 +198,31 @@ export async function alterarStatusUsuario(
   userId: string,
   ativo: boolean
 ): Promise<void> {
-  await atualizarUsuario(userId, { ativo });
+  await atualizarUsuario(userId, { ativo } as Partial<User>);
 }
 
 /**
  * Exclui um usuário
  */
 export async function excluirUsuario(userId: string): Promise<void> {
-  const ref = doc(db, COLLECTION_NAME, userId);
-  await deleteDoc(ref);
+  const { error } = await supabase.from(TABLE_NAME).delete().eq("id", userId);
+  if (error) throw error;
 }
 
 /**
  * Envia e-mail de redefinição de senha
  */
 export async function enviarRedefinicaoSenha(email: string): Promise<void> {
-  await sendPasswordResetEmail(auth, email);
+  const { error } = await supabase.auth.resetPasswordForEmail(email);
+  if (error) throw error;
 }
 
 /**
  * Atualiza o último acesso do usuário
  */
 export async function atualizarUltimoAcesso(userId: string): Promise<void> {
-  await atualizarUsuario(userId, { ultimoAcesso: Timestamp.now() });
+  const { error } = await supabase.from(TABLE_NAME).update({ atualizado_em: new Date().toISOString() }).eq("id", userId);
+  if (error) throw error;
 }
 
 // ============================================

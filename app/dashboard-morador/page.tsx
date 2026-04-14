@@ -1,15 +1,6 @@
 "use client";
 import { useState, useEffect } from "react";
-import { db, auth } from "@/app/lib/firebase";
-import { onAuthStateChanged } from "firebase/auth";
-import {
-  collection,
-  getDocs,
-  query,
-  where,
-  getDoc,
-  doc,
-} from "firebase/firestore";
+import { supabase } from "@/app/lib/supabase";
 import { Package, Mail, Clock, FileText, ChevronRight, Share2, Check, MapPin } from "lucide-react";
 import Link from "next/link";
 import { useAuth } from "@/hooks/useAuth";
@@ -27,44 +18,51 @@ function DashboardMoradorPage() {
   const [linkCopiado, setLinkCopiado] = useState(false);
 
   useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
-      if (currentUser) {
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (_event, session) => {
+      if (session?.user) {
+        const currentUser = session.user;
         try {
           // 1. Carregar dados do usuário
-          const userDoc = await getDoc(doc(db, "users", currentUser.uid));
-          
-          if (userDoc.exists()) {
-            const userData = userDoc.data();
+          const { data: userData } = await supabase
+            .from("users")
+            .select("*")
+            .eq("id", currentUser.id)
+            .single();
+
+          if (userData) {
             const primeiroNome = (userData.nome || "Morador").split(" ")[0];
             setNomeUsuario(primeiroNome);
-            setUnidadeNome(userData.unidadeNome || "-");
+            setUnidadeNome(userData.unidade_nome || "-");
 
             // 2. Buscar Dados Completos do Condomínio
-            if (userData.condominioId) {
-                const condDoc = await getDoc(doc(db, "condominios", userData.condominioId));
-                
-                if (condDoc.exists()) {
-                    const data = condDoc.data();
+            if (userData.condominio_id) {
+                const { data: condData } = await supabase
+                  .from("condominios")
+                  .select("*")
+                  .eq("id", userData.condominio_id)
+                  .single();
+
+                if (condData) {
                     setDadosCondominio({
-                        nome: data.nome || "Seu Condomínio",
-                        cnpj: data.cnpj || "",
-                        endereco: data.endereco || "",
-                        logoUrl: data.logoUrl || ""
+                        nome: condData.nome || "Seu Condomínio",
+                        cnpj: condData.cnpj || "",
+                        endereco: condData.endereco || "",
+                        logoUrl: condData.logo_url || ""
                     });
                 }
             }
           }
 
           // 3. Carregar estatísticas
-          const q = query(
-            collection(db, "correspondencias"),
-            where("moradorId", "==", currentUser.uid)
-          );
-          const snapshot = await getDocs(q);
-          
-          setTotalCorrespondencias(snapshot.size);
-          setPendentes(snapshot.docs.filter(doc => doc.data().status === "pendente").length);
-          
+          const { data: corrData } = await supabase
+            .from("correspondencias")
+            .select("id, status")
+            .eq("morador_id", currentUser.id);
+
+          const correspondencias = corrData || [];
+          setTotalCorrespondencias(correspondencias.length);
+          setPendentes(correspondencias.filter((c: any) => c.status === "pendente").length);
+
         } catch (err) {
           console.error("Erro ao carregar dados:", err);
         } finally {
@@ -75,7 +73,7 @@ function DashboardMoradorPage() {
       }
     });
 
-    return () => unsubscribe();
+    return () => subscription.unsubscribe();
   }, []);
 
   const compartilharLink = () => {

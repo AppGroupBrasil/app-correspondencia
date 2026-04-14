@@ -2,8 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
-import { db } from "@/app/lib/firebase";
-import { doc, getDoc, setDoc, serverTimestamp } from "firebase/firestore";
+import { supabase } from "@/app/lib/supabase";
 import { Settings, Save, Phone, Info, ArrowLeft } from "lucide-react";
 import Navbar from "@/components/Navbar";
 import BotaoVoltar from "@/components/BotaoVoltar"; // Certifique-se de que o caminho está correto
@@ -23,11 +22,16 @@ function ConfiguracoesAdminPage() {
   const carregarConfiguracoes = async () => {
     try {
       setLoadingCarregar(true);
-      const docRef = doc(db, "configuracoes", "suporte");
-      const docSnap = await getDoc(docRef);
+      const { data, error } = await supabase
+        .from("configuracoes")
+        .select("*")
+        .eq("id", "suporte")
+        .single();
 
-      if (docSnap.exists()) {
-        setWhatsappLink(docSnap.data().whatsappLink || "");
+      if (error && error.code !== "PGRST116") throw error;
+
+      if (data) {
+        setWhatsappLink(data.whatsapp_link || "");
       }
     } catch (err) {
       console.error("Erro ao carregar configurações:", err);
@@ -46,10 +50,15 @@ function ConfiguracoesAdminPage() {
 
       setLoading(true);
 
-      await setDoc(doc(db, "configuracoes", "suporte"), {
-        whatsappLink,
-        atualizadoEm: serverTimestamp(),
-      });
+      const { error } = await supabase
+        .from("configuracoes")
+        .upsert({
+          id: "suporte",
+          whatsapp_link: whatsappLink,
+          atualizado_em: new Date().toISOString(),
+        });
+
+      if (error) throw error;
 
       alert("Configurações salvas com sucesso!");
     } catch (err) {

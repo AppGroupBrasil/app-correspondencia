@@ -5,8 +5,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { Html5Qrcode } from "html5-qrcode";
 import withAuth from "@/components/withAuth";
 import ModalRetiradaProfissional from "@/components/ModalRetiradaProfissional";
-import { collection, query, where, getDocs, DocumentData } from "firebase/firestore";
-import { db } from "@/app/lib/firebase";
+import { supabase } from "@/app/lib/supabase";
 import {
   Package,
   Search,
@@ -35,7 +34,7 @@ import { useTemplates } from "@/hooks/useTemplates";
 import { formatPtBrDateTime } from "@/utils/messageFormat";
 
 // --- INTERFACE ---
-interface CorrespondenciaDocument extends DocumentData {
+interface CorrespondenciaDocument {
   id: string;
   protocolo: string;
   moradorNome: string;
@@ -113,16 +112,31 @@ function RegistrarRetiradaPorteiroPage() {
   const carregarPendencias = async () => {
     setLoading(true);
     try {
-      const q = query(
-        collection(db, "correspondencias"),
-        where("condominioId", "==", user?.condominioId),
-        where("status", "==", "pendente")
-      );
-      const snapshot = await getDocs(q);
-      const dados: CorrespondenciaDocument[] = [];
-      snapshot.forEach((doc) =>
-        dados.push({ id: doc.id, ...doc.data() } as CorrespondenciaDocument)
-      );
+      const { data, error: err } = await supabase
+        .from("correspondencias")
+        .select("*")
+        .eq("condominio_id", user?.condominioId)
+        .eq("status", "pendente");
+
+      if (err) throw err;
+
+      const dados: CorrespondenciaDocument[] = (data || []).map((d: any) => ({
+        id: d.id,
+        protocolo: d.protocolo,
+        moradorNome: d.morador_nome,
+        blocoNome: d.bloco_nome,
+        bloco: d.bloco,
+        apartamento: d.apartamento,
+        unidade: d.unidade,
+        condominioId: d.condominio_id,
+        condominioNome: d.condominio_nome,
+        moradorId: d.morador_id,
+        status: d.status,
+        dataChegada: d.data_chegada,
+        criadoEm: d.criado_em,
+        tipoCorrespondencia: d.tipo_correspondencia,
+        moradorTelefone: d.morador_telefone,
+      }));
       
       dados.sort((a, b) => {
          const dA = a.dataChegada || a.criadoEm || "";
@@ -273,14 +287,16 @@ function RegistrarRetiradaPorteiroPage() {
     try {
       const termoNumero = busca.trim();
       if (termoNumero) {
-        const q = query(
-          collection(db, "correspondencias"),
-          where("condominioId", "==", user?.condominioId),
-          where("protocolo", "==", termoNumero),
-          where("status", "==", "retirada")
-        );
-        const snap = await getDocs(q);
-        if (snap.empty) {
+        const { data, error: err } = await supabase
+          .from("correspondencias")
+          .select("id")
+          .eq("condominio_id", user?.condominioId)
+          .eq("protocolo", termoNumero)
+          .eq("status", "retirada");
+
+        if (err) throw err;
+
+        if (!data || data.length === 0) {
           setError("Nenhuma correspondência encontrada com este protocolo.");
         } else {
           setError(`O protocolo #${busca} já consta como RETIRADO.`);

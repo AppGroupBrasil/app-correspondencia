@@ -111,7 +111,7 @@ function HistoricoAvisosResponsavelPage() {
     } catch (error: any) {
       console.error("Erro ao carregar histórico:", error);
       if (error?.message?.includes("index")) {
-        setErro("Falta criar um índice no Firebase. Verifique o console do navegador (F12).");
+        setErro("Há uma limitação na consulta atual. Ajuste o filtro ou recarregue a página.");
       } else {
         setErro("Não foi possível carregar os avisos. Tente recarregar a página.");
       }

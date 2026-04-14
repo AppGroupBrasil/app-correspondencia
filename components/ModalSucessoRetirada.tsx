@@ -2,6 +2,8 @@
 
 import { useState, useMemo } from "react";
 import { CheckCircle, MessageCircle, X, Copy, FileText, Printer } from "lucide-react";
+import { buildWhatsAppUrl } from "@/services/whatsapp";
+import { abrirLink } from "@/utils/platform";
 
 interface Props {
   id: string;
@@ -10,6 +12,7 @@ interface Props {
   telefoneMorador: string;
   emailMorador: string;
   pdfUrl: string;
+  avisoUrl?: string;
   mensagemFormatada?: string;
   onClose: () => void;
 }
@@ -20,6 +23,7 @@ export default function ModalSucessoRetirada({
   moradorNome,
   telefoneMorador,
   pdfUrl,
+  avisoUrl,
   mensagemFormatada,
   onClose,
 }: Props) {
@@ -27,28 +31,21 @@ export default function ModalSucessoRetirada({
   const [imprimirSemAssinatura, setImprimirSemAssinatura] = useState(false);
 
   const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || "https://appcorrespondencia.com.br";
-  const linkPublico = `${baseUrl}/ver?id=${id}`;
-
-  const limparTelefone = (telefone: string) => telefone.replace(/\D/g, "");
+  const linkRecibo = pdfUrl || `${baseUrl}/ver?id=${encodeURIComponent(id)}&type=recibo`;
+  const linkAviso = avisoUrl || `${baseUrl}/ver?id=${encodeURIComponent(id)}&type=aviso`;
 
   const textoFinal = useMemo(() => {
     const textoBase =
       mensagemFormatada || `Olá *${moradorNome}*! A correspondência (Protocolo: ${protocolo}) foi retirada.`;
 
-    return `${textoBase}\n\n *Acesse o recibo digital:*\n${linkPublico}`;
-  }, [mensagemFormatada, moradorNome, protocolo, linkPublico]);
+    return `${textoBase}\n\n *Acesse o comprovante digital:*\n${linkRecibo}\n\n *2ª via do aviso:*\n${linkAviso}`;
+  }, [mensagemFormatada, moradorNome, protocolo, linkAviso, linkRecibo]);
 
   const whatsappUrl = useMemo(() => {
-    const numeroLimpo = limparTelefone(telefoneMorador || "");
-    if (!numeroLimpo) return "";
-
-    // wa.me exige APENAS dígitos. Sem "+".
-    const numeroComDdi = numeroLimpo.startsWith("55") ? numeroLimpo : `55${numeroLimpo}`;
-
-    return `https://wa.me/${numeroComDdi}?text=${encodeURIComponent(textoFinal)}`;
+    return buildWhatsAppUrl(telefoneMorador || "", textoFinal);
   }, [telefoneMorador, textoFinal]);
 
-  const handleWhatsApp = () => {
+  const handleWhatsApp = async () => {
     if (!telefoneMorador) {
       alert("Telefone do morador não disponível.");
       return;
@@ -57,7 +54,7 @@ export default function ModalSucessoRetirada({
       alert("Não foi possível montar o link do WhatsApp.");
       return;
     }
-    window.open(whatsappUrl, "_blank");
+    await abrirLink(whatsappUrl);
   };
 
   const handleCopiarTexto = () => {
@@ -140,7 +137,7 @@ export default function ModalSucessoRetirada({
     } else {
       // --- IMPRESSÃO DO PDF DIGITAL (JÁ ASSINADO) ---
       if (pdfUrl) {
-        const win = window.open(pdfUrl, "_blank");
+        const win = window.open(linkRecibo, "_blank");
         win?.focus();
       } else {
         alert("PDF ainda não disponível. Tente novamente em instantes.");
@@ -207,16 +204,15 @@ export default function ModalSucessoRetirada({
                 Imprimir
               </button>
 
-              {/* Aqui é "Ver Recibo" (link público), então depende do id/link, não do pdfUrl */}
               {id ? (
                 <a
-                  href={linkPublico}
+                  href={linkRecibo}
                   target="_blank"
                   rel="noopener noreferrer"
                   className="flex items-center justify-center gap-2 py-3 rounded-xl bg-gray-100 text-gray-700 font-bold hover:bg-gray-200 transition-all border border-gray-200"
                 >
                   <FileText size={20} />
-                  Ver Recibo
+                  Ver Comprovante
                 </a>
               ) : (
                 <button
@@ -224,10 +220,20 @@ export default function ModalSucessoRetirada({
                   className="flex items-center justify-center gap-2 py-3 rounded-xl bg-gray-50 text-gray-400 font-bold border border-gray-200 cursor-not-allowed"
                   type="button"
                 >
-                  Ver Recibo
+                  Ver Comprovante
                 </button>
               )}
             </div>
+
+            <a
+              href={linkAviso}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="w-full flex items-center justify-center gap-3 py-3.5 rounded-xl bg-amber-50 text-amber-800 font-bold hover:bg-amber-100 transition-all shadow-sm border border-amber-200"
+            >
+              <FileText size={20} />
+              2ª Via do Aviso
+            </a>
 
             {/* CHECKBOX PARA IMPRESSÃO FÍSICA */}
             <div className="flex items-center justify-center gap-2 pt-1">

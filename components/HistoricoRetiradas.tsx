@@ -2,13 +2,13 @@
 
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
-import { db } from "@/app/lib/firebase";
-import { collection, query, where, orderBy, getDocs, limit } from "firebase/firestore";
+import { supabase } from "@/app/lib/supabase";
 import { 
   Search, Download, MessageCircle, Mail, FileText, ArrowLeft, 
   Calendar, Eye, Share2, Printer, X
 } from "lucide-react";
 import Navbar from "@/components/Navbar"; 
+import { useAuth } from "@/hooks/useAuth";
 
 // --- INTERFACES ---
 interface Recibo {
@@ -32,6 +32,22 @@ interface Props {
   tituloPerfil: string;
 }
 
+function getAppOrigin(): string {
+  return typeof window !== "undefined" ? window.location.origin : "";
+}
+
+function buildReciboViewUrl(id: string): string {
+  return `${getAppOrigin()}/ver?id=${encodeURIComponent(id)}&type=recibo`;
+}
+
+function buildReciboDownloadUrl(id: string): string {
+  return `${getAppOrigin()}/api/public-document?id=${encodeURIComponent(id)}&type=recibo&download=1`;
+}
+
+function buildAvisoViewUrl(id: string): string {
+  return `${getAppOrigin()}/ver?id=${encodeURIComponent(id)}&type=aviso`;
+}
+
 // --- COMPONENTE MODAL DE 2ª VIA ---
 const ModalSegundaVia = ({ 
   isOpen, 
@@ -47,16 +63,14 @@ const ModalSegundaVia = ({
   if (!isOpen || !recibo) return null;
 
   // Definição dos links
-  const origin = typeof window !== 'undefined' ? window.location.origin : '';
-  const linkCompartilhamento = `${origin}/ver/${recibo.id}`;
-  const linkArquivo = recibo.reciboUrl || recibo.pdfUrl || "";
+  const linkCompartilhamento = buildReciboViewUrl(recibo.id);
+  const linkAviso = buildAvisoViewUrl(recibo.id);
+  const linkArquivo = buildReciboDownloadUrl(recibo.id);
 
   // Formatação da Data
   const getDataFormatada = () => {
     if (!recibo.dataRetirada) return "Data não informada";
-    // Verifica se é Timestamp do Firestore ou Date normal
-    const seconds = recibo.dataRetirada.seconds;
-    const date = seconds ? new Date(seconds * 1000) : new Date(recibo.dataRetirada);
+    const date = new Date(recibo.dataRetirada);
     
     return date.toLocaleString('pt-BR', {
       day: '2-digit', month: '2-digit', year: 'numeric',
@@ -111,7 +125,7 @@ Sua correspondência foi entregue
 
 Se você não reconhece esta retirada, entre em contato com a portaria imediatamente.
 
- Acesse o recibo digital:
+ Acesse o comprovante digital:
 ${linkCompartilhamento}`;
 
     window.open(`https://wa.me/${phone}?text=${encodeURIComponent(msg)}`, "_blank");
@@ -119,8 +133,8 @@ ${linkCompartilhamento}`;
 
   // Lógica E-mail
   const handleEmail = () => {
-    const subject = `2ª Via de Recibo - Protocolo ${recibo.protocolo}`;
-    const body = `Olá ${recibo.moradorNome},\n\nSegue o link do seu recibo de retirada: ${linkCompartilhamento}`;
+    const subject = `2ª Via de Comprovante - Protocolo ${recibo.protocolo}`;
+    const body = `Olá ${recibo.moradorNome},\n\nSegue o link do seu comprovante de retirada: ${linkCompartilhamento}\n\nAviso original: ${linkAviso}`;
     window.location.href = `mailto:${recibo.emailMorador || ''}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
   };
 
@@ -145,14 +159,14 @@ ${linkCompartilhamento}`;
           <div className="bg-white/20 w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-3 backdrop-blur-md">
             <Share2 className="text-white" size={32} />
           </div>
-          <h2 className="text-2xl font-bold text-white">2ª Via do Recibo</h2>
+          <h2 className="text-2xl font-bold text-white">Comprovante de Retirada</h2>
           <p className="text-green-100 text-sm mt-1">Protocolo #{recibo.protocolo}</p>
         </div>
 
         {/* Corpo do Modal */}
         <div className="p-6">
           <div className="text-center mb-6">
-            <p className="text-gray-600 text-sm">Escolha como deseja compartilhar ou visualizar o recibo de:</p>
+            <p className="text-gray-600 text-sm">Escolha como deseja compartilhar o comprovante ou abrir a 2ª via do aviso de:</p>
             <p className="text-gray-900 font-bold text-lg mt-1">{recibo.moradorNome}</p>
             <p className="text-gray-500 text-xs">Apto {recibo.apartamento} {recibo.blocoNome && `- ${recibo.blocoNome}`}</p>
           </div>
@@ -186,6 +200,13 @@ ${linkCompartilhamento}`;
                 <Download size={20} /> Baixar PDF
               </button>
             </div>
+
+            <button
+              onClick={() => window.open(linkAviso, "_blank")}
+              className="flex items-center justify-center gap-3 w-full py-3 bg-amber-100 hover:bg-amber-200 text-amber-900 rounded-xl font-semibold transition-all shadow-sm hover:shadow-md"
+            >
+              <Eye size={20} /> 2ª Via do Aviso
+            </button>
           </div>
         </div>
 
@@ -206,6 +227,7 @@ ${linkCompartilhamento}`;
 // --- COMPONENTE PRINCIPAL (LÓGICA DO HISTÓRICO) ---
 export default function HistoricoRetiradas({ voltarUrl, tituloPerfil }: Props) {
   const router = useRouter();
+  const { user } = useAuth();
   const [recibos, setRecibos] = useState<Recibo[]>([]);
   const [loading, setLoading] = useState(true);
   const [busca, setBusca] = useState("");
@@ -215,47 +237,47 @@ export default function HistoricoRetiradas({ voltarUrl, tituloPerfil }: Props) {
   const [selectedRecibo, setSelectedRecibo] = useState<Recibo | null>(null);
 
   useEffect(() => {
-    carregarHistorico();
-  }, []);
+    if (user?.condominioId) carregarHistorico();
+  }, [user?.condominioId]);
 
   const carregarHistorico = async () => {
+    if (!user?.condominioId) return;
     try {
       setLoading(true);
-      const q = query(
-        collection(db, "correspondencias"),
-        where("status", "==", "retirada"),
-        orderBy("retiradoEm", "desc"),
-        limit(100)
-      );
+      const { data, error } = await supabase
+        .from("correspondencias")
+        .select("*")
+        .eq("condominio_id", user.condominioId)
+        .eq("status", "retirada")
+        .order("retirado_em", { ascending: false })
+        .limit(100);
 
-      const snapshot = await getDocs(q);
-      const lista = snapshot.docs.map((doc) => {
-        const data = doc.data();
+      if (error) throw error;
 
+      const lista = (data || []).map((item: any) => {
         // TENTATIVA DE ENCONTRAR O TELEFONE EM MÚLTIPLOS CAMPOS
-        // Isso resolve o problema se o campo tiver nomes diferentes no BD
         const telefoneEncontrado = 
-          data.moradorWhatsapp || 
-          data.moradorTelefone || 
-          data.whatsapp || 
-          data.telefone || 
-          data.celular || 
-          data.phone ||
+          item.morador_whatsapp || 
+          item.morador_telefone || 
+          item.whatsapp || 
+          item.telefone || 
+          item.celular || 
+          item.phone ||
           "";
 
         return {
-          id: doc.id,
-          protocolo: data.protocolo,
-          moradorNome: data.moradorNome,
-          apartamento: data.apartamento,
-          blocoNome: data.blocoNome,
-          dataRetirada: data.retiradoEm,
-          status: data.status,
-          reciboUrl: data.reciboUrl || data.pdfUrl,
+          id: item.id,
+          protocolo: item.protocolo,
+          moradorNome: item.morador_nome,
+          apartamento: item.apartamento,
+          blocoNome: item.bloco_nome,
+          dataRetirada: item.retirado_em,
+          status: item.status,
+          reciboUrl: item.recibo_url || item.pdf_url,
           // Garante que seja string para evitar erros
           telefoneMorador: String(telefoneEncontrado), 
-          emailMorador: data.moradorEmail || "",
-          quemRetirouNome: data.retiradoPorNome || data.moradorNome,
+          emailMorador: item.morador_email || "",
+          quemRetirouNome: item.retirado_por_nome || item.morador_nome,
         } as Recibo;
       });
 
@@ -272,8 +294,8 @@ export default function HistoricoRetiradas({ voltarUrl, tituloPerfil }: Props) {
     setModalOpen(true);
   };
 
-  const handleVisualizarDireto = (url?: string) => {
-    if (url) window.open(url, "_blank");
+  const handleVisualizarDireto = (item: Recibo) => {
+    if (item?.id) window.open(buildReciboViewUrl(item.id), "_blank");
     else alert("Recibo não disponível.");
   };
 
@@ -364,8 +386,7 @@ export default function HistoricoRetiradas({ voltarUrl, tituloPerfil }: Props) {
                   </thead>
                   <tbody className="divide-y divide-gray-100">
                     {filtrados.map((item) => {
-                      const seconds = item.dataRetirada?.seconds;
-                      const date = seconds ? new Date(seconds * 1000) : new Date();
+                      const date = item.dataRetirada ? new Date(item.dataRetirada) : new Date();
                       const dataFormatada = date.toLocaleString('pt-BR', {
                           day: '2-digit', month: '2-digit', year: '2-digit',
                           hour: '2-digit', minute: '2-digit'
@@ -393,7 +414,7 @@ export default function HistoricoRetiradas({ voltarUrl, tituloPerfil }: Props) {
                           <td className="px-6 py-4">
                             <div className="flex justify-center items-center gap-3">
                               <button
-                                onClick={() => handleVisualizarDireto(item.reciboUrl)}
+                                onClick={() => handleVisualizarDireto(item)}
                                 className="flex items-center gap-2 px-4 py-2 bg-orange-100 text-orange-700 hover:bg-orange-200 rounded-lg transition-all font-bold text-xs border border-orange-200"
                                 title="Visualizar Recibo"
                               >
@@ -419,8 +440,7 @@ export default function HistoricoRetiradas({ voltarUrl, tituloPerfil }: Props) {
               {/* Versão Mobile */}
               <div className="md:hidden flex flex-col gap-4 p-4 bg-gray-50">
                 {filtrados.map((item) => {
-                  const seconds = item.dataRetirada?.seconds;
-                  const date = seconds ? new Date(seconds * 1000) : new Date();
+                  const date = item.dataRetirada ? new Date(item.dataRetirada) : new Date();
                   const dataFormatada = date.toLocaleString('pt-BR', {
                       day: '2-digit', month: '2-digit', year: '2-digit',
                       hour: '2-digit', minute: '2-digit'
@@ -449,7 +469,7 @@ export default function HistoricoRetiradas({ voltarUrl, tituloPerfil }: Props) {
 
                       <div className="grid grid-cols-2 gap-2">
                         <button
-                          onClick={() => handleVisualizarDireto(item.reciboUrl)}
+                          onClick={() => handleVisualizarDireto(item)}
                           className="flex items-center justify-center gap-2 px-3 py-2.5 bg-orange-100 text-orange-700 hover:bg-orange-200 rounded-lg font-bold text-sm"
                         >
                           <Eye size={18} /> Visualizar

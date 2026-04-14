@@ -1,7 +1,6 @@
 "use client";
 import { useEffect, useMemo, useState } from "react";
 import AssinaturaModal from "./AssinaturaModal";
-import { Timestamp } from "firebase/firestore";
 import { MessageCircle, Mail, FileText, CheckCircle } from "lucide-react";
 
 export interface Linha {
@@ -15,8 +14,8 @@ export interface Linha {
   imagemUrl?: string;
   pdfUrl?: string;
   reciboUrl?: string;
-  criadoEm?: Timestamp;
-  retiradoEm?: Timestamp;
+  criadoEm?: string | Date;
+  retiradoEm?: string | Date;
   compartilhadoVia?: string[];
 }
 
@@ -31,6 +30,18 @@ interface Props {
   getPorteiroAssinaturaUrl: () => Promise<string | null>;
   onCompartilhar?: (id: string, via: "whatsapp" | "email", pdfUrl: string, protocolo: string, moradorNome: string) => Promise<void>;
   onAbrirModalRetirada?: (linha: Linha) => void;
+}
+
+function getAppOrigin(): string {
+  return globalThis.window?.location.origin || "";
+}
+
+function getAvisoViewUrl(id: string): string {
+  return `${getAppOrigin()}/ver?id=${encodeURIComponent(id)}&type=aviso`;
+}
+
+function getReciboViewUrl(id: string): string {
+  return `${getAppOrigin()}/ver?id=${encodeURIComponent(id)}&type=recibo`;
 }
 
 export default function CorrespondenciaTable({ 
@@ -66,32 +77,36 @@ export default function CorrespondenciaTable({
   }, [dados, filtroStatus, busca]);
 
   const handleWhatsApp = async (linha: Linha) => {
-    if (!linha.pdfUrl) {
+    const avisoUrl = getAvisoViewUrl(linha.id);
+
+    if (!linha.id) {
       alert("PDF não disponível. Gere o PDF primeiro.");
       return;
     }
 
-    const mensagem = `Olá ${linha.moradorNome}! Você tem uma correspondência aguardando retirada.\n\nProtocolo: #${linha.protocolo}\n\nVeja o comprovante: ${linha.pdfUrl}`;
+    const mensagem = `Olá ${linha.moradorNome}! Você tem uma correspondência aguardando retirada.\n\nProtocolo: #${linha.protocolo}\n\nVeja o aviso: ${avisoUrl}`;
     const whatsLink = `https://wa.me/?text=${encodeURIComponent(mensagem)}`;
     window.open(whatsLink, "_blank");
 
     if (onCompartilhar) {
-      await onCompartilhar(linha.id, "whatsapp", linha.pdfUrl, linha.protocolo, linha.moradorNome || "");
+      await onCompartilhar(linha.id, "whatsapp", avisoUrl, linha.protocolo, linha.moradorNome || "");
     }
   };
 
   const handleEmail = async (linha: Linha) => {
-    if (!linha.pdfUrl) {
+    const avisoUrl = getAvisoViewUrl(linha.id);
+
+    if (!linha.id) {
       alert("PDF não disponível. Gere o PDF primeiro.");
       return;
     }
 
-    const mensagem = `Olá ${linha.moradorNome}! Você tem uma correspondência aguardando retirada.\n\nProtocolo: #${linha.protocolo}\n\nVeja o comprovante: ${linha.pdfUrl}`;
+    const mensagem = `Olá ${linha.moradorNome}! Você tem uma correspondência aguardando retirada.\n\nProtocolo: #${linha.protocolo}\n\nVeja o aviso: ${avisoUrl}`;
     const mailtoLink = `mailto:?subject=Nova Correspondência - Protocolo ${linha.protocolo}&body=${encodeURIComponent(mensagem)}`;
     window.open(mailtoLink);
 
     if (onCompartilhar) {
-      await onCompartilhar(linha.id, "email", linha.pdfUrl, linha.protocolo, linha.moradorNome || "");
+      await onCompartilhar(linha.id, "email", avisoUrl, linha.protocolo, linha.moradorNome || "");
     }
   };
 
@@ -193,7 +208,7 @@ export default function CorrespondenciaTable({
                 {/* PDF */}
                 {l.pdfUrl ? (
                   <a 
-                    href={l.pdfUrl} 
+                    href={getAvisoViewUrl(l.id)} 
                     target="_blank" 
                     rel="noreferrer"
                     className="flex flex-col items-center justify-center py-2.5 bg-red-500 text-white rounded-lg active:bg-red-600 transition shadow-sm w-full"
@@ -216,7 +231,7 @@ export default function CorrespondenciaTable({
                   </button>
                 ) : l.reciboUrl ? (
                    <a 
-                    href={l.reciboUrl} 
+                  href={getReciboViewUrl(l.id)} 
                     target="_blank" 
                     rel="noreferrer"
                     className="flex flex-col items-center justify-center py-2.5 bg-gray-600 text-white rounded-lg active:bg-gray-700 transition shadow-sm w-full"
@@ -315,7 +330,7 @@ export default function CorrespondenciaTable({
                       
                       {l.pdfUrl && (
                         <a 
-                          href={l.pdfUrl} 
+                          href={getAvisoViewUrl(l.id)} 
                           target="_blank" 
                           className="flex items-center gap-1.5 px-3 py-1.5 bg-red-500 text-white rounded hover:bg-red-600 transition text-sm font-medium" 
                           rel="noreferrer"
@@ -335,7 +350,7 @@ export default function CorrespondenciaTable({
                       
                       {l.status === "retirada" && l.reciboUrl && (
                         <a 
-                          href={l.reciboUrl} 
+                          href={getReciboViewUrl(l.id)} 
                           target="_blank" 
                           className="flex items-center gap-1.5 px-3 py-1.5 bg-gray-600 text-white rounded hover:bg-gray-700 transition text-sm font-medium" 
                           rel="noreferrer"

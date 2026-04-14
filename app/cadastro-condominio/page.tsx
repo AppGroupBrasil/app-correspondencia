@@ -1,9 +1,7 @@
 "use client";
 import { useState, useCallback } from "react";
 import { useRouter } from "next/navigation";
-import { db, auth } from "@/app/lib/firebase";
-import { createUserWithEmailAndPassword, signOut } from "firebase/auth";
-import { collection, addDoc, setDoc, doc, serverTimestamp } from "firebase/firestore";
+import { supabase } from "@/app/lib/supabase";
 import { gerarAmbienteTeste } from "@/utils/gerarAmbienteTeste"; 
 
 export default function CadastroCondominioPage() {
@@ -131,38 +129,37 @@ export default function CadastroCondominioPage() {
     try {
       setLoading(true);
 
-      // 1. Primeiro cria a autenticação do Responsável
-      const userCredential = await createUserWithEmailAndPassword(auth, email, senha);
-      const uid = userCredential.user.uid;
-
-      // 2. Com o usuário autenticado, cria o condomínio
-      const condominioRef = await addDoc(collection(db, "condominios"), {
-        nome: nomeCondominio,
-        cnpj,
-        endereco,
-        logoUrl: logoUrl || "", // Vai vazio se o campo estiver oculto
-        status: "ativo",
-        criadoPor: uid,
-        criadoEm: serverTimestamp(),
+      // 1. Criar usuário auth + condomínio via API (service_role bypassa RLS)
+      const res = await fetch("/api/criar-usuario", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          email,
+          senha,
+          nome: nomeResponsavel,
+          role: "responsavel",
+          dados: {
+            whatsapp,
+            status: "ativo",
+          },
+          condominio: {
+            nome: nomeCondominio,
+            cnpj,
+            endereco,
+            logo_url: logoUrl || "",
+          },
+        }),
       });
 
-      // 3. Salva os dados do usuário no Firestore vinculado ao novo condomínio
-      const userRef = doc(db, "users", uid);
-      await setDoc(userRef, {
-        uid,
-        nome: nomeResponsavel,
-        email,
-        whatsapp, // Já vai formatado
-        role: "responsavel",
-        status: "ativo",
-        condominioId: condominioRef.id,
-        criadoEm: serverTimestamp(),
-      });
+      const result = await res.json();
+      if (!res.ok) throw new Error(result.error || "Erro ao criar usuário");
+      const uid = result.uid || result.id;
+      const condominioId = result.condominioId;
 
-      // 4. 🚀 GERA O AMBIENTE DE TESTE AUTOMATICAMENTE
+      // 2. 🚀 GERA O AMBIENTE DE TESTE AUTOMATICAMENTE
       try {
           await gerarAmbienteTeste({
-            condominioId: condominioRef.id,
+            condominioId: condominioId,
             condominioNome: nomeCondominio,
             whatsappDestino: whatsapp
           });
@@ -171,7 +168,7 @@ export default function CadastroCondominioPage() {
       }
 
       // Faz logout para que o usuário faça login oficialmente na tela de login
-      await signOut(auth);
+      await supabase.auth.signOut();
 
       alert(
         `✅ Condomínio cadastrado com sucesso!\n\nCriamos também um "Morador de Teste" para você validar o sistema.\n\nFaça login para começar.`
@@ -180,11 +177,7 @@ export default function CadastroCondominioPage() {
       router.push("/login"); 
     } catch (err: any) {
       console.error("❌ Erro:", err);
-
-      if (err.code === "auth/email-already-in-use") alert("Este email já está cadastrado.");
-      else if (err.code === "auth/invalid-email") alert("Email inválido.");
-      else if (err.code === "auth/weak-password") alert("Senha muito fraca.");
-      else alert("Erro ao cadastrar: " + err.message);
+      alert("Erro ao cadastrar: " + err.message);
     } finally {
       setLoading(false);
     }

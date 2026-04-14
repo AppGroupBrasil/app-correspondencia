@@ -1,8 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
-import { db } from '@/app/lib/firebase';
-import { collection, query, where, onSnapshot, doc, setDoc } from 'firebase/firestore';
+import { supabase } from '@/app/lib/supabase';
 import { MessageTemplate, MessageCategory } from '../types/template';
-// AQUI ESTAVA O ERRO: Mudamos de parseMessage para replaceVariables
 import { replaceVariables } from '../utils/templateParser';
 
 // --- DEFINIÇÃO DOS MODELOS PADRÃO BONITOS ---
@@ -48,20 +46,39 @@ export function useTemplates(condoId: string) {
   const [templates, setTemplates] = useState<MessageTemplate[]>([]);
   const [loading, setLoading] = useState(true);
 
-  // Busca templates em tempo real
-  useEffect(() => {
-    if (!condoId) return;
-
-    const q = query(collection(db, 'message_templates'), where('condoId', '==', condoId));
-    
-    const unsubscribe = onSnapshot(q, (snapshot) => {
-      const data = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as MessageTemplate));
-      setTemplates(data);
+  const fetchTemplates = useCallback(async () => {
+    if (!condoId) {
+      setTemplates([]);
       setLoading(false);
-    });
+      return;
+    }
 
-    return () => unsubscribe();
+    setLoading(true);
+
+    const { data, error } = await supabase
+      .from('message_templates')
+      .select('*')
+      .eq('condo_id', condoId);
+
+    if (!error && data) {
+      setTemplates(data.map((d: any) => ({
+        id: d.id,
+        condoId: d.condo_id,
+        category: d.category,
+        title: d.title,
+        content: d.content,
+        isActive: d.is_active,
+      } as MessageTemplate)));
+    }
+
+    setLoading(false);
   }, [condoId]);
+
+  // Busca templates sob demanda. Realtime foi removido para evitar
+  // conflitos de múltiplas assinaturas do mesmo canal em páginas modais.
+  useEffect(() => {
+    fetchTemplates();
+  }, [fetchTemplates]);
 
   // Função para pegar a mensagem formatada
   const getFormattedMessage = useCallback(async (category: MessageCategory, variables: Record<string, string>) => {
@@ -71,7 +88,7 @@ export function useTemplates(condoId: string) {
     let content = "";
 
     // 2. Se existir, usa. Se não, usa o PADRÃO BONITO.
-    if (template && template.content) {
+    if (template?.content) {
       content = template.content;
     } else {
       switch (category) {
@@ -97,19 +114,21 @@ export function useTemplates(condoId: string) {
   const saveTemplate = async (template: MessageTemplate) => {
     if (!condoId) return;
     
-    const id = `${condoId}_${template.category}`;
-    const docRef = doc(db, 'message_templates', id);
-    
-    await setDoc(docRef, {
-      ...template,
-      condoId,
-      updatedAt: new Date().toISOString()
-    }, { merge: true });
+    const { error } = await supabase
+      .from('message_templates')
+      .upsert({
+        condo_id: condoId,
+        category: template.category,
+        title: template.title || null,
+        content: template.content,
+        is_active: template.isActive !== false,
+      }, { onConflict: 'condo_id,category' });
+
+    if (error) console.error('Erro ao salvar template:', error);
   };
 
   const refresh = async () => {
-    setLoading(true);
-    setTimeout(() => setLoading(false), 500);
+    await fetchTemplates();
   };
 
   return {

@@ -4,9 +4,7 @@ import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/hooks/useAuth";
 import { useAvisosRapidos } from "@/hooks/useAvisosRapidos";
-import { db, storage } from "@/app/lib/firebase";
-import { collection, query, where, getDocs, doc, updateDoc } from "firebase/firestore";
-import { ref, uploadBytes, getDownloadURL } from "firebase/storage";
+import { supabase } from "@/app/lib/supabase";
 import Navbar from "@/components/Navbar";
 import BotaoVoltar from "@/components/BotaoVoltar";
 import withAuth from "@/components/withAuth";
@@ -200,18 +198,16 @@ Aguardamos a sua retirada`;
   const carregarBlocos = async () => {
     try {
       setLoadingTela(true);
-      const blocosRef = collection(db, "blocos");
-      const q = query(blocosRef, where("condominioId", "==", user?.condominioId));
-      const snapshot = await getDocs(q);
-
-      const blocosData: Bloco[] = [];
-      snapshot.forEach((d) => {
-        blocosData.push({
-          id: d.id,
-          nome: d.data().nome,
-          condominioId: d.data().condominioId,
-        });
-      });
+      const { data: snapData, error } = await supabase
+        .from("blocos")
+        .select("*")
+        .eq("condominio_id", user?.condominioId);
+      if (error) throw error;
+      const blocosData: Bloco[] = (snapData || []).map((d: any) => ({
+        id: d.id,
+        nome: d.nome,
+        condominioId: d.condominio_id,
+      }));
 
       blocosData.sort((a, b) => a.nome.localeCompare(b.nome, "pt-BR", { numeric: true }));
       setBlocos(blocosData);
@@ -234,29 +230,26 @@ Aguardamos a sua retirada`;
 
     try {
       const termoLimpo = termoBusca.toLowerCase().trim();
-      const q = query(
-        collection(db, "users"),
-        where("condominioId", "==", user?.condominioId),
-        where("role", "==", "morador")
-      );
+      const { data: usersData } = await supabase
+        .from("users")
+        .select("*")
+        .eq("condominio_id", user?.condominioId)
+        .eq("role", "morador");
 
-      const snapshot = await getDocs(q);
       const resultados: Morador[] = [];
-
-      snapshot.forEach((d) => {
-        const data = d.data() as any;
+      (usersData || []).forEach((data: any) => {
         const nome = (data.nome || "").toLowerCase();
-        const apto = (data.unidadeNome || data.apartamento || "").toString().toLowerCase();
+        const apto = (data.unidade_nome || data.apartamento || "").toString().toLowerCase();
 
         if (nome.includes(termoLimpo) || apto.includes(termoLimpo)) {
           resultados.push({
-            id: d.id,
+            id: data.id,
             nome: data.nome,
-            apartamento: data.unidadeNome || data.apartamento || "?",
+            apartamento: data.unidade_nome || data.apartamento || "?",
             telefone: data.whatsapp || data.telefone || "",
-            blocoId: data.blocoId,
-            blocoNome: data.blocoNome,
-            condominioId: data.condominioId,
+            blocoId: data.bloco_id,
+            blocoNome: data.bloco_nome,
+            condominioId: data.condominio_id,
             role: data.role,
             aprovado: data.aprovado,
           });
@@ -280,30 +273,24 @@ Aguardamos a sua retirada`;
       setBlocoSelecionado(bloco);
       setTermoBuscaModal("");
 
-      const q = query(
-        collection(db, "users"),
-        where("condominioId", "==", user?.condominioId),
-        where("blocoId", "==", bloco.id),
-        where("role", "==", "morador")
-      );
+      const { data: usersSnap } = await supabase
+        .from("users")
+        .select("*")
+        .eq("condominio_id", user?.condominioId)
+        .eq("bloco_id", bloco.id)
+        .eq("role", "morador");
 
-      const snapshot = await getDocs(q);
-
-      let moradoresData: Morador[] = [];
-      snapshot.forEach((d) => {
-        const data = d.data() as any;
-        moradoresData.push({
-          id: d.id,
-          nome: data.nome,
-          apartamento: data.unidadeNome || data.apartamento || "?",
-          telefone: data.whatsapp || data.telefone || "",
-          blocoId: data.blocoId,
-          blocoNome: data.blocoNome || bloco.nome,
-          condominioId: data.condominioId,
-          role: data.role,
-          aprovado: data.aprovado,
-        });
-      });
+      let moradoresData: Morador[] = (usersSnap || []).map((data: any) => ({
+        id: data.id,
+        nome: data.nome,
+        apartamento: data.unidade_nome || data.apartamento || "?",
+        telefone: data.whatsapp || data.telefone || "",
+        blocoId: data.bloco_id,
+        blocoNome: data.bloco_nome || bloco.nome,
+        condominioId: data.condominio_id,
+        role: data.role,
+        aprovado: data.aprovado,
+      }));
 
       moradoresData = moradoresData.filter((m) => m.aprovado === true || m.aprovado === undefined);
       moradoresData.sort((a, b) => a.apartamento.localeCompare(b.apartamento, "pt-BR", { numeric: true }));
@@ -345,9 +332,9 @@ Aguardamos a sua retirada`;
     const arquivoFinal = await compressImage(imagem);
     setProgress(50);
     setMessage("Enviando imagem...");
-    const storageRef = ref(storage, `avisos/temp_${Date.now()}_${moradorId}.jpg`);
-    await uploadBytes(storageRef, arquivoFinal);
-    return getDownloadURL(storageRef);
+    const path = `avisos/temp_${Date.now()}_${moradorId}.jpg`;
+    await supabase.storage.from("avisos").upload(path, arquivoFinal);
+    return supabase.storage.from("avisos").getPublicUrl(path).data.publicUrl;
   };
 
   type WhatsAppPlatform = "capacitor" | "mobile-web" | "desktop";
@@ -437,11 +424,11 @@ Aguardamos a sua retirada`;
       mensagemFinal = mensagemFinal.replaceAll("{{LINK}}", linkDoAviso || LINK_SISTEMA_FALLBACK);
       mensagemFinal = mensagemFinal.replaceAll("{{FOTO}}", publicFotoUrl ? linkDoAviso : "");
 
-      await updateDoc(doc(db, "avisos_rapidos", avisoId), {
+      await supabase.from("avisos_rapidos").update({
         mensagem: mensagemFinal,
-        linkUrl: linkDoAviso,
-        fotoUrl: publicFotoUrl || null,
-      });
+        link_url: linkDoAviso,
+        foto_url: publicFotoUrl || null,
+      }).eq("id", avisoId);
 
       const whatsappLink = `https://wa.me/${cleanPhone}?text=${encodeURIComponent(mensagemFinal)}`;
 

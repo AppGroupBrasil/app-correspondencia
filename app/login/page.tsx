@@ -2,9 +2,7 @@
 
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { signInWithEmailAndPassword, sendPasswordResetEmail } from 'firebase/auth'
-import { auth, db } from '@/app/lib/firebase'
-import { doc, getDoc } from 'firebase/firestore'
+import { supabase } from '@/app/lib/supabase'
 import Image from 'next/image'
 
 import { Browser } from '@capacitor/browser'
@@ -41,20 +39,31 @@ export default function LoginPage() {
         return
       }
 
-      // 1. Login Auth
-      const userCredential = await signInWithEmailAndPassword(auth, email, senha)
-      const uid = userCredential.user.uid
-
-      // 2. Dados Firestore
-      const userDoc = await getDoc(doc(db, 'users', uid))
-
-      if (!userDoc.exists()) {
-        setErro('Usuário não encontrado no sistema')
-        await auth.signOut()
+      // 1. Login Supabase Auth
+      const { data: authData, error: authError } = await supabase.auth.signInWithPassword({ email, password: senha })
+      
+      if (authError) {
+        if (authError.message?.includes('Invalid login credentials')) {
+          setErro('Email ou senha incorretos')
+        } else if (authError.message?.includes('too many requests')) {
+          setErro('Muitas tentativas. Tente novamente mais tarde')
+        } else {
+          setErro(`Erro ao fazer login: ${authError.message}`)
+        }
         return
       }
 
-      const userData = userDoc.data()
+      const uid = authData.user.id
+
+      // 2. Dados do perfil
+      const { data: userData, error: profileError } = await supabase.from('users').select('*').eq('id', uid).single()
+
+      if (profileError || !userData) {
+        setErro('Usuário não encontrado no sistema')
+        await supabase.auth.signOut()
+        return
+      }
+
       const role = userData.role || ''
       const ativo = userData.ativo !== false 
       const aprovado = userData.aprovado !== false 
@@ -63,12 +72,12 @@ export default function LoginPage() {
       if (role === 'morador') {
         if (!aprovado) {
           setErro('Seu cadastro ainda não foi aprovado pelo responsável')
-          await auth.signOut()
+          await supabase.auth.signOut()
           return
         }
         if (!ativo) {
           setErro('Sua conta está inativa. Entre em contato com o responsável')
-          await auth.signOut()
+          await supabase.auth.signOut()
           return
         }
       }
@@ -82,20 +91,12 @@ export default function LoginPage() {
         case 'admin': router.push('/dashboard-admin'); break
         default:
           setErro('Perfil de usuário não reconhecido')
-          await auth.signOut()
+          await supabase.auth.signOut()
       }
 
     } catch (e: any) {
-      console.error('Erro ao fazer login:', e, 'Code:', e?.code, 'Message:', e?.message)
-      if (e.code === 'auth/invalid-credential' || e.code === 'auth/wrong-password' || e.code === 'auth/user-not-found') {     
-        setErro('Email ou senha incorretos')
-      } else if (e.code === 'auth/too-many-requests') {
-        setErro('Muitas tentativas. Tente novamente mais tarde')
-      } else if (e.code === 'permission-denied' || e.message?.includes('Missing or insufficient permissions')) {
-        setErro('Erro de permissão ao acessar dados. Verifique as regras do Firestore.')
-      } else {
-        setErro(`Erro ao fazer login: ${e.code || e.message || 'desconhecido'}`)
-      }
+      console.error('Erro ao fazer login:', e)
+      setErro(`Erro ao fazer login: ${e.message || 'desconhecido'}`)
     } finally {
       setLoading(false)
     }
@@ -108,17 +109,14 @@ export default function LoginPage() {
     }
     try {
       setLoadingRecuperacao(true)
-      await sendPasswordResetEmail(auth as any, emailRecuperacao)
+      const { error } = await supabase.auth.resetPasswordForEmail(emailRecuperacao)
+      if (error) throw error
       alert('✅ Email de recuperação enviado!\n\nVerifique sua caixa de entrada e spam.')
       setModalEsqueciSenha(false)
       setEmailRecuperacao('')
     } catch (err: any) {
       console.error('Erro ao enviar email:', err)
-      if (err.code === 'auth/user-not-found') {
-        alert('Email não encontrado')
-      } else {
-        alert('Erro ao enviar email de recuperação')
-      }
+      alert('Erro ao enviar email de recuperação')
     } finally {
       setLoadingRecuperacao(false)
     }

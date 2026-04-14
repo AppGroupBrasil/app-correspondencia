@@ -1,20 +1,7 @@
 "use client";
 
 import { useState, useCallback } from "react";
-import { db, storage } from "@/app/lib/firebase";
-import {
-  collection,
-  addDoc,
-  serverTimestamp,
-  doc,
-  getDoc,
-  query,
-  where,
-  getDocs,
-  updateDoc,
-  orderBy
-} from "firebase/firestore";
-import { ref, uploadBytes, getDownloadURL } from "firebase/storage";
+import { supabase } from "@/app/lib/supabase";
 import jsPDF from "jspdf";
 import QRCode from "qrcode";
 import imageCompression from "browser-image-compression";
@@ -121,9 +108,10 @@ export function useCorrespondencias() {
   };
 
   const uploadToStorage = async (blob: Blob | File, path: string) => {
-    const r = ref(storage, path);
-    await uploadBytes(r, blob);
-    return await getDownloadURL(r);
+    const { data, error } = await supabase.storage.from("correspondencias").upload(path, blob, { upsert: true });
+    if (error) throw error;
+    const { data: urlData } = supabase.storage.from("correspondencias").getPublicUrl(data.path);
+    return urlData.publicUrl;
   };
 
   // --------------------------------------------------------------------------
@@ -148,10 +136,10 @@ export function useCorrespondencias() {
         let nomeMorador = params.moradorNome || "";
         if (params.moradorId) {
             try {
-                const u = await getDoc(doc(db, "users", params.moradorId));
-                if (u.exists()) {
-                    emailDestino = u.data().email;
-                    nomeMorador = u.data().nome;
+                const { data: u } = await supabase.from("users").select("email, nome").eq("id", params.moradorId).single();
+                if (u) {
+                    emailDestino = u.email;
+                    nomeMorador = u.nome;
                 }
             } catch (e) {
               console.warn("Erro ao buscar dados do morador:", e);
@@ -167,19 +155,28 @@ export function useCorrespondencias() {
             }
         }
 
-        // 4. Salvar no Firestore
+        // 4. Salvar no Supabase
         setProgressMessage("Salvando dados...");
-        const docRef = await addDoc(collection(db, "correspondencias"), {
-            ...params,
-            moradorNome: nomeMorador,
+        const { data: inserted, error: insertError } = await supabase.from("correspondencias").insert({
+            condominio_id: params.condominioId,
+            bloco_id: params.blocoId || null,
+            bloco_nome: params.blocoNome || null,
+            morador_id: params.moradorId || null,
+            morador_nome: nomeMorador,
+            apartamento: params.apartamento || null,
             protocolo,
-            imagemUrl,
+            observacao: params.observacao || null,
+            local_armazenamento: params.localArmazenamento || "Portaria",
             status: "pendente",
-            criadoEm: serverTimestamp(),
-            criadoPor: porteiro,
-            moradorEmail: emailDestino,
-            dataHora: new Date().toLocaleString()
-        });
+            imagem_url: imagemUrl || null,
+            morador_telefone: params.moradorTelefone || null,
+            morador_email: emailDestino || null,
+            criado_por: porteiro,
+            criado_por_nome: porteiro,
+        }).select("id").single();
+
+        if (insertError) throw insertError;
+        const docId = inserted!.id;
 
         // 5. Enviar E-mail (Sem travar se falhar)
         if (emailDestino) {
@@ -204,7 +201,7 @@ export function useCorrespondencias() {
         // 6. Gerar PDF em background
         setTimeout(async () => {
             try {
-                const qrUrl = `${API_BASE_URL}/ver?id=${docRef.id}`;
+                const qrUrl = `${API_BASE_URL}/ver?id=${docId}`;
                 const qr = await QRCode.toDataURL(qrUrl);
                 const pdf = await gerarPDFProfissional({
                     ...params,
@@ -216,14 +213,14 @@ export function useCorrespondencias() {
                     qrCodeDataUrl: qr
                 });
                 const pdfBlob = pdf.output('blob');
-                const pdfUrl = await uploadToStorage(pdfBlob, `correspondencias/pdf_${protocolo}.pdf`);
-                await updateDoc(docRef, { pdfUrl });
+                const pdfUrl = await uploadToStorage(pdfBlob, `pdf_${protocolo}.pdf`);
+                await supabase.from("correspondencias").update({ pdf_url: pdfUrl }).eq("id", docId);
             } catch (e) { console.error("Erro ao gerar PDF background:", e); }
         }, 500);
 
         setLoading(false);
         setProgressMessage("");
-        return { id: docRef.id, protocolo };
+        return { id: docId, protocolo };
 
     } catch (e: any) {
         setError(e.message);
@@ -236,7 +233,6 @@ export function useCorrespondencias() {
   // 2. LISTAR CORRESPONDÊNCIAS (Com useCallback e Proteção de ID)
   // --------------------------------------------------------------------------
   const listarCorrespondencias = useCallback(async (condominioId: string, filtroStatus?: string) => {
-    // 🛡️ Proteção contra ID inválido (Evita erro do Firebase e Loop)
     if (!condominioId) {
         console.warn("Hook: Tentativa de listar sem condominioId");
         return [];
@@ -244,28 +240,49 @@ export function useCorrespondencias() {
 
     try {
         setLoading(true);
-        let q = query(
-            collection(db, "correspondencias"), 
-            where("condominioId", "==", condominioId),
-            orderBy("criadoEm", "desc")
-        );
+        let query = supabase
+            .from("correspondencias")
+            .select("*")
+            .eq("condominio_id", condominioId)
+            .order("criado_em", { ascending: false });
         
         if (filtroStatus) {
-             q = query(
-                collection(db, "correspondencias"), 
-                where("condominioId", "==", condominioId),
-                where("status", "==", filtroStatus),
-                orderBy("criadoEm", "desc") // Nota: Requer índice no Firebase se usar status+data
-            );
+            query = query.eq("status", filtroStatus);
         }
 
-        const snap = await getDocs(q);
-        const lista = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+        const { data, error: queryError } = await query;
+        if (queryError) throw queryError;
+
+        // Mapear snake_case → camelCase para compatibilidade
+        const lista = (data || []).map((d: any) => ({
+            id: d.id,
+            condominioId: d.condominio_id,
+            blocoId: d.bloco_id,
+            blocoNome: d.bloco_nome,
+            moradorId: d.morador_id,
+            moradorNome: d.morador_nome,
+            apartamento: d.apartamento,
+            protocolo: d.protocolo,
+            observacao: d.observacao,
+            localArmazenamento: d.local_armazenamento,
+            status: d.status,
+            imagemUrl: d.imagem_url,
+            pdfUrl: d.pdf_url,
+            reciboUrl: d.recibo_url,
+            moradorTelefone: d.morador_telefone,
+            moradorEmail: d.morador_email,
+            criadoPor: d.criado_por,
+            criadoPorNome: d.criado_por_nome,
+            compartilhadoVia: d.compartilhado_via,
+            retiradoEm: d.retirado_em,
+            dadosRetirada: d.dados_retirada,
+            criadoEm: d.criado_em,
+            dataHora: d.criado_em ? new Date(d.criado_em).toLocaleString() : "",
+        }));
         setLoading(false);
         return lista;
     } catch (e: any) {
         console.error("Erro ao listar correspondências:", e);
-        // Não jogamos erro aqui para não quebrar a UI, apenas logamos
         setLoading(false);
         return [];
     }
@@ -277,21 +294,28 @@ export function useCorrespondencias() {
   const registrarRetirada = useCallback(async (id: string, dadosRetirada: any) => {
       try {
           setLoading(true);
-          const ref = doc(db, "correspondencias", id);
           
           let assinaturaUrl = "";
           if (dadosRetirada.assinaturaBase64) {
              const resp = await fetch(dadosRetirada.assinaturaBase64);
              const blob = await resp.blob();
-             assinaturaUrl = await uploadToStorage(blob, `assinaturas/${id}_${Date.now()}.png`);
+             const { data: uploadData, error: uploadError } = await supabase.storage.from("retiradas").upload(`assinaturas/${id}_${Date.now()}.png`, blob);
+             if (!uploadError && uploadData) {
+               const { data: urlData } = supabase.storage.from("retiradas").getPublicUrl(uploadData.path);
+               assinaturaUrl = urlData.publicUrl;
+             }
           }
 
-          await updateDoc(ref, {
+          const { error: updateError } = await supabase.from("correspondencias").update({
               status: "retirada",
-              retiradoEm: serverTimestamp(),
-              retiradoPor: dadosRetirada.nomeRecebedor,
-              assinaturaUrl
-          });
+              retirado_em: new Date().toISOString(),
+              dados_retirada: {
+                nomeRecebedor: dadosRetirada.nomeRecebedor,
+                assinaturaUrl
+              }
+          }).eq("id", id);
+
+          if (updateError) throw updateError;
           setLoading(false);
           return true;
       } catch (e) {
@@ -303,8 +327,8 @@ export function useCorrespondencias() {
 
   const gerarSegundaVia = useCallback(async (id: string) => {
       try {
-        const d = await getDoc(doc(db, "correspondencias", id));
-        if (d.exists()) return d.data().pdfUrl;
+        const { data } = await supabase.from("correspondencias").select("pdf_url").eq("id", id).single();
+        if (data) return data.pdf_url;
         return null;
       } catch (e) { console.warn("Erro ao gerar segunda via:", e); return null; }
   }, []);

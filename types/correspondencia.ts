@@ -3,8 +3,6 @@
  * @module types/correspondencia
  */
 
-import { Timestamp } from "firebase/firestore";
-
 /**
  * Status possíveis de uma correspondência
  */
@@ -43,10 +41,10 @@ export interface Correspondencia {
   pdfUrl?: string;
   reciboUrl?: string;
   status: CorrespondenciaStatus;
-  criadoEm: Timestamp | Date;
+  criadoEm: string | Date;
   criadoPor: string;
   dataHora?: string;
-  retiradoEm?: Timestamp | Date;
+  retiradoEm?: string | Date;
   retiradoPor?: string;
   assinaturaUrl?: string;
   observacoes?: string;

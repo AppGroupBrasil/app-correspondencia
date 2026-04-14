@@ -3,21 +3,16 @@
 import { useState } from "react";
 import Link from "next/link";
 import Image from "next/image";
-import { useRouter } from "next/navigation";
 import { LogOut, Menu, User, X } from "lucide-react";
-import { signOut } from "firebase/auth";
-import { auth } from "@/app/lib/firebase";
 import { useAuth } from "@/hooks/useAuth";
 
 export default function NavbarSimples() {
   const [open, setOpen] = useState(false);
-  const router = useRouter();
-  const { user } = useAuth();
+  const { user, logout } = useAuth();
 
   const handleLogout = async () => {
-    await signOut(auth);
+    await logout();
     setOpen(false);
-    router.push("/login"); 
   };
 
   const getRoleLabel = (role: string) => {

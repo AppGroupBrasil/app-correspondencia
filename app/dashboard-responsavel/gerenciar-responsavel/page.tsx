@@ -2,9 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { auth, db } from "@/app/lib/firebase";
-import { onAuthStateChanged } from "firebase/auth";
-import { doc, getDoc, collection, query, where, getDocs } from "firebase/firestore";
+import { supabase } from "@/app/lib/supabase";
 import Image from "next/image";
 import { 
   Building2, 
@@ -36,16 +34,20 @@ export default function DashboardResponsavel() {
   const [pendentesAprovacao, setPendentesAprovacao] = useState(0);
 
   useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, async (user) => {
-      if (!user) {
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (_event, session) => {
+      if (!session?.user) {
         router.push("/login");
         return;
       }
 
       try {
-        const userDoc = await getDoc(doc(db, "users", user.uid));
-        if (userDoc.exists()) {
-          const userData = userDoc.data();
+        const { data: userData } = await supabase
+          .from("users")
+          .select("*")
+          .eq("id", session.user.id)
+          .single();
+
+        if (userData) {
           setUserName(userData.nome || "Responsável");
           setUserRole(userData.role || "");
 
@@ -54,13 +56,17 @@ export default function DashboardResponsavel() {
             return;
           }
 
-          if (userData.condominioId) {
-            setCondominioId(userData.condominioId);
+          if (userData.condominio_id) {
+            setCondominioId(userData.condominio_id);
             
             // Buscar dados do condomínio
-            const condominioDoc = await getDoc(doc(db, "condominios", userData.condominioId));
-            if (condominioDoc.exists()) {
-              const condominioData = condominioDoc.data();
+            const { data: condominioData } = await supabase
+              .from("condominios")
+              .select("*")
+              .eq("id", userData.condominio_id)
+              .single();
+
+            if (condominioData) {
               setCondominioNome(condominioData.nome || "");
               setCondominioEndereco(condominioData.endereco || "");
             }
@@ -68,14 +74,13 @@ export default function DashboardResponsavel() {
             // ---------------------------------------------------------
             // 🔔 Verificar Moradores Pendentes
             // ---------------------------------------------------------
-            const qPendentes = query(
-              collection(db, "moradores"),
-              where("condominioId", "==", userData.condominioId),
-              where("aprovado", "==", false)
-            );
+            const { count } = await supabase
+              .from("moradores")
+              .select("*", { count: "exact", head: true })
+              .eq("condominio_id", userData.condominio_id)
+              .eq("aprovado", false);
             
-            const snapshot = await getDocs(qPendentes);
-            setPendentesAprovacao(snapshot.size);
+            setPendentesAprovacao(count || 0);
           }
         }
       } catch (error) {
@@ -85,7 +90,7 @@ export default function DashboardResponsavel() {
       }
     });
 
-    return () => unsubscribe();
+    return () => subscription.unsubscribe();
   }, [router]);
 
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
@@ -138,7 +143,7 @@ export default function DashboardResponsavel() {
               
               <button
                 onClick={async () => {
-                  await auth.signOut();
+                  await supabase.auth.signOut();
                   router.push("/login");
                 }}
                 className="flex items-center gap-2 px-4 py-2 bg-red-500 text-white rounded-lg hover:bg-red-600 transition-all font-medium shadow-sm"

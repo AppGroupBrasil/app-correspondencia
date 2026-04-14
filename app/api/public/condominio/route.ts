@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getAdminDb } from "@/app/lib/firebase-admin";
+import { createServerClient } from "@/app/lib/supabase";
 
 export const dynamic = "force-dynamic";
 
@@ -18,32 +18,34 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "CNPJ inválido" }, { status: 400 });
     }
 
-    const adminDb = getAdminDb();
-    const snapshot = await adminDb
-      .collection("condominios")
-      .where("cnpj", "==", cnpjOriginal)
-      .limit(1)
-      .get();
+    const supabaseAdmin = createServerClient();
 
-    if (snapshot.empty) {
+    const { data: condominioData, error: condErr } = await supabaseAdmin
+      .from("condominios")
+      .select("id, nome, cnpj")
+      .eq("cnpj", cnpjOriginal)
+      .limit(1)
+      .single();
+
+    if (condErr || !condominioData) {
       return NextResponse.json({ error: "Condomínio não encontrado" }, { status: 404 });
     }
 
-    const condominioDoc = snapshot.docs[0];
-    const condominioData = condominioDoc.data();
-    const blocosSnapshot = await adminDb
-      .collection("blocos")
-      .where("condominioId", "==", condominioDoc.id)
-      .get();
+    const { data: blocosData } = await supabaseAdmin
+      .from("blocos")
+      .select("id, nome")
+      .eq("condominio_id", condominioData.id)
+      .order("nome");
 
-    const blocos = blocosSnapshot.docs
-      .map((doc) => ({ id: doc.id, nome: doc.data().nome || "Sem Nome" }))
-      .sort((left, right) => left.nome.localeCompare(right.nome, "pt-BR"));
+    const blocos = (blocosData || []).map((b: any) => ({
+      id: b.id,
+      nome: b.nome || "Sem Nome",
+    }));
 
     return NextResponse.json({
       success: true,
       condominio: {
-        id: condominioDoc.id,
+        id: condominioData.id,
         nome: condominioData.nome || "Condomínio",
       },
       blocos,

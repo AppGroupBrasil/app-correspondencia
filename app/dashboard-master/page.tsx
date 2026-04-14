@@ -4,8 +4,7 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/hooks/useAuth";
 import withAuth from "@/components/withAuth";
-import { db } from "@/app/lib/firebase";
-import { collection, getDocs, query, where, orderBy, limit } from "firebase/firestore";
+import { supabase } from "@/app/lib/supabase";
 import {
   Building2,
   Users,
@@ -19,7 +18,6 @@ import {
   ChevronRight,
   Clock,
   CheckCircle2,
-  AlertCircle,
 } from "lucide-react";
 
 interface DashboardStats {
@@ -57,50 +55,51 @@ function DashboardMasterPage() {
     const fetchStats = async () => {
       try {
         // Buscar total de condomínios
-        const condominiosSnap = await getDocs(collection(db, "condominios"));
-        const totalCondominios = condominiosSnap.size;
+        const { count: totalCondominios } = await supabase
+          .from("condominios").select("*", { count: "exact", head: true });
 
         // Buscar total de usuários
-        const usersSnap = await getDocs(collection(db, "users"));
-        const totalUsuarios = usersSnap.size;
-        const usuariosAtivos = usersSnap.docs.filter(
-          (doc) => doc.data().ativo !== false
-        ).length;
+        const { count: totalUsuarios } = await supabase
+          .from("users").select("*", { count: "exact", head: true });
+        const { count: usuariosAtivos } = await supabase
+          .from("users").select("*", { count: "exact", head: true }).eq("ativo", true);
 
         // Buscar correspondências
-        const correspondenciasSnap = await getDocs(collection(db, "correspondencias"));
-        const totalCorrespondencias = correspondenciasSnap.size;
-        const correspondenciasPendentes = correspondenciasSnap.docs.filter(
-          (doc) => doc.data().status === "pendente"
-        ).length;
+        const { count: totalCorrespondencias } = await supabase
+          .from("correspondencias").select("*", { count: "exact", head: true });
+        const { count: correspondenciasPendentes } = await supabase
+          .from("correspondencias").select("*", { count: "exact", head: true }).eq("status", "pendente");
 
         // Correspondências de hoje
         const hoje = new Date();
         hoje.setHours(0, 0, 0, 0);
-        const correspondenciasHoje = correspondenciasSnap.docs.filter((doc) => {
-          const criadoEm = doc.data().criadoEm?.toDate?.();
-          return criadoEm && criadoEm >= hoje;
-        }).length;
+        const { count: correspondenciasHoje } = await supabase
+          .from("correspondencias").select("*", { count: "exact", head: true })
+          .gte("criado_em", hoje.toISOString());
 
         setStats({
-          totalCondominios,
-          totalUsuarios,
-          totalCorrespondencias,
-          correspondenciasPendentes,
-          correspondenciasHoje,
-          usuariosAtivos,
+          totalCondominios: totalCondominios || 0,
+          totalUsuarios: totalUsuarios || 0,
+          totalCorrespondencias: totalCorrespondencias || 0,
+          correspondenciasPendentes: correspondenciasPendentes || 0,
+          correspondenciasHoje: correspondenciasHoje || 0,
+          usuariosAtivos: usuariosAtivos || 0,
         });
 
         // Buscar atividades recentes
-        const activities: RecentActivity[] = correspondenciasSnap.docs
-          .slice(0, 5)
-          .map((doc) => ({
-            id: doc.id,
-            tipo: "correspondencia",
-            descricao: `Nova correspondência registrada - ${doc.data().protocolo || "S/N"}`,
-            data: doc.data().criadoEm?.toDate?.() || new Date(),
-            condominioNome: doc.data().condominioNome,
-          }));
+        const { data: recentCorr } = await supabase
+          .from("correspondencias")
+          .select("id, protocolo, criado_em, condominio_nome")
+          .order("criado_em", { ascending: false })
+          .limit(5);
+
+        const activities: RecentActivity[] = (recentCorr || []).map((d: any) => ({
+          id: d.id,
+          tipo: "correspondencia",
+          descricao: `Nova correspondência registrada - ${d.protocolo || "S/N"}`,
+          data: d.criado_em ? new Date(d.criado_em) : new Date(),
+          condominioNome: d.condominio_nome,
+        }));
 
         setRecentActivities(activities);
       } catch (error) {
@@ -334,7 +333,7 @@ function DashboardMasterPage() {
               </h3>
               <div className="space-y-3">
                 <div className="flex items-center justify-between">
-                  <span className="text-sm text-gray-600">Firebase</span>
+                  <span className="text-sm text-gray-600">Supabase</span>
                   <span className="text-xs font-medium text-green-600 bg-green-50 px-2 py-1 rounded-full">
                     Conectado
                   </span>

@@ -2,15 +2,7 @@
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/hooks/useAuth";
-import { db, auth } from "@/app/lib/firebase";
-import { doc, updateDoc, deleteDoc } from "firebase/firestore";
-import { 
-  updateEmail, 
-  updatePassword, 
-  EmailAuthProvider, 
-  reauthenticateWithCredential,
-  deleteUser 
-} from "firebase/auth";
+import { supabase } from "@/app/lib/supabase";
 import { User, Mail, Phone, Lock, Trash2, Save, ArrowLeft } from "lucide-react";
 import withAuth from "@/components/withAuth";
 
@@ -60,25 +52,33 @@ function MinhaContaPage() {
       setError("");
       setMessage("");
 
-      // Atualizar dados no Firestore
-      const userRef = doc(db, "users", user.uid);
-      await updateDoc(userRef, {
-        nome,
-        telefone,
-      });
+      // Atualizar dados na tabela users
+      const { error: dbError } = await supabase
+        .from("users")
+        .update({ nome, telefone })
+        .eq("id", user.uid);
+
+      if (dbError) throw new Error(dbError.message);
 
       // Atualizar email se mudou
-      if (email !== user.email && auth.currentUser) {
+      if (email !== user.email) {
         if (!senhaAtual) {
           setError("Para alterar o email, informe sua senha atual");
           setLoading(false);
           return;
         }
 
-        const credential = EmailAuthProvider.credential(user.email, senhaAtual);
-        await reauthenticateWithCredential(auth.currentUser, credential);
-        await updateEmail(auth.currentUser, email);
-        await updateDoc(userRef, { email });
+        // Reautenticar
+        const { error: reAuthError } = await supabase.auth.signInWithPassword({
+          email: user.email,
+          password: senhaAtual,
+        });
+        if (reAuthError) throw new Error("Senha atual incorreta");
+
+        const { error: emailError } = await supabase.auth.updateUser({ email });
+        if (emailError) throw new Error(emailError.message);
+
+        await supabase.from("users").update({ email }).eq("id", user.uid);
       }
 
       // Atualizar senha se informada
@@ -101,11 +101,15 @@ function MinhaContaPage() {
           return;
         }
 
-        if (auth.currentUser) {
-          const credential = EmailAuthProvider.credential(user.email, senhaAtual);
-          await reauthenticateWithCredential(auth.currentUser, credential);
-          await updatePassword(auth.currentUser, novaSenha);
-        }
+        // Reautenticar antes de trocar senha
+        const { error: reAuthError } = await supabase.auth.signInWithPassword({
+          email: user.email,
+          password: senhaAtual,
+        });
+        if (reAuthError) throw new Error("Senha atual incorreta");
+
+        const { error: pwdError } = await supabase.auth.updateUser({ password: novaSenha });
+        if (pwdError) throw new Error(pwdError.message);
 
         setSenhaAtual("");
         setNovaSenha("");
@@ -116,20 +120,14 @@ function MinhaContaPage() {
       setTimeout(() => setMessage(""), 3000);
     } catch (err: any) {
       console.error("Erro ao salvar:", err);
-      if (err.code === "auth/wrong-password") {
-        setError("Senha atual incorreta");
-      } else if (err.code === "auth/email-already-in-use") {
-        setError("Este email já está em uso");
-      } else {
-        setError("Erro ao salvar dados. Tente novamente.");
-      }
+      setError(err.message || "Erro ao salvar dados. Tente novamente.");
     } finally {
       setLoading(false);
     }
   };
 
   const handleExcluirConta = async () => {
-    if (!user || !auth.currentUser) return;
+    if (!user) return;
 
     try {
       setLoading(true);
@@ -142,24 +140,27 @@ function MinhaContaPage() {
       }
 
       // Reautenticar
-      const credential = EmailAuthProvider.credential(user.email, senhaExcluir);
-      await reauthenticateWithCredential(auth.currentUser, credential);
+      const { error: reAuthError } = await supabase.auth.signInWithPassword({
+        email: user.email,
+        password: senhaExcluir,
+      });
+      if (reAuthError) {
+        setError("Senha incorreta");
+        setLoading(false);
+        return;
+      }
 
-      // Excluir dados do Firestore
-      await deleteDoc(doc(db, "users", user.uid));
+      // Excluir dados da tabela users
+      await supabase.from("users").delete().eq("id", user.uid);
 
-      // Excluir conta do Firebase Auth
-      await deleteUser(auth.currentUser);
+      // Sign out (admin delete não disponível no client)
+      await supabase.auth.signOut();
 
       alert("Conta excluída com sucesso!");
       router.push("/login");
     } catch (err: any) {
       console.error("Erro ao excluir conta:", err);
-      if (err.code === "auth/wrong-password") {
-        setError("Senha incorreta");
-      } else {
-        setError("Erro ao excluir conta. Tente novamente.");
-      }
+      setError(err.message || "Erro ao excluir conta. Tente novamente.");
     } finally {
       setLoading(false);
     }

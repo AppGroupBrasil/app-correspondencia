@@ -3,6 +3,18 @@
 // Detecta se é build de App ou Web
 const isAppBuild = process.env.BUILD_TARGET === 'app';
 
+function getSupabaseHostname() {
+  try {
+    return process.env.NEXT_PUBLIC_SUPABASE_URL
+      ? new URL(process.env.NEXT_PUBLIC_SUPABASE_URL).hostname
+      : null;
+  } catch {
+    return null;
+  }
+}
+
+const supabaseHostname = getSupabaseHostname();
+
 const nextConfig = {
   // Modo App = Exportação Estática | Modo Web = Standalone (para Docker) ou Padrão
   output: isAppBuild ? 'export' : 'standalone',
@@ -26,6 +38,15 @@ const nextConfig = {
         hostname: '*.firebasestorage.app',
         pathname: '/**',
       },
+      ...(supabaseHostname
+        ? [
+            {
+              protocol: 'https',
+              hostname: supabaseHostname,
+              pathname: '/**',
+            },
+          ]
+        : []),
     ],
     formats: ['image/avif', 'image/webp'],
     // Tamanhos de dispositivo para otimização
@@ -72,7 +93,7 @@ const nextConfig = {
 
   // Otimizações experimentais
   experimental: {
-    optimizePackageImports: ['lucide-react', 'firebase'],
+    optimizePackageImports: ['lucide-react'],
   },
 };
 

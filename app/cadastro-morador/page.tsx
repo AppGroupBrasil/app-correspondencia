@@ -2,9 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { auth, db } from "@/app/lib/firebase";
-import { createUserWithEmailAndPassword } from "firebase/auth";
-import { doc, setDoc } from "firebase/firestore";
+import { supabase } from "@/app/lib/supabase";
 // 🔥 AJUSTE: Uso de alias '@/' para evitar erros de caminho relativo
 import { enviarConfirmacaoCadastro } from '@/app/lib/email-helper';
 
@@ -126,8 +124,6 @@ export default function CadastroMoradorPage() {
     setErro("");
 
     try {
-      const cred = await createUserWithEmailAndPassword(auth as any, email, senha);
-      
       const blocoSel = blocos.find(b => b.id === blocoId);
       
       // Montar identificação da unidade (Ex: 101 Bloco A)
@@ -140,28 +136,34 @@ export default function CadastroMoradorPage() {
         ? `${identificacaoUnidade} - ${blocoSel.nome}` 
         : identificacaoUnidade;
 
-      await setDoc(doc(db, "moradores", cred.user.uid), {
-        nome,
-        email,
-        whatsapp, // Salva já formatado ou limpe aqui se preferir salvar só números: whatsapp.replace(/\D/g, "")
-        perfil,
-        perfilMorador: perfil,
-        condominioId: condominioEncontrado.id,
-        condominioNome: condominioEncontrado.nome,
-        
-        blocoId: blocoId || "",
-        blocoNome: blocoSel?.nome || "",
-        
-        // Campos ajustados para texto livre
-        unidadeId: "manual", 
-        unidadeNome: unidadeNomeCompleto, 
-        numeroUnidade: identificacaoUnidade,
-        
-        role: "morador",
-        ativo: false,
-        aprovado: false,
-        criadoEm: new Date()
+      // 1. Criar usuário auth via API
+      const res = await fetch("/api/criar-usuario", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          email,
+          senha,
+          nome,
+          role: "morador",
+          condominioId: condominioEncontrado.id,
+          dados: {
+            whatsapp,
+            perfil,
+            perfil_morador: perfil,
+            condominio_nome: condominioEncontrado.nome,
+            bloco_id: blocoId || "",
+            bloco_nome: blocoSel?.nome || "",
+            unidade_id: "manual",
+            unidade_nome: unidadeNomeCompleto,
+            numero_unidade: identificacaoUnidade,
+            ativo: false,
+            aprovado: false,
+          },
+        }),
       });
+
+      const result = await res.json();
+      if (!res.ok) throw new Error(result.error || "Erro ao criar conta");
 
       // 🔥 Envio de Email de Confirmação (Integrado)
       try {
@@ -180,12 +182,11 @@ export default function CadastroMoradorPage() {
       }
 
       alert("Cadastro realizado! Aguarde aprovação.");
-      router.push("/login"); // ✅ CORREÇÃO: Redireciona para o Login
+      router.push("/login");
 
     } catch (err: any) {
       console.error("Erro:", err);
-      if (err.code === 'auth/email-already-in-use') setErro("Email já cadastrado");
-      else setErro("Erro ao criar conta: " + err.message);
+      setErro(err.message || "Erro ao criar conta");
     } finally {
       setLoading(false);
     }

@@ -1,20 +1,9 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { db } from "@/app/lib/firebase";
+import { supabase } from "@/app/lib/supabase";
 import { useAuth } from "@/hooks/useAuth";
 import { Check, X, Trash2, Edit, UserCheck, Ban, Save, XCircle } from "lucide-react";
-import {
-  collection,
-  query,
-  where,
-  getDocs,
-  doc,
-  updateDoc,
-  deleteDoc,
-  serverTimestamp,
-  getDoc,
-} from "firebase/firestore";
 
 import BotaoVoltar from "@/components/BotaoVoltar";
 import BotaoLinkCadastro from "@/components/BotaoLinkCadastro";
@@ -80,9 +69,13 @@ export default function AprovarMoradores({ condominioId: adminCondominioId }: { 
     async function garantirCondominioId() {
       if (user?.uid && !user.condominioId && !adminCondominioId) {
         try {
-          const snap = await getDoc(doc(db, "users", user.uid));
-          if (snap.exists()) {
-            setFetchedCondominioId(snap.data().condominioId);
+          const { data } = await supabase
+            .from("users")
+            .select("condominio_id")
+            .eq("id", user.uid)
+            .single();
+          if (data) {
+            setFetchedCondominioId(data.condominio_id);
           }
         } catch (error) {
           console.error("Erro ao buscar detalhes do usuário", error);
@@ -102,23 +95,40 @@ export default function AprovarMoradores({ condominioId: adminCondominioId }: { 
   const carregarDados = async () => {
     setLoading(true);
     try {
-      const qBlocos = query(collection(db, "blocos"), where("condominioId", "==", targetCondominioId));
-      const snapBlocos = await getDocs(qBlocos);
-      const listaBlocos = snapBlocos.docs.map((d) => ({ id: d.id, nome: d.data().nome }));
+      const { data: blocosData } = await supabase
+        .from("blocos")
+        .select("id, nome")
+        .eq("condominio_id", targetCondominioId);
+      const listaBlocos = (blocosData || []).map((d: any) => ({ id: d.id, nome: d.nome }));
       setBlocos(listaBlocos.sort((a, b) => a.nome.localeCompare(b.nome, "pt-BR", { numeric: true })));
 
-      const qUsers = query(
-        collection(db, "users"),
-        where("condominioId", "==", targetCondominioId),
-        where("role", "==", "morador")
-      );
-      const snapUsers = await getDocs(qUsers);
+      const { data: usersData } = await supabase
+        .from("users")
+        .select("*")
+        .eq("condominio_id", targetCondominioId)
+        .eq("role", "morador");
       
       const pendentes: Morador[] = [];
       const aprovados: Morador[] = [];
 
-      snapUsers.forEach((doc) => {
-        const data = { id: doc.id, ...doc.data() } as Morador;
+      (usersData || []).forEach((d: any) => {
+        const data: Morador = {
+          id: d.id,
+          nome: d.nome,
+          email: d.email,
+          whatsapp: d.whatsapp,
+          perfil: d.perfil,
+          condominioId: d.condominio_id,
+          condominioNome: d.condominio_nome,
+          blocoId: d.bloco_id,
+          blocoNome: d.bloco_nome,
+          unidadeId: d.unidade_id,
+          unidadeNome: d.unidade_nome,
+          numeroUnidade: d.numero_unidade,
+          ativo: d.ativo,
+          aprovado: d.aprovado,
+          criadoEm: d.criado_em,
+        };
         if (data.aprovado === true) {
           aprovados.push(data);
         } else {
@@ -126,8 +136,8 @@ export default function AprovarMoradores({ condominioId: adminCondominioId }: { 
         }
       });
 
-      pendentes.sort((a, b) => (a.criadoEm?.toMillis() || 0) - (b.criadoEm?.toMillis() || 0));
-      aprovados.sort((a, b) => (b.criadoEm?.toMillis() || 0) - (a.criadoEm?.toMillis() || 0));
+      pendentes.sort((a, b) => new Date(a.criadoEm || 0).getTime() - new Date(b.criadoEm || 0).getTime());
+      aprovados.sort((a, b) => new Date(b.criadoEm || 0).getTime() - new Date(a.criadoEm || 0).getTime());
 
       setMoradoresPendentes(pendentes);
       setMoradoresAprovados(aprovados);
@@ -168,12 +178,12 @@ export default function AprovarMoradores({ condominioId: adminCondominioId }: { 
 
     try {
       setProcessandoId(morador.id);
-      await updateDoc(doc(db, "users", morador.id), {
+      await supabase.from("users").update({
         aprovado: true,
         ativo: true,
-        aprovadoEm: serverTimestamp(),
-        aprovadoPor: user?.uid
-      });
+        aprovado_em: new Date().toISOString(),
+        aprovado_por: user?.uid
+      }).eq("id", morador.id);
       enviarEmailAprovacao(morador);
       alert("✅ Morador aprovado com sucesso!");
       carregarDados();
@@ -189,13 +199,13 @@ export default function AprovarMoradores({ condominioId: adminCondominioId }: { 
     if (!confirm(`Rejeitar cadastro de ${morador.nome}? Essa ação não pode ser desfeita.`)) return;
     try {
       setProcessandoId(morador.id);
-      await updateDoc(doc(db, "users", morador.id), {
+      await supabase.from("users").update({
         aprovado: false,
         ativo: false,
         rejeitado: true,
-        rejeitadoEm: serverTimestamp(),
-        rejeitadoPor: user?.uid
-      });
+        rejeitado_em: new Date().toISOString(),
+        rejeitado_por: user?.uid
+      }).eq("id", morador.id);
       alert("Cadastro rejeitado.");
       carregarDados();
     } catch (err) {
@@ -209,7 +219,7 @@ export default function AprovarMoradores({ condominioId: adminCondominioId }: { 
     if (!confirm(`EXCLUIR DEFINITIVAMENTE ${morador.nome}?`)) return;
     try {
       setProcessandoId(morador.id);
-      await deleteDoc(doc(db, "users", morador.id));
+      await supabase.from("users").delete().eq("id", morador.id);
       carregarDados();
     } catch (err) {
       alert("Erro ao excluir.");
@@ -220,7 +230,7 @@ export default function AprovarMoradores({ condominioId: adminCondominioId }: { 
 
   const toggleStatus = async (morador: Morador) => {
     try {
-      await updateDoc(doc(db, "users", morador.id), { ativo: !morador.ativo });
+      await supabase.from("users").update({ ativo: !morador.ativo }).eq("id", morador.id);
       carregarDados();
     } catch { 
       alert("Erro ao alterar status."); 
@@ -247,13 +257,13 @@ export default function AprovarMoradores({ condominioId: adminCondominioId }: { 
         email: editEmail,
         whatsapp: editWhatsapp,
         perfil: editPerfil,
-        blocoId: editBlocoId,
-        blocoNome: blocoSelecionado?.nome || "",
-        numeroUnidade: editUnidade,
-        unidadeNome: editUnidade,
-        atualizadoEm: serverTimestamp()
+        bloco_id: editBlocoId,
+        bloco_nome: blocoSelecionado?.nome || "",
+        numero_unidade: editUnidade,
+        unidade_nome: editUnidade,
+        atualizado_em: new Date().toISOString()
       };
-      await updateDoc(doc(db, "users", moradorEditando.id), updates);
+      await supabase.from("users").update(updates).eq("id", moradorEditando.id);
       setModalEditarAberto(false);
       setMoradorEditando(null);
       alert("Dados atualizados!");
@@ -376,7 +386,7 @@ export default function AprovarMoradores({ condominioId: adminCondominioId }: { 
                             <div className="text-right">
                                <span className="block text-gray-500 text-xs">Data Cadastro</span>
                                <span className="text-gray-800 font-medium text-xs">
-                                  {m.criadoEm?.toDate ? m.criadoEm.toDate().toLocaleDateString('pt-BR') : 'N/A'}
+                                  {m.criadoEm ? new Date(m.criadoEm).toLocaleDateString('pt-BR') : 'N/A'}
                                </span>
                             </div>
                          </div>

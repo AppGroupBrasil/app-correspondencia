@@ -2,8 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { useAuth } from "@/hooks/useAuth";
-import { db } from "@/app/lib/firebase";
-import { doc, getDoc } from "firebase/firestore";
+import { supabase } from "@/app/lib/supabase";
 import { Check, Share2 } from "lucide-react";
 
 export default function BotaoLinkCadastro() {
@@ -17,9 +16,13 @@ export default function BotaoLinkCadastro() {
     const fetchCnpj = async () => {
       if (user?.condominioId) {
         try {
-          const docSnap = await getDoc(doc(db, "condominios", user.condominioId));
-          if (docSnap.exists()) {
-            setCnpjCondominio(docSnap.data().cnpj);
+          const { data, error } = await supabase
+            .from("condominios")
+            .select("cnpj")
+            .eq("id", user.condominioId)
+            .single();
+          if (!error && data) {
+            setCnpjCondominio(data.cnpj);
           }
         } catch (error) {
           console.error("Erro ao buscar CNPJ:", error);

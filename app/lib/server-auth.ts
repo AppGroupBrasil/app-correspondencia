@@ -1,7 +1,7 @@
 import "server-only";
 
 import type { NextRequest } from "next/server";
-import { getAdminAuth, getAdminDb } from "@/app/lib/firebase-admin";
+import { createServerClient } from "@/app/lib/supabase";
 
 export type AppRole = "adminMaster" | "admin" | "responsavel" | "porteiro" | "morador";
 
@@ -56,17 +56,15 @@ function getBearerToken(request: NextRequest): string | null {
 }
 
 async function getProfile(uid: string) {
-  const adminDb = getAdminDb();
-  const collections = ["users", "moradores"];
+  const supabaseAdmin = createServerClient();
 
-  for (const collectionName of collections) {
-    const snapshot = await adminDb.collection(collectionName).doc(uid).get();
-    if (snapshot.exists) {
-      return snapshot.data() || null;
-    }
-  }
+  const { data } = await supabaseAdmin
+    .from("users")
+    .select("*")
+    .eq("id", uid)
+    .single();
 
-  return null;
+  return data || null;
 }
 
 export async function requireRequestAuth(
@@ -78,19 +76,25 @@ export async function requireRequestAuth(
     throw new RequestAuthError(401, "Token de autenticação ausente.");
   }
 
-  const decodedToken = await getAdminAuth().verifyIdToken(token);
-  const profile = await getProfile(decodedToken.uid);
-  const role = normalizeRole(profile?.role ?? decodedToken.role);
+  const supabaseAdmin = createServerClient();
+  const { data: { user: authUser }, error } = await supabaseAdmin.auth.getUser(token);
+
+  if (error || !authUser) {
+    throw new RequestAuthError(401, "Token inválido ou expirado.");
+  }
+
+  const profile = await getProfile(authUser.id);
+  const role = normalizeRole(profile?.role);
 
   if (!profile || !role) {
     throw new RequestAuthError(403, "Perfil do usuário não encontrado ou sem permissão.");
   }
 
   const authContext: RequestAuthContext = {
-    uid: decodedToken.uid,
-    email: decodedToken.email || profile.email || "",
+    uid: authUser.id,
+    email: authUser.email || profile.email || "",
     role,
-    condominioId: profile.condominioId || "",
+    condominioId: profile.condominio_id || "",
   };
 
   if (allowedRoles && !allowedRoles.includes(authContext.role)) {

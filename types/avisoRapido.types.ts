@@ -1,5 +1,3 @@
-import { Timestamp } from "firebase/firestore";
-
 /**
  * Interface para Aviso Rápido enviado via WhatsApp
  */
@@ -7,7 +5,7 @@ export interface AvisoRapido {
   id: string;
   
   // Informações do envio
-  dataEnvio: Timestamp | any; // 'any' adicionado para flexibilidade com datas serializadas
+  dataEnvio: string | Date;
   
   // Quem enviou
   enviadoPorId: string;

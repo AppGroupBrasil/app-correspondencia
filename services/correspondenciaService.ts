@@ -1,18 +1,4 @@
-import {
-  collection,
-  query,
-  where,
-  orderBy,
-  getDocs,
-  addDoc,
-  updateDoc,
-  deleteDoc,
-  doc,
-  Timestamp,
-  DocumentData,
-  QueryConstraint,
-} from "firebase/firestore";
-import { db } from "@/app/lib/firebase";
+import { supabase } from "@/app/lib/supabase";
 
 // ============================================
 // TIPOS
@@ -30,8 +16,8 @@ export interface Correspondencia {
   descricao?: string;
   remetente?: string;
   codigoRastreio?: string;
-  dataRegistro: Timestamp;
-  dataRetirada?: Timestamp;
+  dataRegistro: string;
+  dataRetirada?: string;
   registradoPor: string;
   retiradoPor?: string;
   assinatura?: string;
@@ -77,7 +63,30 @@ export interface FiltrosCorrespondencia {
 // SERVIÇO DE CORRESPONDÊNCIAS
 // ============================================
 
-const COLLECTION_NAME = "correspondencias";
+const TABLE_NAME = "correspondencias";
+
+function mapCorrespondencia(d: any): Correspondencia {
+  return {
+    id: d.id,
+    condominioId: d.condominio_id,
+    moradorId: d.morador_id,
+    moradorNome: d.morador_nome,
+    bloco: d.bloco_nome,
+    apartamento: d.apartamento,
+    tipo: d.tipo || "encomenda",
+    status: d.status,
+    descricao: d.observacao,
+    remetente: d.remetente,
+    codigoRastreio: d.codigo_rastreio,
+    dataRegistro: d.criado_em,
+    dataRetirada: d.retirado_em,
+    registradoPor: d.criado_por,
+    retiradoPor: d.dados_retirada?.nomeRecebedor,
+    assinatura: d.dados_retirada?.assinaturaUrl,
+    fotoUrl: d.imagem_url,
+    observacoes: d.observacao,
+  };
+}
 
 /**
  * Busca correspondências com filtros opcionais
@@ -86,52 +95,35 @@ export async function buscarCorrespondencias(
   condominioId: string,
   filtros?: FiltrosCorrespondencia
 ): Promise<Correspondencia[]> {
-  const constraints: QueryConstraint[] = [
-    where("condominioId", "==", condominioId),
-    orderBy("dataRegistro", "desc"),
-  ];
+  let query = supabase
+    .from(TABLE_NAME)
+    .select("*")
+    .eq("condominio_id", condominioId)
+    .order("criado_em", { ascending: false });
 
   if (filtros?.status) {
-    constraints.push(where("status", "==", filtros.status));
-  }
-
-  if (filtros?.tipo) {
-    constraints.push(where("tipo", "==", filtros.tipo));
+    query = query.eq("status", filtros.status);
   }
 
   if (filtros?.bloco) {
-    constraints.push(where("bloco", "==", filtros.bloco));
+    query = query.eq("bloco_nome", filtros.bloco);
   }
 
   if (filtros?.moradorId) {
-    constraints.push(where("moradorId", "==", filtros.moradorId));
+    query = query.eq("morador_id", filtros.moradorId);
   }
 
-  const ref = collection(db, COLLECTION_NAME);
-  const q = query(ref, ...constraints);
-  const snapshot = await getDocs(q);
-
-  let correspondencias = snapshot.docs.map((doc) => ({
-    id: doc.id,
-    ...doc.data(),
-  })) as Correspondencia[];
-
-  // Filtros de data (aplicados no cliente pois Firestore não suporta múltiplos orderBy)
   if (filtros?.dataInicio) {
-    correspondencias = correspondencias.filter((c) => {
-      const data = c.dataRegistro.toDate();
-      return data >= filtros.dataInicio!;
-    });
+    query = query.gte("criado_em", filtros.dataInicio.toISOString());
   }
 
   if (filtros?.dataFim) {
-    correspondencias = correspondencias.filter((c) => {
-      const data = c.dataRegistro.toDate();
-      return data <= filtros.dataFim!;
-    });
+    query = query.lte("criado_em", filtros.dataFim.toISOString());
   }
 
-  return correspondencias;
+  const { data, error } = await query;
+  if (error) throw error;
+  return (data || []).map(mapCorrespondencia);
 }
 
 /**
@@ -153,16 +145,23 @@ export async function buscarCorrespondenciasPendentes(
 export async function registrarCorrespondencia(
   dados: NovaCorrespondencia
 ): Promise<string> {
-  const correspondencia = {
-    ...dados,
-    status: "pendente" as StatusCorrespondencia,
-    dataRegistro: Timestamp.now(),
-  };
+  const protocolo = Math.floor(100000 + Math.random() * 900000).toString();
+  
+  const { data, error } = await supabase.from(TABLE_NAME).insert({
+    condominio_id: dados.condominioId,
+    morador_id: dados.moradorId || null,
+    morador_nome: dados.moradorNome,
+    bloco_nome: dados.bloco,
+    apartamento: dados.apartamento,
+    protocolo,
+    observacao: dados.descricao || dados.observacoes,
+    status: "pendente",
+    criado_por: dados.registradoPor,
+    imagem_url: dados.fotoUrl || null,
+  }).select("id").single();
 
-  const ref = collection(db, COLLECTION_NAME);
-  const docRef = await addDoc(ref, correspondencia);
-
-  return docRef.id;
+  if (error) throw error;
+  return data!.id;
 }
 
 /**
@@ -173,14 +172,16 @@ export async function marcarComoRetirada(
   retiradoPor: string,
   assinatura?: string
 ): Promise<void> {
-  const ref = doc(db, COLLECTION_NAME, correspondenciaId);
+  const { error } = await supabase.from(TABLE_NAME).update({
+    status: "retirada",
+    retirado_em: new Date().toISOString(),
+    dados_retirada: {
+      nomeRecebedor: retiradoPor,
+      assinaturaUrl: assinatura || null,
+    },
+  }).eq("id", correspondenciaId);
 
-  await updateDoc(ref, {
-    status: "retirado",
-    dataRetirada: Timestamp.now(),
-    retiradoPor,
-    assinatura: assinatura || null,
-  });
+  if (error) throw error;
 }
 
 /**
@@ -190,12 +191,12 @@ export async function marcarComoDevolvida(
   correspondenciaId: string,
   observacoes?: string
 ): Promise<void> {
-  const ref = doc(db, COLLECTION_NAME, correspondenciaId);
-
-  await updateDoc(ref, {
+  const { error } = await supabase.from(TABLE_NAME).update({
     status: "devolvido",
-    observacoes: observacoes || "Devolvido ao remetente",
-  });
+    observacao: observacoes || "Devolvido ao remetente",
+  }).eq("id", correspondenciaId);
+
+  if (error) throw error;
 }
 
 /**
@@ -205,8 +206,26 @@ export async function atualizarCorrespondencia(
   correspondenciaId: string,
   dados: Partial<Correspondencia>
 ): Promise<void> {
-  const ref = doc(db, COLLECTION_NAME, correspondenciaId);
-  await updateDoc(ref, dados as DocumentData);
+  const mapped: Record<string, any> = {};
+  if (dados.condominioId !== undefined) mapped.condominio_id = dados.condominioId;
+  if (dados.moradorId !== undefined) mapped.morador_id = dados.moradorId;
+  if (dados.moradorNome !== undefined) mapped.morador_nome = dados.moradorNome;
+  if (dados.bloco !== undefined) mapped.bloco = dados.bloco;
+  if (dados.apartamento !== undefined) mapped.apartamento = dados.apartamento;
+  if (dados.tipo !== undefined) mapped.tipo = dados.tipo;
+  if (dados.status !== undefined) mapped.status = dados.status;
+  if (dados.descricao !== undefined) mapped.descricao = dados.descricao;
+  if (dados.remetente !== undefined) mapped.remetente = dados.remetente;
+  if (dados.codigoRastreio !== undefined) mapped.codigo_rastreio = dados.codigoRastreio;
+  if (dados.dataRetirada !== undefined) mapped.data_retirada = dados.dataRetirada;
+  if (dados.registradoPor !== undefined) mapped.registrado_por = dados.registradoPor;
+  if (dados.retiradoPor !== undefined) mapped.retirado_por = dados.retiradoPor;
+  if (dados.assinatura !== undefined) mapped.assinatura = dados.assinatura;
+  if (dados.fotoUrl !== undefined) mapped.foto_url = dados.fotoUrl;
+  if (dados.observacoes !== undefined) mapped.observacao = dados.observacoes;
+
+  const { error } = await supabase.from(TABLE_NAME).update(mapped).eq("id", correspondenciaId);
+  if (error) throw error;
 }
 
 /**
@@ -215,8 +234,8 @@ export async function atualizarCorrespondencia(
 export async function excluirCorrespondencia(
   correspondenciaId: string
 ): Promise<void> {
-  const ref = doc(db, COLLECTION_NAME, correspondenciaId);
-  await deleteDoc(ref);
+  const { error } = await supabase.from(TABLE_NAME).delete().eq("id", correspondenciaId);
+  if (error) throw error;
 }
 
 // ============================================
@@ -252,8 +271,8 @@ export function calcularEstatisticas(
   let tempoMedioRetirada = 0;
   if (retiradosComTempo.length > 0) {
     const tempos = retiradosComTempo.map((c) => {
-      const registro = c.dataRegistro.toDate();
-      const retirada = c.dataRetirada!.toDate();
+      const registro = new Date(c.dataRegistro);
+      const retirada = new Date(c.dataRetirada!);
       return (retirada.getTime() - registro.getTime()) / (1000 * 60 * 60);
     });
     tempoMedioRetirada = tempos.reduce((a, b) => a + b, 0) / tempos.length;
@@ -277,9 +296,9 @@ export function calcularEstatisticas(
   const porDiaMap = new Map<string, number>();
 
   correspondencias
-    .filter((c) => c.dataRegistro.toDate() >= trintaDiasAtras)
+    .filter((c) => new Date(c.dataRegistro) >= trintaDiasAtras)
     .forEach((c) => {
-      const data = c.dataRegistro.toDate().toISOString().split("T")[0];
+      const data = new Date(c.dataRegistro).toISOString().split("T")[0];
       porDiaMap.set(data, (porDiaMap.get(data) || 0) + 1);
     });
 

@@ -12,15 +12,9 @@ import {
   Loader2,
   Clock
 } from "lucide-react";
-import { db } from "@/app/lib/firebase"; 
-import { 
-  collection, getDocs, updateDoc, deleteDoc, doc, setDoc, addDoc, query, where, serverTimestamp, getDoc 
-} from "firebase/firestore";
+import { supabase } from "@/app/lib/supabase";
 import { useAuth } from "@/hooks/useAuth";
 import BotaoVoltar from "@/components/BotaoVoltar";
-
-import { initializeApp, deleteApp, FirebaseApp } from "firebase/app";
-import { getAuth, createUserWithEmailAndPassword, signOut } from "firebase/auth";
 
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
@@ -168,8 +162,12 @@ export default function GerenciarMoradores({ condominioId: adminCondominioId }: 
     async function garantirCondominioId() {
       if (user?.uid && !user.condominioId && !adminCondominioId) {
         try {
-          const snap = await getDoc(doc(db, "users", user.uid));
-          if (snap.exists()) setFetchedCondominioId(snap.data().condominioId);
+          const { data } = await supabase
+            .from("users")
+            .select("condominio_id")
+            .eq("id", user.uid)
+            .single();
+          if (data) setFetchedCondominioId(data.condominio_id);
         } catch (error) {
           console.error("Erro ao buscar detalhes do usuário", error);
         }
@@ -191,10 +189,13 @@ export default function GerenciarMoradores({ condominioId: adminCondominioId }: 
 
   const carregarBlocos = async () => {
     try {
-      const q = query(collection(db, "blocos"), where("condominioId", "==", targetCondominioId));
-      const snapshot = await getDocs(q);
-      const data = snapshot.docs.map((d) => ({ id: d.id, ...d.data() })) as Bloco[];
-      setBlocos(data.sort((a, b) => ordenacaoNatural(a.nome, b.nome)));
+      const { data, error } = await supabase
+        .from("blocos")
+        .select("id, nome")
+        .eq("condominio_id", targetCondominioId);
+      if (error) throw error;
+      const mapped = (data || []).map((d: any) => ({ id: d.id, nome: d.nome })) as Bloco[];
+      setBlocos(mapped.sort((a, b) => ordenacaoNatural(a.nome, b.nome)));
     } catch (err) {
       console.error("Erro blocos:", err);
     }
@@ -202,10 +203,19 @@ export default function GerenciarMoradores({ condominioId: adminCondominioId }: 
 
   const carregarUnidades = async () => {
     try {
-      const q = query(collection(db, "unidades"), where("condominioId", "==", targetCondominioId));
-      const snapshot = await getDocs(q);
-      const data = snapshot.docs.map((d) => ({ id: d.id, ...d.data() })) as Unidade[];
-      setUnidades(data.sort((a, b) => ordenacaoNatural(a.identificacao, b.identificacao)));
+      const { data, error } = await supabase
+        .from("unidades")
+        .select("id, identificacao, tipo, bloco_setor, bloco_id")
+        .eq("condominio_id", targetCondominioId);
+      if (error) throw error;
+      const mapped = (data || []).map((d: any) => ({
+        id: d.id,
+        identificacao: d.identificacao,
+        tipo: d.tipo,
+        blocoSetor: d.bloco_setor,
+        blocoId: d.bloco_id,
+      })) as Unidade[];
+      setUnidades(mapped.sort((a, b) => ordenacaoNatural(a.identificacao, b.identificacao)));
     } catch (err) {
       console.error("Erro unidades:", err);
     }
@@ -213,14 +223,29 @@ export default function GerenciarMoradores({ condominioId: adminCondominioId }: 
 
   const carregarMoradores = async () => {
     try {
-      const q = query(
-        collection(db, "users"),
-        where("condominioId", "==", targetCondominioId),
-        where("role", "==", "morador")
-      );
-      const snapshot = await getDocs(q);
-      const data = snapshot.docs.map((d) => ({ id: d.id, ...d.data() })) as Morador[];
-      setMoradores(data);
+      const { data, error } = await supabase
+        .from("users")
+        .select("*")
+        .eq("condominio_id", targetCondominioId)
+        .eq("role", "morador");
+      if (error) throw error;
+      const mapped = (data || []).map((d: any) => ({
+        id: d.id,
+        nome: d.nome,
+        email: d.email,
+        whatsapp: d.whatsapp || "",
+        perfil: d.perfil || d.perfil_morador || "",
+        unidadeId: d.unidade_id || "",
+        unidadeNome: d.unidade_nome || "",
+        bloco: d.bloco || "",
+        blocoNome: d.bloco_nome || "",
+        blocoId: d.bloco_id || "",
+        complemento: d.complemento || "",
+        condominioId: d.condominio_id,
+        ativo: d.ativo,
+        criadoEm: d.criado_em,
+      })) as Morador[];
+      setMoradores(mapped);
     } catch (err) {
       console.error("Erro moradores:", err);
     }
@@ -249,8 +274,8 @@ export default function GerenciarMoradores({ condominioId: adminCondominioId }: 
 
     setLoading(true);
     try {
-      const deletePromises = selecionados.map(id => deleteDoc(doc(db, "users", id)));
-      await Promise.all(deletePromises);
+      const { error } = await supabase.from("users").delete().in("id", selecionados);
+      if (error) throw error;
 
       setMoradores(prev => prev.filter(m => !selecionados.includes(m.id)));
       setSelecionados([]);
@@ -337,17 +362,21 @@ export default function GerenciarMoradores({ condominioId: adminCondominioId }: 
       if (unidadeExistente) {
         unidadeIdFinal = unidadeExistente.id;
       } else {
-        const novaUnidadeRef = await addDoc(collection(db, "unidades"), {
-          identificacao: numeroApartamento,
-          tipo: "apartamento",
-          blocoId: blocoSelecionado,
-          blocoSetor: nomeDoBloco,
-          condominioId: targetCondominioId,
-          status: "ocupado",
-          proprietario: nome,
-          criadoEm: serverTimestamp(),
-        });
-        unidadeIdFinal = novaUnidadeRef.id;
+        const { data: novaUnidadeData, error: unidErr } = await supabase
+          .from("unidades")
+          .insert({
+            identificacao: numeroApartamento,
+            tipo: "apartamento",
+            bloco_id: blocoSelecionado,
+            bloco_setor: nomeDoBloco,
+            condominio_id: targetCondominioId,
+            status: "ocupado",
+            proprietario: nome,
+          })
+          .select("id")
+          .single();
+        if (unidErr) throw unidErr;
+        unidadeIdFinal = novaUnidadeData.id;
         const novaUnidade: Unidade = {
             id: unidadeIdFinal,
             identificacao: numeroApartamento,
@@ -363,47 +392,48 @@ export default function GerenciarMoradores({ condominioId: adminCondominioId }: 
         email: email.trim(),
         whatsapp: whatsapp.replace(/\D/g, ""),
         perfil: perfil,
-        perfilMorador: perfil,
-        unidadeId: unidadeIdFinal,
-        unidadeNome: numeroApartamento,
-        blocoId: blocoSelecionado,
-        blocoNome: nomeDoBloco,
+        perfil_morador: perfil,
+        unidade_id: unidadeIdFinal,
+        unidade_nome: numeroApartamento,
+        bloco_id: blocoSelecionado,
+        bloco_nome: nomeDoBloco,
         bloco: nomeDoBloco,
         complemento: complemento || "",
-        condominioId: targetCondominioId,
+        condominio_id: targetCondominioId,
         role: "morador",
         ativo: !!ativo,
         aprovado: true,
-        statusAprovacao: "ok",
+        status_aprovacao: "ok",
       };
 
       if (modoEdicao && moradorEditando) {
-        await updateDoc(doc(db, "users", moradorEditando.id), {
-          ...dadosMorador,
-          atualizadoEm: serverTimestamp(),
-        });
+        const { error } = await supabase
+          .from("users")
+          .update({
+            ...dadosMorador,
+            atualizado_em: new Date().toISOString(),
+          })
+          .eq("id", moradorEditando.id);
+        if (error) throw error;
         alert("Morador atualizado com sucesso!");
       } else {
-        const config = db.app.options;
-        const secondaryApp = initializeApp(config, "SecondaryAppSingle" + Date.now());
-        const secondaryAuth = getAuth(secondaryApp);
-        
-        try {
-            const userCredential = await createUserWithEmailAndPassword(secondaryAuth, email, senha);
-            await setDoc(doc(db, "users", userCredential.user.uid), {
-              ...dadosMorador,
-              criadoEm: serverTimestamp(),
-            });
-            await signOut(secondaryAuth);
-            deleteApp(secondaryApp);
-            alert("Morador cadastrado!");
-        } catch (e: any) {
-            deleteApp(secondaryApp);
-            if (e.code === 'auth/email-already-in-use') {
-                alert("Este e-mail já está cadastrado.");
-            } else {
-                alert("Erro: " + e.message);
-            }
+        const res = await fetch("/api/criar-usuario", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            email,
+            senha,
+            nome: nome.trim(),
+            role: "morador",
+            condominioId: targetCondominioId,
+            dados: dadosMorador,
+          }),
+        });
+        const result = await res.json();
+        if (!res.ok) {
+          alert(result.error || "Erro ao criar usuário");
+        } else {
+          alert("Morador cadastrado!");
         }
       }
 
@@ -421,10 +451,14 @@ export default function GerenciarMoradores({ condominioId: adminCondominioId }: 
 
   const alternarStatus = async (morador: Morador) => {
     try {
-      await updateDoc(doc(db, "users", morador.id), {
-        ativo: !morador.ativo,
-        atualizadoEm: serverTimestamp(),
-      });
+      const { error } = await supabase
+        .from("users")
+        .update({
+          ativo: !morador.ativo,
+          atualizado_em: new Date().toISOString(),
+        })
+        .eq("id", morador.id);
+      if (error) throw error;
       setMoradores(prev => prev.map(m => m.id === morador.id ? { ...m, ativo: !m.ativo } : m));
     } catch (err) {
       console.error("Erro status:", err);
@@ -435,7 +469,8 @@ export default function GerenciarMoradores({ condominioId: adminCondominioId }: 
   const excluirMorador = async (morador: Morador) => {
     if (!confirm(`Excluir ${morador.nome}?`)) return;
     try {
-      await deleteDoc(doc(db, "users", morador.id));
+      const { error } = await supabase.from("users").delete().eq("id", morador.id);
+      if (error) throw error;
       setMoradores(prev => prev.filter(m => m.id !== morador.id));
       setSelecionados(prev => prev.filter(id => id !== morador.id));
     } catch (err) {
@@ -536,14 +571,7 @@ export default function GerenciarMoradores({ condominioId: adminCondominioId }: 
     setLogImportacao([]);
     setStatusImportacao("Iniciando leitura do arquivo...");
 
-    let secondaryApp: FirebaseApp | null = null;
-    let secondaryAuth: any = null;
-
     try {
-      const config = db.app.options;
-      secondaryApp = initializeApp(config, "SecondaryImportApp" + Date.now());
-      secondaryAuth = getAuth(secondaryApp);
-
       const buffer = await arquivoImportacao.arrayBuffer();
       const workbook = XLSX.read(buffer, { type: "array" });
       const sheet = workbook.Sheets[workbook.SheetNames[0]];
@@ -575,8 +603,8 @@ export default function GerenciarMoradores({ condominioId: adminCondominioId }: 
       const total = json.length - 1;
 
       for (let i = 1; i < json.length; i++) {
-        // Delay padrão de 3s
-        if (i > 1) await delay(3000); 
+        // Delay padrão de 1s (sem secondary app, pode ser menor)
+        if (i > 1) await delay(1000); 
 
         setStatusImportacao(`Processando ${i} de ${total}...`);
         
@@ -609,17 +637,24 @@ export default function GerenciarMoradores({ condominioId: adminCondominioId }: 
         if (unidExistente) {
             unidadeId = unidExistente.id;
         } else {
-            const ref = await addDoc(collection(db, "unidades"), {
+            const { data: novaUnid, error: unidErr } = await supabase
+              .from("unidades")
+              .insert({
                 identificacao: unidadeRaw,
                 tipo: "apartamento",
-                blocoId: blocoMatch.id,
-                blocoSetor: blocoMatch.nome,
-                condominioId: targetCondominioId,
+                bloco_id: blocoMatch.id,
+                bloco_setor: blocoMatch.nome,
+                condominio_id: targetCondominioId,
                 status: "ocupado",
                 proprietario: nome,
-                criadoEm: serverTimestamp()
-            });
-            unidadeId = ref.id;
+              })
+              .select("id")
+              .single();
+            if (unidErr) {
+              logsTemp.push(`Linha ${i + 1}: Erro ao criar unidade (${unidErr.message})`);
+              continue;
+            }
+            unidadeId = novaUnid.id;
             unidades.push({ id: unidadeId, identificacao: unidadeRaw, tipo: "apt", blocoSetor: blocoMatch.nome, blocoId: blocoMatch.id });
         }
 
@@ -628,73 +663,66 @@ export default function GerenciarMoradores({ condominioId: adminCondominioId }: 
             email,
             whatsapp: String(row[idx.whats] || "").replace(/\D/g, ""),
             perfil: normalizarPerfil(row[idx.perfil]),
-            unidadeId,
-            unidadeNome: unidadeRaw,
-            blocoId: blocoMatch.id,
-            blocoNome: blocoMatch.nome,
+            unidade_id: unidadeId,
+            unidade_nome: unidadeRaw,
+            bloco_id: blocoMatch.id,
+            bloco_nome: blocoMatch.nome,
             complemento: String(row[idx.compl] || ""),
-            condominioId: targetCondominioId,
+            condominio_id: targetCondominioId,
             role: "morador",
             ativo: true,
             aprovado: true,
         };
 
-        // LOOP DE TENTATIVA (Retry Logic)
-        let sucesso = false;
-        while (!sucesso) {
-            try {
-                // 1. TENTA ACHAR NO BANCO
-                const qUser = query(collection(db, "users"), where("email", "==", email));
-                const querySnapshot = await getDocs(qUser);
+        try {
+          // 1. Check if user exists in DB
+          const { data: existingUsers } = await supabase
+            .from("users")
+            .select("id")
+            .eq("email", email)
+            .limit(1);
 
-                if (!querySnapshot.empty) {
-                    // ATUALIZA
-                    const userDoc = querySnapshot.docs[0];
-                    await updateDoc(doc(db, "users", userDoc.id), {
-                        ...dadosMorador,
-                        atualizadoEm: serverTimestamp()
-                    });
-                    atualizados++;
-                    sucesso = true;
-                } else {
-                    // 2. TENTA CRIAR
-                    try {
-                      const cred = await createUserWithEmailAndPassword(secondaryAuth, email, gerarSenhaTemporaria());
-                        await setDoc(doc(db, "users", cred.user.uid), {
-                            ...dadosMorador,
-                        criadoEm: serverTimestamp(),
-                        precisaRedefinirSenha: true,
-                        });
-                        await signOut(secondaryAuth);
-                        criados++;
-                        sucesso = true;
-                    } catch (authErr: any) {
-                        if (authErr.code === 'auth/email-already-in-use') {
-                        logsTemp.push(`Linha ${i + 1}: E-mail já existe no Firebase Auth sem documento correspondente. Revisão manual necessária.`);
-                        sucesso = true;
-                        } else if (authErr.code === 'auth/too-many-requests') {
-                             throw authErr; // Joga pro catch externo
-                        } else {
-                            logsTemp.push(`Linha ${i + 1}: Erro Auth (${authErr.code})`);
-                            sucesso = true; 
-                        }
-                    }
-                }
-            } catch (e: any) {
-                if (e.code === 'auth/too-many-requests') {
-                    setStatusImportacao(`Bloqueio de segurança detectado! Pausando por 60 segundos...`);
-                    for (let t = 60; t > 0; t--) {
-                        setCooldown(t);
-                        await delay(1000);
-                    }
-                    setCooldown(0);
-                    setStatusImportacao(`Retomando importação (Linha ${i+1})...`);
-                    // Não define sucesso=true, repete o loop
-                } else {
-                    logsTemp.push(`Linha ${i + 1}: Erro Geral (${e.message})`);
-                    sucesso = true;
-                }
+          if (existingUsers && existingUsers.length > 0) {
+            // UPDATE
+            const { error } = await supabase
+              .from("users")
+              .update({
+                ...dadosMorador,
+                atualizado_em: new Date().toISOString(),
+              })
+              .eq("id", existingUsers[0].id);
+            if (error) throw error;
+            atualizados++;
+          } else {
+            // CREATE via API route
+            const res = await fetch("/api/criar-usuario", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                email,
+                senha: gerarSenhaTemporaria(),
+                nome,
+                role: "morador",
+                condominioId: targetCondominioId,
+                dados: {
+                  ...dadosMorador,
+                  precisa_redefinir_senha: true,
+                },
+              }),
+            });
+            const result = await res.json();
+            if (!res.ok) {
+              if (result.error?.includes("já está em uso") || result.error?.includes("already been registered")) {
+                logsTemp.push(`Linha ${i + 1}: E-mail já existe no Auth sem documento correspondente. Revisão manual necessária.`);
+              } else {
+                logsTemp.push(`Linha ${i + 1}: Erro Auth (${result.error})`);
+              }
+            } else {
+              criados++;
             }
+          }
+        } catch (e: any) {
+          logsTemp.push(`Linha ${i + 1}: Erro Geral (${e.message})`);
         }
       }
 
@@ -704,7 +732,6 @@ export default function GerenciarMoradores({ condominioId: adminCondominioId }: 
     } catch (err: any) {
       alert("Erro fatal: " + err.message);
     } finally {
-      if (secondaryApp) deleteApp(secondaryApp);
       setImportando(false);
       setStatusImportacao("");
       setCooldown(0);

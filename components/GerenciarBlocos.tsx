@@ -2,20 +2,7 @@
 
 import { useState, useEffect, useMemo } from "react";
 import { Layers, Edit2, Trash2, CheckCircle, XCircle, Plus, FileSpreadsheet, FileText } from "lucide-react";
-import { db } from "@/app/lib/firebase";
-import {
-  collection,
-  addDoc,
-  getDocs,
-  updateDoc,
-  deleteDoc,
-  doc,
-  getDoc,
-  query,
-  where,
-  serverTimestamp,
-  writeBatch,
-} from "firebase/firestore";
+import { supabase } from "@/app/lib/supabase";
 import { useAuth } from "@/hooks/useAuth";
 import BotaoVoltar from "@/components/BotaoVoltar";
 
@@ -70,9 +57,13 @@ export default function GerenciarBlocos({ condominioId: adminCondominioId }: Pro
     async function garantirCondominioId() {
       if (user?.uid && !user.condominioId && !adminCondominioId) {
         try {
-          const snap = await getDoc(doc(db, "users", user.uid));
-          if (snap.exists()) {
-            setFetchedCondominioId(snap.data().condominioId);
+          const { data } = await supabase
+            .from("users")
+            .select("condominio_id")
+            .eq("id", user.uid)
+            .single();
+          if (data) {
+            setFetchedCondominioId(data.condominio_id);
           }
         } catch (error) {
           console.error("Erro ao buscar detalhes do usuário", error);
@@ -94,16 +85,21 @@ export default function GerenciarBlocos({ condominioId: adminCondominioId }: Pro
     try {
       setLoading(true);
 
-      const q = query(
-        collection(db, "blocos"),
-        where("condominioId", "==", targetCondominioId)
-      );
+      const { data, error } = await supabase
+        .from("blocos")
+        .select("*")
+        .eq("condominio_id", targetCondominioId);
 
-      const snapshot = await getDocs(q);
-      const blocosData = snapshot.docs.map((d) => ({
+      if (error) throw error;
+
+      const blocosData: Bloco[] = (data || []).map((d: any) => ({
         id: d.id,
-        ...(d.data() as any),
-      })) as Bloco[];
+        nome: d.nome,
+        condominioId: d.condominio_id,
+        ativo: d.ativo,
+        criadoEm: d.criado_em,
+        ordem: d.ordem ?? null,
+      }));
 
       const sorted = blocosData.sort((a, b) => {
         const ordemA = typeof a.ordem === 'number' ? a.ordem : extrairOrdemDoNome(a.nome) ?? 999999;
@@ -149,20 +145,26 @@ export default function GerenciarBlocos({ condominioId: adminCondominioId }: Pro
       const ordem = extrairOrdemDoNome(nome) ?? 999999;
 
       if (modoEdicao && blocoEditando) {
-        await updateDoc(doc(db, "blocos", blocoEditando.id), {
-          nome,
-          ativo,
-          ordem,
-          atualizadoEm: serverTimestamp(),
-        });
+        const { error } = await supabase
+          .from("blocos")
+          .update({
+            nome,
+            ativo,
+            ordem,
+            atualizado_em: new Date().toISOString(),
+          })
+          .eq("id", blocoEditando.id);
+        if (error) throw error;
       } else {
-        await addDoc(collection(db, "blocos"), {
-          nome,
-          condominioId: targetCondominioId,
-          ativo,
-          ordem,
-          criadoEm: serverTimestamp(),
-        });
+        const { error } = await supabase
+          .from("blocos")
+          .insert({
+            nome,
+            condominio_id: targetCondominioId,
+            ativo,
+            ordem,
+          });
+        if (error) throw error;
       }
 
       setModalAberto(false);
@@ -186,20 +188,18 @@ export default function GerenciarBlocos({ condominioId: adminCondominioId }: Pro
     }
     try {
       setLoading(true);
-      const batch = writeBatch(db);
-
+      const novos = [];
       for (let i = 1; i <= quantidadeLote; i++) {
-        const novoBlocoRef = doc(collection(db, "blocos"));
-        batch.set(novoBlocoRef, {
+        novos.push({
           nome: `${prefixoLote} ${i}`,
-          condominioId: targetCondominioId,
+          condominio_id: targetCondominioId,
           ativo: true,
           ordem: i,
-          criadoEm: serverTimestamp(),
         });
       }
 
-      await batch.commit();
+      const { error } = await supabase.from("blocos").insert(novos);
+      if (error) throw error;
       alert(quantidadeLote + " blocos gerados com sucesso!");
       setModalLoteAberto(false);
       carregarBlocos();
@@ -213,10 +213,14 @@ export default function GerenciarBlocos({ condominioId: adminCondominioId }: Pro
 
   const alternarStatus = async (bloco: Bloco) => {
     try {
-      await updateDoc(doc(db, "blocos", bloco.id), {
-        ativo: !bloco.ativo,
-        atualizadoEm: serverTimestamp(),
-      });
+      const { error } = await supabase
+        .from("blocos")
+        .update({
+          ativo: !bloco.ativo,
+          atualizado_em: new Date().toISOString(),
+        })
+        .eq("id", bloco.id);
+      if (error) throw error;
       carregarBlocos();
     } catch (err) {
       console.error("Erro ao alterar status:", err);
@@ -227,7 +231,8 @@ export default function GerenciarBlocos({ condominioId: adminCondominioId }: Pro
   const excluirBloco = async (bloco: Bloco) => {
     if (!confirm("Tem certeza que deseja excluir o bloco " + bloco.nome + "?")) return;
     try {
-      await deleteDoc(doc(db, "blocos", bloco.id));
+      const { error } = await supabase.from("blocos").delete().eq("id", bloco.id);
+      if (error) throw error;
       carregarBlocos();
     } catch (err) {
       console.error("Erro ao excluir bloco:", err);
@@ -252,8 +257,8 @@ export default function GerenciarBlocos({ condominioId: adminCondominioId }: Pro
   const formatDateBR = (value: any) => {
     try {
       const date: Date | null =
-        value?.toDate?.() instanceof Date ? value.toDate() : value instanceof Date ? value : null;
-      if (!date) return "";
+        typeof value === "string" ? new Date(value) : value instanceof Date ? value : null;
+      if (!date || isNaN(date.getTime())) return "";
       return new Intl.DateTimeFormat("pt-BR", { dateStyle: "short", timeStyle: "short" }).format(date);
     } catch {
       return "";
@@ -319,18 +324,18 @@ export default function GerenciarBlocos({ condominioId: adminCondominioId }: Pro
     if (!confirm("Isso vai preencher o campo 'ordem' em blocos antigos. Continuar?")) return;
     try {
       setLoading(true);
-      const q = query(collection(db, "blocos"), where("condominioId", "==", targetCondominioId));
-      const snap = await getDocs(q);
+      const { data, error } = await supabase
+        .from("blocos")
+        .select("id, nome")
+        .eq("condominio_id", targetCondominioId);
+      if (error) throw error;
 
-      const batch = writeBatch(db);
-      snap.docs.forEach((d) => {
-        const data = d.data() as any;
-        const nomeDoc = String(data.nome ?? "");
-        const ordem = extrairOrdemDoNome(nomeDoc) ?? 999999;
-        batch.update(doc(db, "blocos", d.id), { ordem });
+      const updates = (data || []).map((d: any) => {
+        const ordem = extrairOrdemDoNome(String(d.nome ?? "")) ?? 999999;
+        return supabase.from("blocos").update({ ordem }).eq("id", d.id);
       });
 
-      await batch.commit();
+      await Promise.all(updates);
       alert("Campo 'ordem' preenchido! Agora a lista ficará em ordem 1,2,3...");
       carregarBlocos();
     } catch (e) {

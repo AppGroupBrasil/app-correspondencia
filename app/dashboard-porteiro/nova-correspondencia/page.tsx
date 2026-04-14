@@ -7,9 +7,7 @@ import SelectCondominioBlocoMorador from "@/components/SelectCondominioBlocoMora
 import { LoadingOverlay } from "@/components/LoadingOverlay"; 
 import ModalSucessoEntrada from "@/components/ModalSucessoEntrada";
 import { useAuth } from "@/hooks/useAuth";
-import { db, storage } from "@/app/lib/firebase";
-import { doc, getDoc, collection, setDoc, Timestamp } from "firebase/firestore";
-import { ref, uploadBytes, getDownloadURL } from "firebase/storage";
+import { supabase } from "@/app/lib/supabase";
 import Navbar from "@/components/Navbar";
 import withAuth from "@/components/withAuth";
 import { Package, FileText, CheckCircle, Loader2, Building2, Camera, MapPin } from "lucide-react"; 
@@ -87,19 +85,21 @@ function NovaCorrespondenciaPorteiroPage() {
       const cached = getCachedData(cacheKey);
       
       if (cached) {
-        setTelefoneMorador(limparTelefone(cached.whatsapp || ""));
+        setTelefoneMorador(limparTelefone(cached.whatsapp || cached.telefone || ""));
         setEmailMorador(cached.email || "");
         setMoradorNome(cached.nome || "");
         return;
       }
 
       try {
-        const mRef = doc(db, "users", selectedMorador);
-        const mSnap = await getDoc(mRef);
-        if (mSnap.exists()) {
-          const data = mSnap.data();
+        const { data, error: err } = await supabase
+          .from("users")
+          .select("*")
+          .eq("id", selectedMorador)
+          .single();
+        if (!err && data) {
           setCachedData(cacheKey, data);
-          setTelefoneMorador(limparTelefone(data.whatsapp || ""));
+          setTelefoneMorador(limparTelefone(data.whatsapp || data.telefone || ""));
           setEmailMorador(data.email || "");
           setMoradorNome(data.nome || "");
         }
@@ -126,13 +126,13 @@ function NovaCorrespondenciaPorteiroPage() {
           condominioNome = cached.nome || efetivoCondominioId;
         } else {
           promises.push(
-            getDoc(doc(db, "condominios", efetivoCondominioId)).then(snap => {
-              const data = snap.data();
+            (async () => {
+              const { data } = await supabase.from("condominios").select("*").eq("id", efetivoCondominioId).single();
               if (data) {
                 setCachedData(cacheKey, data);
                 condominioNome = data.nome || efetivoCondominioId;
               }
-            })
+            })()
           );
         }
       }
@@ -145,13 +145,13 @@ function NovaCorrespondenciaPorteiroPage() {
           blocoNome = cached.nome || selectedBloco;
         } else {
           promises.push(
-            getDoc(doc(db, "blocos", selectedBloco)).then(snap => {
-              const data = snap.data();
+            (async () => {
+              const { data } = await supabase.from("blocos").select("*").eq("id", selectedBloco).single();
               if (data) {
                 setCachedData(cacheKey, data);
                 blocoNome = data.nome || selectedBloco;
               }
-            })
+            })()
           );
         }
       }
@@ -162,17 +162,17 @@ function NovaCorrespondenciaPorteiroPage() {
         const cached = getCachedData(cacheKey);
         if (cached) {
           nomeMorador = cached.nome || selectedMorador;
-          apartamento = cached.apartamento || cached.unidade || cached.unidadeNome || cached.numero || "";
+          apartamento = cached.apartamento || cached.unidade || cached.unidade_nome || cached.numero || "";
         } else {
           promises.push(
-            getDoc(doc(db, "users", selectedMorador)).then(snap => {
-              const data = snap.data();
+            (async () => {
+              const { data } = await supabase.from("users").select("*").eq("id", selectedMorador).single();
               if (data) {
                 setCachedData(cacheKey, data);
                 nomeMorador = data.nome || selectedMorador;
-                apartamento = data.apartamento || data.unidade || data.unidadeNome || data.numero || "";
+                apartamento = data.apartamento || data.unidade || data.unidade_nome || data.numero || "";
               }
-            })
+            })()
           );
         }
       }
@@ -193,9 +193,7 @@ function NovaCorrespondenciaPorteiroPage() {
         const cached = getCachedData(`morador_${selectedMorador}`);
         nomeMorador = cached?.nome || selectedMorador;
         apartamento = cached?.apartamento || cached?.unidade || "";
-      }
-
-    } catch (err) {
+      }    } catch (err) {
       console.error("Erro ao buscar nomes:", err);
     }
     
@@ -215,9 +213,9 @@ function NovaCorrespondenciaPorteiroPage() {
     try {
       // PASSO 1: Gerar protocolo e link IMEDIATAMENTE
       const novoProtocolo = `${Math.floor(Date.now() / 1000).toString().slice(-6)}`;
-      const docRef = doc(collection(db, "correspondencias"));
+      const docId = crypto.randomUUID();
       const baseUrl = typeof window !== 'undefined' ? window.location.origin : '';
-      const novoLinkPublico = `${baseUrl}/ver/${docRef.id}`;
+      const novoLinkPublico = `${baseUrl}/ver/${docId}`;
       
       setProtocolo(novoProtocolo);
       setLinkPublico(novoLinkPublico);
@@ -285,41 +283,55 @@ Aguardamos a sua retirada`;
       backgroundTaskRef.current = (async () => {
         try {
           // Upload do PDF
-          const pdfRef = ref(storage, `correspondencias/entrada_${novoProtocolo}_${Date.now()}.pdf`);
-          await uploadBytes(pdfRef, pdfBlob);
-          const publicPdfUrl = await getDownloadURL(pdfRef);
+          const pdfPath = `correspondencias/entrada_${novoProtocolo}_${Date.now()}.pdf`;
+          const { error: pdfUpErr } = await supabase.storage
+            .from("correspondencias")
+            .upload(pdfPath, pdfBlob);
+          if (pdfUpErr) throw pdfUpErr;
+          const { data: pdfUrlData } = supabase.storage
+            .from("correspondencias")
+            .getPublicUrl(pdfPath);
+          const publicPdfUrl = pdfUrlData.publicUrl;
           
           // Upload da foto (já comprimida)
           let publicFotoUrl = "";
           if (imagemFile) {
-            const fotoRef = ref(storage, `correspondencias/foto_${novoProtocolo}_${Date.now()}.jpg`);
-            await uploadBytes(fotoRef, imagemFile);
-            publicFotoUrl = await getDownloadURL(fotoRef);
+            const fotoPath = `correspondencias/foto_${novoProtocolo}_${Date.now()}.jpg`;
+            const { error: fotoUpErr } = await supabase.storage
+              .from("correspondencias")
+              .upload(fotoPath, imagemFile);
+            if (fotoUpErr) throw fotoUpErr;
+            const { data: fotoUrlData } = supabase.storage
+              .from("correspondencias")
+              .getPublicUrl(fotoPath);
+            publicFotoUrl = fotoUrlData.publicUrl;
           }
 
-          // Salvar no Firestore
-          await setDoc(docRef, {
-            condominioId: efetivoCondominioId,
-            blocoId: selectedBloco,
-            blocoNome: nomes.blocoNome,
-            moradorId: selectedMorador,
-            moradorNome: nomes.moradorNome,
+          // Salvar no Supabase
+          const { error: insertErr } = await supabase.from("correspondencias").insert({
+            id: docId,
+            condominio_id: efetivoCondominioId,
+            bloco_id: selectedBloco,
+            bloco_nome: nomes.blocoNome,
+            morador_id: selectedMorador,
+            morador_nome: nomes.moradorNome,
             apartamento: nomes.apartamento,
             protocolo: novoProtocolo,
             observacao,
-            localArmazenamento,
+            local_armazenamento: localArmazenamento,
             status: "pendente", 
-            criadoEm: Timestamp.now(),
-            criadoPor: user?.email || "porteiro",
-            criadoPorNome: nomeUser, 
-            criadoPorCargo: "Porteiro",
-            imagemUrl: publicFotoUrl,
-            pdfUrl: publicPdfUrl,
-            moradorTelefone: telefoneMorador,
-            moradorEmail: emailMorador
+            criado_em: new Date().toISOString(),
+            criado_por: user?.email || "porteiro",
+            criado_por_nome: nomeUser, 
+            criado_por_cargo: "Porteiro",
+            imagem_url: publicFotoUrl,
+            pdf_url: publicPdfUrl,
+            morador_telefone: telefoneMorador,
+            morador_email: emailMorador
           });
 
-          console.log("✅ [Background] Correspondência salva com sucesso! ID:", docRef.id);
+          if (insertErr) throw insertErr;
+          console.log("✅ [Background] Correspondência salva com sucesso! ID:", docId);
 
         } catch (err) {
           console.error("❌ [Background] Erro ao salvar:", err);

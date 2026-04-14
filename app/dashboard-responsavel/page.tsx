@@ -30,9 +30,8 @@ import {
 
 import TutorialGuide from "@/components/TutorialGuide";
 import GerarFolder from "@/components/GerarFolder";
-import { db } from "@/app/lib/firebase";
+import { supabase } from "@/app/lib/supabase";
 import { useAuth } from "@/hooks/useAuth";
-import { collection, query, where, getCountFromServer } from "firebase/firestore";
 import withAuth from "@/components/withAuth";
 
 function DashboardResponsavel() {
@@ -89,38 +88,34 @@ function DashboardResponsavel() {
     if (!user?.condominioId) return;
     try {
       // 1. Contagem de Blocos
-      const blocosSnap = await getCountFromServer(
-        query(collection(db, "blocos"), where("condominioId", "==", user.condominioId))
-      );
+      const { count: blocosCount } = await supabase
+        .from("blocos")
+        .select("*", { count: "exact", head: true })
+        .eq("condominio_id", user.condominioId);
 
       // 2. Contagem TOTAL de Moradores (Todos que existem)
-      const qTotalMoradores = query(
-          collection(db, "users"),
-          where("condominioId", "==", user.condominioId),
-          where("role", "==", "morador")
-      );
-      const snapTotalMoradores = await getCountFromServer(qTotalMoradores);
-      const totalGeral = snapTotalMoradores.data().count;
+      const { count: totalGeral } = await supabase
+        .from("users")
+        .select("*", { count: "exact", head: true })
+        .eq("condominio_id", user.condominioId)
+        .eq("role", "morador");
 
       // 3. Contagem de Moradores APROVADOS (Ativos)
-      const qAprovados = query(
-          collection(db, "users"),
-          where("condominioId", "==", user.condominioId),
-          where("role", "==", "morador"),
-          where("aprovado", "==", true)
-      );
-      const snapAprovados = await getCountFromServer(qAprovados);
-      const totalAprovados = snapAprovados.data().count;
+      const { count: totalAprovados } = await supabase
+        .from("users")
+        .select("*", { count: "exact", head: true })
+        .eq("condominio_id", user.condominioId)
+        .eq("role", "morador")
+        .eq("aprovado", true);
 
       // 4. Cálculo: Pendentes = Total Geral - Aprovados
-      // Isso garante que null, undefined ou false caiam aqui
-      const totalPendentes = totalGeral - totalAprovados;
+      const totalPendentes = (totalGeral || 0) - (totalAprovados || 0);
 
       setStats({
-        blocos: blocosSnap.data().count,
+        blocos: blocosCount || 0,
         unidades: 0,
-        moradores: totalAprovados, // Mostra quantos estão ativos
-        pendentes: totalPendentes, // Mostra o restante
+        moradores: totalAprovados || 0,
+        pendentes: totalPendentes,
       });
 
     } catch (error) {

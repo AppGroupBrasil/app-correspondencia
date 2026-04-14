@@ -1,24 +1,23 @@
-import { db } from '../app/lib/firebase';
-import { 
-  collection, 
-  doc, 
-  getDocs, 
-  setDoc, 
-  query, 
-  where, 
-  serverTimestamp, 
-  limit 
-} from 'firebase/firestore';
+import { supabase } from '@/app/lib/supabase';
 import { MessageTemplate, MessageCategory } from '../types/template';
 
-const COLLECTION_NAME = 'message_templates';
+const TABLE_NAME = 'message_templates';
 
 export const TemplateService = {
   getTemplates: async (condoId: string): Promise<MessageTemplate[]> => {
     try {
-      const q = query(collection(db, COLLECTION_NAME), where('condoId', '==', condoId));
-      const snapshot = await getDocs(q);
-      return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as MessageTemplate));
+      const { data, error } = await supabase.from(TABLE_NAME).select('*').eq('condo_id', condoId);
+      if (error) throw error;
+      return (data || []).map((d: any) => ({
+        id: d.id,
+        condoId: d.condo_id,
+        category: d.category,
+        title: d.title,
+        content: d.content,
+        isActive: d.is_active,
+        createdAt: d.criado_em,
+        updatedAt: d.atualizado_em,
+      } as MessageTemplate));
     } catch (error) {
       console.error('Error fetching templates:', error);
       return [];
@@ -27,16 +26,24 @@ export const TemplateService = {
 
   getActiveTemplate: async (condoId: string, category: MessageCategory): Promise<MessageTemplate | null> => {
     try {
-      const q = query(
-        collection(db, COLLECTION_NAME),
-        where('condoId', '==', condoId),
-        where('category', '==', category),
-        where('isActive', '==', true),
-        limit(1)
-      );
-      const snapshot = await getDocs(q);
-      if (snapshot.empty) return null;
-      return { id: snapshot.docs[0].id, ...snapshot.docs[0].data() } as MessageTemplate;
+      const { data, error } = await supabase
+        .from(TABLE_NAME)
+        .select('*')
+        .eq('condo_id', condoId)
+        .eq('category', category)
+        .eq('is_active', true)
+        .limit(1)
+        .single();
+      
+      if (error || !data) return null;
+      return {
+        id: data.id,
+        condoId: data.condo_id,
+        category: data.category,
+        title: data.title,
+        content: data.content,
+        isActive: data.is_active,
+      } as MessageTemplate;
     } catch (error) {
       console.error('Error fetching active template:', error);
       return null;
@@ -45,18 +52,16 @@ export const TemplateService = {
 
   saveTemplate: async (template: MessageTemplate): Promise<void> => {
     try {
-      const ref = template.id 
-        ? doc(db, COLLECTION_NAME, template.id) 
-        : doc(collection(db, COLLECTION_NAME));
+      const { error } = await supabase.from(TABLE_NAME).upsert({
+        id: template.id || undefined,
+        condo_id: template.condoId,
+        category: template.category,
+        title: template.title,
+        content: template.content,
+        is_active: template.isActive !== false,
+      });
 
-      const data = {
-        ...template,
-        id: ref.id,
-        updatedAt: serverTimestamp(),
-        createdAt: template.createdAt || serverTimestamp(),
-      };
-
-      await setDoc(ref, data, { merge: true });
+      if (error) throw error;
     } catch (error) {
       console.error('Error saving template:', error);
       throw error;

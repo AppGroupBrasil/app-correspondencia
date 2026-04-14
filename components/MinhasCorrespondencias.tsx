@@ -2,8 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
-import { db } from "@/app/lib/firebase";
-import { collection, query, where, getDocs } from "firebase/firestore";
+import { supabase } from "@/app/lib/supabase";
 import { useAuth } from "@/hooks/useAuth";
 import { 
   Package, Calendar, Filter, ArrowLeft, CheckCircle, Clock, MapPin, QrCode, FileText, ChevronRight
@@ -29,29 +28,34 @@ export default function MinhasCorrespondencias() {
   const buscarCorrespondencias = async (userId: string) => {
     try {
       setLoadingData(true);
-      const q = query(
-        collection(db, "correspondencias"),
-        where("moradorId", "==", userId)
-      );
+      const { data, error } = await supabase
+        .from("correspondencias")
+        .select("*")
+        .eq("morador_id", userId);
 
-      const snapshot = await getDocs(q);
+      if (error) throw error;
       
-      const lista = snapshot.docs.map((doc) => {
-        const data = doc.data();
+      const lista = (data || []).map((item: any) => {
         let dataOrdenacao = new Date();
         let dataFormatada = "Data n/d";
 
-        if (data.criadoEm?.toDate) {
-            dataOrdenacao = data.criadoEm.toDate();
+        if (item.criado_em) {
+            dataOrdenacao = new Date(item.criado_em);
             dataFormatada = dataOrdenacao.toLocaleDateString("pt-BR");
-        } else if (data.dataChegada) {
-            dataOrdenacao = new Date(data.dataChegada);
+        } else if (item.data_chegada) {
+            dataOrdenacao = new Date(item.data_chegada);
             dataFormatada = dataOrdenacao.toLocaleDateString("pt-BR");
         }
 
         return {
-          id: doc.id,
-          ...data,
+          id: item.id,
+          protocolo: item.protocolo,
+          moradorNome: item.morador_nome,
+          apartamento: item.apartamento,
+          blocoNome: item.bloco_nome,
+          status: item.status,
+          observacao: item.observacao,
+          tipoCorrespondencia: item.tipo_correspondencia,
           dataOrdenacao,
           dataFormatada,
         };

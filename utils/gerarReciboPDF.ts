@@ -7,6 +7,7 @@ interface GerarReciboPDFParams {
   dadosRetirada: DadosRetirada;
   nomeCondominio?: string;
   logoUrl?: string;
+  linkPublicoRecibo?: string;
   onProgress?: (progress: number) => void;
 }
 
@@ -153,17 +154,20 @@ export async function gerarReciboPDF({
   dadosRetirada,
   nomeCondominio = "Condomínio",
   logoUrl,
+  linkPublicoRecibo,
   onProgress,
 }: GerarReciboPDFParams): Promise<Blob> {
   
   if (onProgress) onProgress(5);
 
-  const qrCodeData = JSON.stringify({
-    p: correspondencia.protocolo,
-    d: dadosRetirada.dataHoraRetirada,
-    c: dadosRetirada.cpfQuemRetirou,
-    v: dadosRetirada.codigoVerificacao
-  });
+  const qrCodeData =
+    linkPublicoRecibo ||
+    JSON.stringify({
+      p: correspondencia.protocolo,
+      d: dadosRetirada.dataHoraRetirada,
+      c: dadosRetirada.cpfQuemRetirou,
+      v: dadosRetirada.codigoVerificacao,
+    });
 
   const tasks = [
     { id: 'logo', fn: () => logoUrl ? fetchAndCompressImage(logoUrl, false) : Promise.resolve("") },

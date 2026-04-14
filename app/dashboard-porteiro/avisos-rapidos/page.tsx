@@ -7,9 +7,7 @@ import { useAuth } from "@/hooks/useAuth";
 import { useAvisosRapidos } from "@/hooks/useAvisosRapidos";
 import { useTemplates } from "@/hooks/useTemplates"; 
 import { parseTemplate } from "@/utils/templateParser"; 
-import { db, storage } from "@/app/lib/firebase";
-import { collection, query, where, getDocs, doc, updateDoc, setDoc, serverTimestamp } from "firebase/firestore";
-import { ref, uploadBytes, getDownloadURL } from "firebase/storage";
+import { supabase } from "@/app/lib/supabase";
 import Navbar from "@/components/Navbar";
 import BotaoVoltar from "@/components/BotaoVoltar"; 
 import withAuth from "@/components/withAuth";
@@ -126,11 +124,12 @@ function AvisosRapidosPage() {
   const carregarBlocos = async () => {
     try {
       setLoadingData(true);
-      const blocosRef = collection(db, "blocos");
-      const q = query(blocosRef, where("condominioId", "==", user?.condominioId));
-      const snapshot = await getDocs(q);
-      const blocosData: Bloco[] = [];
-      snapshot.forEach((doc) => { blocosData.push({ id: doc.id, nome: doc.data().nome, condominioId: doc.data().condominioId }); });
+      const { data: blocosRaw, error: blocosErr } = await supabase
+        .from("blocos")
+        .select("*")
+        .eq("condominio_id", user?.condominioId);
+      if (blocosErr) throw blocosErr;
+      const blocosData: Bloco[] = (blocosRaw || []).map((d: any) => ({ id: d.id, nome: d.nome, condominioId: d.condominio_id }));
       blocosData.sort((a, b) => a.nome.localeCompare(b.nome, "pt-BR", { numeric: true }));
       setBlocos(blocosData);
     } catch (error) { console.error(error); setErro("Erro ao carregar blocos"); } finally { setLoadingData(false); }
@@ -141,18 +140,21 @@ function AvisosRapidosPage() {
     setBuscando(true);
     try {
         const termoLimpo = termoBusca.toLowerCase().trim();
-        const q = query(collection(db, "users"), where("condominioId", "==", user?.condominioId), where("role", "==", "morador"));
-        const snapshot = await getDocs(q);
+        const { data: usersRaw, error: usersErr } = await supabase
+          .from("users")
+          .select("*")
+          .eq("condominio_id", user?.condominioId)
+          .eq("role", "morador");
+        if (usersErr) throw usersErr;
         const resultados: Morador[] = [];
-        snapshot.forEach((doc) => {
-            const data = doc.data();
+        (usersRaw || []).forEach((data: any) => {
             const nome = (data.nome || "").toLowerCase();
-            const apto = (data.unidadeNome || data.apartamento || "").toString().toLowerCase();
+            const apto = (data.unidade_nome || data.apartamento || "").toString().toLowerCase();
             if (nome.includes(termoLimpo) || apto.includes(termoLimpo)) {
                 resultados.push({
-                    id: doc.id, nome: data.nome, apartamento: data.unidadeNome || data.apartamento || "?",
-                    telefone: data.whatsapp || data.telefone || "", blocoId: data.blocoId, blocoNome: data.blocoNome,
-                    condominioId: data.condominioId, role: data.role, aprovado: data.aprovado,
+                    id: data.id, nome: data.nome, apartamento: data.unidade_nome || data.apartamento || "?",
+                    telefone: data.whatsapp || data.telefone || "", blocoId: data.bloco_id, blocoNome: data.bloco_nome,
+                    condominioId: data.condominio_id, role: data.role, aprovado: data.aprovado,
                 });
             }
         });
@@ -168,17 +170,18 @@ function AvisosRapidosPage() {
         setTermoBuscaModal("");
         if (cacheBlocos.current[bloco.id]) { setMoradores(cacheBlocos.current[bloco.id]); setModalAberto(true); return; }
         setLoadingData(true);
-        const q = query(collection(db, "users"), where("condominioId", "==", user?.condominioId), where("blocoId", "==", bloco.id), where("role", "==", "morador"));
-        const snapshot = await getDocs(q);
-        let moradoresData: Morador[] = [];
-        snapshot.forEach((doc) => {
-            const data = doc.data();
-            moradoresData.push({
-                id: doc.id, nome: data.nome, apartamento: data.unidadeNome || data.apartamento || "?",
-                telefone: data.whatsapp || data.telefone || "", blocoId: data.blocoId, blocoNome: data.blocoNome || bloco.nome,
-                condominioId: data.condominioId, role: data.role, aprovado: data.aprovado,
-            });
-        });
+        const { data: moradoresRaw, error: moradoresErr } = await supabase
+          .from("users")
+          .select("*")
+          .eq("condominio_id", user?.condominioId)
+          .eq("bloco_id", bloco.id)
+          .eq("role", "morador");
+        if (moradoresErr) throw moradoresErr;
+        let moradoresData: Morador[] = (moradoresRaw || []).map((data: any) => ({
+            id: data.id, nome: data.nome, apartamento: data.unidade_nome || data.apartamento || "?",
+            telefone: data.whatsapp || data.telefone || "", blocoId: data.bloco_id, blocoNome: data.bloco_nome || bloco.nome,
+            condominioId: data.condominio_id, role: data.role, aprovado: data.aprovado,
+        }));
         moradoresData = moradoresData.filter(m => m.aprovado === true || m.aprovado === undefined);
         moradoresData.sort((a, b) => a.apartamento.localeCompare(b.apartamento, "pt-BR", { numeric: true }));
         cacheBlocos.current[bloco.id] = moradoresData;
@@ -200,8 +203,7 @@ function AvisosRapidosPage() {
     if (!moradorParaEnvio) return;
     
     // 1. Geração local do ID
-    const avisoDocRef = doc(collection(db, "avisos_rapidos"));
-    const avisoId = avisoDocRef.id;
+    const avisoId = crypto.randomUUID();
 
     // 2. Preparação dos dados
     const telefoneDoMorador = moradorParaEnvio.telefone || "";
@@ -254,32 +256,39 @@ function AvisosRapidosPage() {
             let publicFotoUrl = "";
             if (imagemAviso) {
                 const arquivoFinal = await compressImage(imagemAviso);
-                const storageRef = ref(storage, `avisos/${avisoId}_${Date.now()}.jpg`);
-                await uploadBytes(storageRef, arquivoFinal);
-                publicFotoUrl = await getDownloadURL(storageRef);
+                const fotoPath = `avisos/${avisoId}_${Date.now()}.jpg`;
+                const { error: upErr } = await supabase.storage
+                  .from("avisos")
+                  .upload(fotoPath, arquivoFinal);
+                if (upErr) throw upErr;
+                const { data: urlData } = supabase.storage
+                  .from("avisos")
+                  .getPublicUrl(fotoPath);
+                publicFotoUrl = urlData.publicUrl;
             }
 
-            await setDoc(avisoDocRef, {
+            const { error: insertErr } = await supabase.from("avisos_rapidos").insert({
                 id: avisoId,
-                enviadoPorId: user?.uid || "",
-                enviadoPorNome: user?.nome || "Porteiro",
-                enviadoPorRole: user?.role || "porteiro",
-                moradorId: moradorParaEnvio.id,
-                moradorNome: moradorParaEnvio.nome,
-                moradorTelefone: moradorParaEnvio.telefone || "",
-                condominioId: user?.condominioId || "",
-                blocoId: moradorParaEnvio.blocoId || "",
-                blocoNome: blocoSelecionado?.nome || moradorParaEnvio.blocoNome || "",
+                enviado_por_id: user?.uid || "",
+                enviado_por_nome: user?.nome || "Porteiro",
+                enviado_por_role: user?.role || "porteiro",
+                morador_id: moradorParaEnvio.id,
+                morador_nome: moradorParaEnvio.nome,
+                morador_telefone: moradorParaEnvio.telefone || "",
+                condominio_id: user?.condominioId || "",
+                bloco_id: moradorParaEnvio.blocoId || "",
+                bloco_nome: blocoSelecionado?.nome || moradorParaEnvio.blocoNome || "",
                 apartamento: moradorParaEnvio.apartamento,
                 mensagem: mensagemFinal,
                 protocolo: protocoloGerado,
-                fotoUrl: publicFotoUrl,
-                imagemUrl: publicFotoUrl,
-                linkUrl: temFoto ? linkReal : "", 
-                criadoEm: serverTimestamp(),
+                foto_url: publicFotoUrl,
+                imagem_url: publicFotoUrl,
+                link_url: temFoto ? linkReal : "", 
+                criado_em: new Date().toISOString(),
                 status: "pendente",
                 tipo: "aviso_rapido"
             });
+            if (insertErr) throw insertErr;
             
         } catch (bgError) {
             console.error("❌ [Background] Erro:", bgError);

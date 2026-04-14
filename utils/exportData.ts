@@ -52,7 +52,7 @@ export function exportToCSV<T extends Record<string, any>>(
   const csvContent = [
     headers.join(","),
     ...rows.map((row) =>
-      row.map((cell) => `"${String(cell).replace(/"/g, '""')}"`).join(",")
+      row.map((cell) => `"${String(cell).replaceAll('"', '""')}"`).join(",")
     ),
   ].join("\n");
 
@@ -261,8 +261,10 @@ function formatTipo(tipo: string): string {
 function formatStatus(status: string): string {
   const statuses: Record<string, string> = {
     pendente: "Pendente",
-    retirado: "Retirado",
-    devolvido: "Devolvido",
+    retirada: "Retirada",
+    retirado: "Retirada",
+    devolvida: "Devolvida",
+    devolvido: "Devolvida",
   };
   return statuses[status] || status;
 }
@@ -271,7 +273,8 @@ function getTimestamp(): string {
   const now = new Date();
   return now
     .toISOString()
-    .replace(/[:.]/g, "-")
+    .replaceAll(":", "-")
+    .replaceAll(".", "-")
     .replace("T", "_")
     .slice(0, 19);
 }
@@ -283,7 +286,7 @@ function downloadBlob(blob: Blob, filename: string): void {
   link.download = filename;
   document.body.appendChild(link);
   link.click();
-  document.body.removeChild(link);
+  link.remove();
   URL.revokeObjectURL(url);
 }
 

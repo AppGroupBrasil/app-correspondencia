@@ -85,11 +85,21 @@ function isRateLimited(clientIp: string): boolean {
 function isAllowedAttachmentUrl(url: string): boolean {
   try {
     const parsed = new URL(url);
-    return parsed.protocol === 'https:' && [
+    const allowedHosts = [
       'firebasestorage.googleapis.com',
       'correspondencia-9a73a.firebasestorage.app',
       'storage.googleapis.com',
-    ].includes(parsed.hostname);
+    ];
+
+    const supabaseHost = process.env.NEXT_PUBLIC_SUPABASE_URL
+      ? new URL(process.env.NEXT_PUBLIC_SUPABASE_URL).hostname
+      : null;
+
+    if (supabaseHost) {
+      allowedHosts.push(supabaseHost);
+    }
+
+    return parsed.protocol === 'https:' && allowedHosts.includes(parsed.hostname);
   } catch {
     return false;
   }

@@ -1,8 +1,7 @@
 "use client";
 
-import { useEffect, useState, useCallback } from "react";
-import { collection, getDocs, query, where, doc, getDoc } from "firebase/firestore"; 
-import { db } from "@/app/lib/firebase";
+import { useEffect, useState, useCallback, useRef } from "react";
+import { supabase } from "@/app/lib/supabase";
 import { useAuth } from "@/hooks/useAuth";
 
 interface Props {
@@ -44,6 +43,10 @@ export default function SelectCondominioBlocoMorador({ onSelect }: Props) {
   const [selectedBloco, setSelectedBloco] = useState("");
   const [selectedMorador, setSelectedMorador] = useState("");
 
+  // ✅ Ref para evitar loop de re-render causado por onSelect no dependency array
+  const onSelectRef = useRef(onSelect);
+  useEffect(() => { onSelectRef.current = onSelect; });
+
   const getCleanName = (text: string) => {
     return (text || "").replace(/"/g, '').trim(); 
   };
@@ -53,21 +56,22 @@ export default function SelectCondominioBlocoMorador({ onSelect }: Props) {
     const carregarCondominios = async () => {
       try {
         if (role === "adminMaster" || role === "admin") {
-          const snapshot = await getDocs(collection(db, "condominios"));
-          const lista = snapshot.docs.map((doc) => ({
-            id: doc.id,
-            ...doc.data(),
-          })) as Condominio[];
+          const { data, error } = await supabase.from("condominios").select("*");
+          if (error) throw error;
+          const lista = (data || []) as Condominio[];
           
           lista.sort((a, b) => a.nome.localeCompare(b.nome, "pt-BR"));
           setCondominios(lista);
         } else {
           if (userCondominioId) {
-              const condominioRef = doc(db, "condominios", userCondominioId);
-              const docSnap = await getDoc(condominioRef);
+              const { data, error } = await supabase
+                .from("condominios")
+                .select("*")
+                .eq("id", userCondominioId)
+                .single();
 
-              if (docSnap.exists()) {
-                  setCondominios([{ id: docSnap.id, ...docSnap.data() } as Condominio]); 
+              if (!error && data) {
+                  setCondominios([data as Condominio]); 
                   setSelectedCondominio(userCondominioId); 
               } else {
                   setCondominios([]);
@@ -94,15 +98,12 @@ export default function SelectCondominioBlocoMorador({ onSelect }: Props) {
     }
 
     try {
-      const q = query(
-        collection(db, "blocos"),
-        where("condominioId", "==", condominioId)
-      );
-      const snapshot = await getDocs(q);
-      const lista = snapshot.docs.map((doc) => ({
-        id: doc.id,
-        ...doc.data(),
-      })) as Bloco[];
+      const { data, error } = await supabase
+        .from("blocos")
+        .select("*")
+        .eq("condominio_id", condominioId);
+      if (error) throw error;
+      const lista = (data || []) as Bloco[];
 
       // 🔥 Ordenação Natural para Blocos
       lista.sort((a, b) => {
@@ -119,23 +120,24 @@ export default function SelectCondominioBlocoMorador({ onSelect }: Props) {
   }, []);
 
   // ✅ Carrega moradores
-  const carregarMoradores = useCallback(async (blocoId: string) => {
-    if (!blocoId) {
+  const carregarMoradores = useCallback(async (blocoId: string, condominioId: string) => {
+    if (!blocoId || !condominioId) {
       setMoradores([]);
       setSelectedMorador("");
       return;
     }
 
     try {
-      const q = query(
-        collection(db, "users"),
-        where("blocoId", "==", blocoId), 
-        where("role", "==", "morador")
-      );
-      const snapshot = await getDocs(q);
-      const lista = snapshot.docs.map((doc) => ({
-        id: doc.id,
-        ...doc.data(),
+      const { data, error } = await supabase
+        .from("users")
+        .select("*")
+        .eq("condominio_id", condominioId)
+        .eq("bloco_id", blocoId)
+        .eq("role", "morador");
+      if (error) throw error;
+      const lista = (data || []).map((d: any) => ({
+        ...d,
+        unidadeNome: d.unidade_nome,
       })) as Morador[];
 
       // 🔥 Ordenação Natural para Unidades/Apartamentos
@@ -163,20 +165,20 @@ export default function SelectCondominioBlocoMorador({ onSelect }: Props) {
   }, [selectedCondominio, carregarBlocos]);
 
   useEffect(() => {
-    if (selectedBloco) {
-      carregarMoradores(selectedBloco);
+    if (selectedBloco && selectedCondominio) {
+      carregarMoradores(selectedBloco, selectedCondominio);
     }
-  }, [selectedBloco, carregarMoradores]);
+  }, [selectedBloco, selectedCondominio, carregarMoradores]);
 
   useEffect(() => {
-    if (typeof onSelect === 'function') {
-      onSelect({
+    if (typeof onSelectRef.current === 'function') {
+      onSelectRef.current({
         condominioId: selectedCondominio,
         blocoId: selectedBloco,
         moradorId: selectedMorador,
       });
     }
-  }, [selectedCondominio, selectedBloco, selectedMorador, onSelect]);
+  }, [selectedCondominio, selectedBloco, selectedMorador]);
 
   return (
     <div className="space-y-4">

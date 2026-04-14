@@ -52,8 +52,8 @@ service cloud.firestore {
       // Admin lê apenas usuários do mesmo condomínio
       allow read: if hasRole('admin') && resource.data.condominioId == getUserData().condominioId;
 
-      // Responsáveis leem usuários do mesmo condomínio
-      allow read: if hasRole('responsavel') && resource.data.condominioId == getUserData().condominioId;
+      // Responsáveis e porteiros leem usuários do mesmo condomínio
+      allow read: if hasAnyRole(['responsavel', 'porteiro']) && resource.data.condominioId == getUserData().condominioId;
 
       // Auto-cadastro: usuário cria seu próprio documento
       allow create: if isAuthenticated() && request.auth.uid == userId;
@@ -94,6 +94,12 @@ service cloud.firestore {
 
       // Responsável atualiza seu próprio condomínio
       allow update: if hasRole('responsavel') && isSameCondominio(condominioId);
+
+      // Subcoleção: configuracoes (retirada, etc.)
+      match /configuracoes/{docId} {
+        allow read: if isAuthenticated() && isSameCondominio(condominioId);
+        allow write: if isResponsavelOrHigher() && isSameCondominio(condominioId);
+      }
     }
 
     // ============================================
@@ -192,6 +198,23 @@ service cloud.firestore {
       allow read: if isAuthenticated() && isSameCondominio(resource.data.condominioId);
       allow create, update, delete: if isResponsavelOrHigher()
                                     && isSameCondominio(request.resource.data.condominioId);
+    }
+
+    // ============================================
+    // COLEÇÃO: message_templates
+    // ============================================
+    match /message_templates/{templateId} {
+      allow read: if isAuthenticated();
+      allow create, update, delete: if isResponsavelOrHigher();
+    }
+
+    // ============================================
+    // COLEÇÃO: retiradas
+    // ============================================
+    match /retiradas/{retiradaId} {
+      allow read: if isAuthenticated() && isSameCondominio(resource.data.condominioId);
+      allow create, update: if hasAnyRole(['porteiro', 'responsavel', 'admin', 'adminMaster']);
+      allow delete: if isAdmin();
     }
 
     // ============================================

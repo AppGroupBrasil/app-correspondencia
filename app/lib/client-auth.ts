@@ -1,4 +1,4 @@
-import { auth } from "@/app/lib/firebase";
+import { supabase } from "@/app/lib/supabase";
 
 export async function buildAuthenticatedJsonHeaders(init?: HeadersInit): Promise<Headers> {
   const headers = new Headers(init);
@@ -7,10 +7,9 @@ export async function buildAuthenticatedJsonHeaders(init?: HeadersInit): Promise
     headers.set("Content-Type", "application/json");
   }
 
-  const currentUser = auth.currentUser;
-  if (currentUser) {
-    const token = await currentUser.getIdToken();
-    headers.set("Authorization", `Bearer ${token}`);
+  const { data: { session } } = await supabase.auth.getSession();
+  if (session?.access_token) {
+    headers.set("Authorization", `Bearer ${session.access_token}`);
   }
 
   return headers;

@@ -2,9 +2,7 @@
 
 import { useState, useEffect, useRef } from "react";
 import { useAuth } from "@/hooks/useAuth";
-import { doc, getDoc, setDoc, updateDoc, Timestamp } from "firebase/firestore";
-import { db, storage } from "@/app/lib/firebase";
-import { ref, uploadBytes, getDownloadURL } from "firebase/storage";
+import { supabase } from "@/app/lib/supabase";
 import { X, Save, AlertCircle, ArrowRight, ArrowLeft } from "lucide-react";
 import AssinaturaDigitalPro from "./AssinaturaDigitalPro";
 import UploadImagem from "./UploadImagem";
@@ -129,6 +127,7 @@ export default function ModalRetiradaProfissional({
   const [error, setError] = useState("");
   const [showSuccessModal, setShowSuccessModal] = useState(false);
   const [finalPdfUrl, setFinalPdfUrl] = useState("");
+  const [finalAvisoUrl, setFinalAvisoUrl] = useState("");
   const [linkSistemaFinal, setLinkSistemaFinal] = useState("");
   const [mensagemFormatada, setMensagemFormatada] = useState("");
   const [moradorPhone, setMoradorPhone] = useState(
@@ -183,9 +182,12 @@ export default function ModalRetiradaProfissional({
   async function carregarDadosMorador() {
     try {
       if (correspondencia.moradorId) {
-        const docSnap = await getDoc(doc(db, "users", correspondencia.moradorId));
-        if (docSnap.exists()) {
-          const data = docSnap.data();
+        const { data } = await supabase
+          .from("users")
+          .select("whatsapp, telefone, email")
+          .eq("id", correspondencia.moradorId)
+          .single();
+        if (data) {
           if (data.whatsapp || data.telefone) setMoradorPhone(data.whatsapp || data.telefone);
           if (data.email) setMoradorEmail(data.email);
         }
@@ -198,9 +200,12 @@ export default function ModalRetiradaProfissional({
   async function carregarConfiguracoes() {
     if (!user?.condominioId) return;
     try {
-      const docRef = doc(db, "condominios", user.condominioId, "configuracoes", "retirada");
-      const docSnap = await getDoc(docRef);
-      if (docSnap.exists()) setConfig(docSnap.data() as ConfiguracoesRetirada);
+      const { data } = await supabase
+        .from("configuracoes_retirada")
+        .select("*")
+        .eq("condominio_id", user.condominioId)
+        .single();
+      if (data) setConfig(data as ConfiguracoesRetirada);
     } catch (error) {
       console.error(error);
     }
@@ -209,10 +214,13 @@ export default function ModalRetiradaProfissional({
   async function carregarAssinaturaPorteiro() {
     if (!user?.uid) return;
     try {
-      const docRef = doc(db, "users", user.uid);
-      const docSnap = await getDoc(docRef);
-      if (docSnap.exists() && docSnap.data()?.assinaturaPadrao) {
-        setAssinaturaPorteiro(docSnap.data()?.assinaturaPadrao);
+      const { data } = await supabase
+        .from("users")
+        .select("assinatura_padrao")
+        .eq("id", user.uid)
+        .single();
+      if (data?.assinatura_padrao) {
+        setAssinaturaPorteiro(data.assinatura_padrao);
       }
     } catch (error) {
       console.error(error);
@@ -271,9 +279,11 @@ export default function ModalRetiradaProfissional({
 
     try {
       if (salvarPadrao && assinaturaPorteiro && user.uid) {
-        updateDoc(doc(db, "users", user.uid), {
-          assinaturaPadrao: assinaturaPorteiro,
-        }).catch((e) => console.error("Erro ao salvar assinatura padrão:", e));
+        supabase.from("users").update({
+          assinatura_padrao: assinaturaPorteiro,
+        }).eq("id", user.uid).then(({ error }) => {
+          if (error) console.error("Erro ao salvar assinatura padrão:", error);
+        });
       }
 
       let arquivoImagemFinal = imagemFile;
@@ -300,22 +310,33 @@ export default function ModalRetiradaProfissional({
         dadosRetiradaBruto.fotoComprovanteUrl = localBase64;
       }
 
+      const baseUrl = typeof window !== "undefined" ? window.location.origin : "";
+      const linkAviso = `${baseUrl}/ver?id=${encodeURIComponent(correspondencia.id)}&type=aviso`;
+      const linkRecibo = `${baseUrl}/ver?id=${encodeURIComponent(correspondencia.id)}&type=recibo`;
+
       setMessage("Gerando recibo...");
       const pdfBlob = await gerarReciboPDF({
         correspondencia,
         dadosRetirada: dadosRetiradaBruto,
         nomeCondominio: correspondencia.condominioNome || "Condomínio",
         logoUrl: "/logo-app-correspondencia.png",
+        linkPublicoRecibo: linkRecibo,
         onProgress: (val) => setProgress(20 + val * 0.4),
       });
 
       setMessage("Finalizando...");
       const timestamp = Date.now();
       const pdfFileName = `recibo_${correspondencia.protocolo}_${timestamp}.pdf`;
-      const pdfStorageRef = ref(storage, `correspondencias/${pdfFileName}`);
 
-      await uploadBytes(pdfStorageRef, pdfBlob);
-      const publicPdfUrl = await getDownloadURL(pdfStorageRef);
+      const { error: uploadError } = await supabase.storage
+        .from("correspondencias")
+        .upload(pdfFileName, pdfBlob, { contentType: "application/pdf" });
+      if (uploadError) throw uploadError;
+
+      const { data: urlData } = supabase.storage
+        .from("correspondencias")
+        .getPublicUrl(pdfFileName);
+      const publicPdfUrl = urlData.publicUrl;
 
       setFinalPdfUrl(publicPdfUrl);
       setProgress(100);
@@ -325,11 +346,8 @@ export default function ModalRetiradaProfissional({
         timeStyle: "short",
       });
 
-      const baseUrl = typeof window !== "undefined" ? window.location.origin : "";
-      
-      // --- CORREÇÃO DO LINK PARA ANDROID (Removendo erro de rota) ---
-      const linkSistema = `${baseUrl}/ver?id=${correspondencia.id}`; 
-      setLinkSistemaFinal(linkSistema);
+      setFinalAvisoUrl(linkAviso);
+      setLinkSistemaFinal(linkRecibo);
 
       // ✅ MENSAGEM PADRONIZADA COM LAYOUT CORRIGIDO
       const msgFinal = `*CONFIRMAÇÃO DE RETIRADA*
@@ -354,50 +372,45 @@ Obrigado!
 
       backgroundTaskRef.current = (async () => {
         try {
-          let fotoUrlFirebase = "";
+          let fotoUrlSupabase = "";
           if (arquivoImagemFinal) {
             const fotoFileName = `retirada_${correspondencia.protocolo}_${timestamp}.jpg`;
-            const fotoStorageRef = ref(storage, `retiradas/${fotoFileName}`);
-            await uploadBytes(fotoStorageRef, arquivoImagemFinal);
-            fotoUrlFirebase = await getDownloadURL(fotoStorageRef);
+            const { error: fotoError } = await supabase.storage
+              .from("retiradas")
+              .upload(fotoFileName, arquivoImagemFinal, { contentType: "image/jpeg" });
+            if (!fotoError) {
+              const { data: fotoUrlData } = supabase.storage
+                .from("retiradas")
+                .getPublicUrl(fotoFileName);
+              fotoUrlSupabase = fotoUrlData.publicUrl;
+            }
           }
 
-          if (fotoUrlFirebase) dadosRetiradaBruto.fotoComprovanteUrl = fotoUrlFirebase;
+          if (fotoUrlSupabase) dadosRetiradaBruto.fotoComprovanteUrl = fotoUrlSupabase;
           else delete dadosRetiradaBruto.fotoComprovanteUrl;
 
           const dadosRetirada = removerUndefined(dadosRetiradaBruto);
-          const batchWrites = [];
 
-          const corrRef = doc(db, "correspondencias", correspondencia.id);
-          batchWrites.push(
-            setDoc(
-              corrRef,
-              {
-                status: "retirada",
-                retiradoEm: Timestamp.now(),
-                dadosRetirada,
-                reciboUrl: publicPdfUrl,
-              },
-              { merge: true }
-            )
+          // Update correspondencia
+          await supabase.from("correspondencias").update({
+            status: "retirada",
+            retirado_em: new Date().toISOString(),
+            dados_retirada: dadosRetirada,
+            recibo_url: publicPdfUrl,
+          }).eq("id", correspondencia.id);
+
+          // Insert retirada record
+          await supabase.from("retiradas").insert(
+            removerUndefined({
+              correspondencia_id: correspondencia.id,
+              protocolo: correspondencia.protocolo,
+              condominio_id: user?.condominioId || "",
+              ...dadosRetirada,
+              status: "concluida",
+              criado_em: new Date().toISOString(),
+            })
           );
 
-          const retiradaRef = doc(db, "retiradas", `${correspondencia.id}_${Date.now()}`);
-          batchWrites.push(
-            setDoc(
-              retiradaRef,
-              removerUndefined({
-                correspondenciaId: correspondencia.id,
-                protocolo: correspondencia.protocolo,
-                condominioId: user?.condominioId || "",
-                ...dadosRetirada,
-                status: "concluida",
-                criadoEm: new Date().toISOString(),
-              })
-            )
-          );
-
-          await Promise.all(batchWrites);
         } catch (bgError) {
           console.error("❌ [Background] Erro:", bgError);
         }
@@ -431,6 +444,7 @@ Obrigado!
         telefoneMorador={moradorPhone}
         emailMorador={moradorEmail}
         pdfUrl={linkSistemaFinal}
+        avisoUrl={finalAvisoUrl}
         mensagemFormatada={mensagemFormatada}
         onClose={handleCloseSuccess}
       />

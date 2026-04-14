@@ -1,18 +1,6 @@
 "use client";
 import { useState, useEffect } from "react";
-import { db } from "@/app/lib/firebase";
-import {
-  collection,
-  getDocs,
-  addDoc,
-  updateDoc,
-  deleteDoc,
-  doc,
-  serverTimestamp,
-  query,
-  orderBy,
-} from "firebase/firestore";
-import { getFunctions, httpsCallable } from "firebase/functions";
+import { supabase } from "@/app/lib/supabase";
 import {
   Building2,
   Plus,
@@ -58,18 +46,20 @@ export default function GerenciarCondominios() {
   const carregarCondominios = async () => {
     try {
       setLoading(true);
-      const q = query(collection(db, "condominios"), orderBy("criadoEm", "desc"));
-      const snapshot = await getDocs(q);
-      const lista: Condominio[] = snapshot.docs.map((d) => ({
+      const { data, error } = await supabase
+        .from("condominios")
+        .select("*")
+        .order("criado_em", { ascending: false });
+      if (error) throw error;
+      const lista: Condominio[] = (data || []).map((d: any) => ({
         id: d.id,
-        nome: d.data().nome || "",
-        endereco: d.data().endereco || "",
-        logoUrl: d.data().logoUrl || "",
-        status: d.data().status || "ativo",
-        criadoEm: d.data().criadoEm,
-
-        authUid: d.data().authUid || "",
-        emailLogin: d.data().emailLogin || "",
+        nome: d.nome || "",
+        endereco: d.endereco || "",
+        logoUrl: d.logo_url || "",
+        status: d.status || "ativo",
+        criadoEm: d.criado_em,
+        authUid: d.auth_uid || "",
+        emailLogin: d.email_login || "",
       }));
       setCondominios(lista);
     } catch (err) {
@@ -87,22 +77,22 @@ export default function GerenciarCondominios() {
     try {
       setLoading(true);
       if (condominioEditando) {
-        await updateDoc(doc(db, "condominios", condominioEditando.id), {
+        await supabase.from("condominios").update({
           nome,
           endereco,
-          logoUrl: logoUrl || "",
-          emailLogin: emailLogin.trim() || "",
-          atualizadoEm: serverTimestamp(),
-        });
+          logo_url: logoUrl || "",
+          email_login: emailLogin.trim() || "",
+          atualizado_em: new Date().toISOString(),
+        }).eq("id", condominioEditando.id);
         alert("Atualizado com sucesso!");
       } else {
-        await addDoc(collection(db, "condominios"), {
+        await supabase.from("condominios").insert({
           nome,
           endereco,
-          logoUrl: logoUrl || "",
-          emailLogin: emailLogin.trim() || "",
+          logo_url: logoUrl || "",
+          email_login: emailLogin.trim() || "",
           status: "ativo",
-          criadoEm: serverTimestamp(),
+          criado_em: new Date().toISOString(),
         });
         alert("Cadastrado com sucesso!");
       }
@@ -134,26 +124,27 @@ export default function GerenciarCondominios() {
     try {
       setLoading(true);
 
-      // NOME DA FUNCTION = exatamente o exports.transferirAcessoCondominio
-      const fn = httpsCallable(getFunctions(), "transferirAcessoCondominio");
-      const res: any = await fn({ condominioId: condominioEditando.id, novoEmail });
+      // Chama API route para transferir acesso (server-side)
+      const res = await fetch('/api/transferir-acesso', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ condominioId: condominioEditando.id, novoEmail }),
+      });
 
-      const link = res.data?.resetLink;
+      const result = await res.json();
+
+      if (!res.ok) {
+        throw new Error(result.error || 'Erro ao transferir acesso');
+      }
+
+      const link = result?.resetLink;
       if (link) window.open(link, "_blank");
 
       alert("Acesso transferido! O link de redefinição foi aberto em uma nova aba.");
       await carregarCondominios();
     } catch (err: any) {
       console.error(err);
-
-      const msg =
-        err?.code === "functions/permission-denied"
-          ? "Sem permissão (você não é ADMIN_MASTER)."
-          : err?.code === "functions/unauthenticated"
-          ? "Você precisa estar logado."
-          : err?.message || "Erro ao transferir acesso.";
-
-      alert(msg);
+      alert(err?.message || "Erro ao transferir acesso.");
     } finally {
       setLoading(false);
     }
@@ -171,10 +162,10 @@ export default function GerenciarCondominios() {
   const alternarStatus = async (c: Condominio) => {
     try {
       const novoStatus = c.status === "ativo" ? "inativo" : "ativo";
-      await updateDoc(doc(db, "condominios", c.id), {
+      await supabase.from("condominios").update({
         status: novoStatus,
-        atualizadoEm: serverTimestamp(),
-      });
+        atualizado_em: new Date().toISOString(),
+      }).eq("id", c.id);
       await carregarCondominios();
     } catch (err) {
       console.error("Erro ao alterar status:", err);
@@ -191,7 +182,7 @@ export default function GerenciarCondominios() {
 
     try {
       setLoading(true);
-      await deleteDoc(doc(db, "condominios", c.id));
+      await supabase.from("condominios").delete().eq("id", c.id);
       alert("Excluído com sucesso!");
       await carregarCondominios();
     } catch (err) {
