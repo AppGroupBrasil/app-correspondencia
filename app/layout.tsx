@@ -186,6 +186,15 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
           `}
         </Script>
 
+        {/* ===== SERVICE WORKER (PWA) ===== */}
+        <Script id="sw-register" strategy="afterInteractive">
+          {`
+            if ('serviceWorker' in navigator) {
+              navigator.serviceWorker.register('/sw.js').catch(function() {});
+            }
+          `}
+        </Script>
+
         <AuthProvider>
           <main className="min-h-screen w-full overflow-x-hidden">
             {children}

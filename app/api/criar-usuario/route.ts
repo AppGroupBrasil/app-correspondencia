@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
+import nodemailer from 'nodemailer';
 import { createServerClient } from '@/app/lib/supabase';
+import { emailNovoCadastroAdmin } from '@/app/lib/email-templates/novo-cadastro-admin';
 
 function buildNormalizedDados(body: Record<string, any>) {
   const normalizedDados = body.dados ? { ...body.dados } : {};
@@ -53,6 +55,58 @@ function buildNormalizedDados(body: Record<string, any>) {
   }
 
   return normalizedDados;
+}
+
+/**
+ * Envia e-mail de notificação ao admin quando há um novo cadastro
+ */
+async function notificarAdminNovoCadastro(dados: {
+  nome: string;
+  email: string;
+  role: string;
+  condominioNome?: string;
+  blocoNome?: string;
+  unidadeNome?: string;
+  whatsapp?: string;
+}) {
+  const adminEmail = process.env.SMTP_ADMIN_EMAIL;
+  const smtpUser = process.env.SMTP_USER;
+  const smtpPass = process.env.SMTP_PASS;
+
+  if (!adminEmail || !smtpUser || !smtpPass) {
+    console.warn('[Criar Usuário] SMTP_ADMIN_EMAIL, SMTP_USER ou SMTP_PASS não configurados. Notificação não enviada.');
+    return;
+  }
+
+  try {
+    const transporter = nodemailer.createTransport({
+      host: process.env.SMTP_HOST || 'smtp.gmail.com',
+      port: Number(process.env.SMTP_PORT) || 587,
+      secure: false,
+      auth: { user: smtpUser, pass: smtpPass },
+    });
+
+    const htmlContent = emailNovoCadastroAdmin({
+      nomeUsuario: dados.nome,
+      emailUsuario: dados.email,
+      role: dados.role,
+      condominioNome: dados.condominioNome,
+      blocoNome: dados.blocoNome,
+      unidadeNome: dados.unidadeNome,
+      whatsapp: dados.whatsapp,
+    });
+
+    await transporter.sendMail({
+      from: process.env.EMAIL_FROM || smtpUser,
+      to: adminEmail,
+      subject: `🆕 Novo cadastro: ${dados.nome} (${dados.role})`,
+      html: htmlContent,
+    });
+
+    console.log(`[Criar Usuário] ✅ Notificação de novo cadastro enviada para ${adminEmail}`);
+  } catch (err) {
+    console.error('[Criar Usuário] ⚠️ Falha ao enviar notificação de novo cadastro:', err);
+  }
 }
 
 export async function POST(req: NextRequest) {
@@ -160,6 +214,17 @@ export async function POST(req: NextRequest) {
       await supabaseAdmin.auth.admin.deleteUser(uid);
       return NextResponse.json({ error: 'Erro ao salvar dados do usuário: ' + dbError.message }, { status: 500 });
     }
+
+    // 📧 Notificar admin sobre novo cadastro (não bloqueia resposta)
+    notificarAdminNovoCadastro({
+      nome: nome || normalizedDados.nome || email,
+      email,
+      role,
+      condominioNome: condominio?.nome || normalizedDados.condominio_nome,
+      blocoNome: normalizedDados.bloco_nome,
+      unidadeNome: normalizedDados.unidade_nome,
+      whatsapp: normalizedDados.whatsapp,
+    }).catch(() => {});
 
     return NextResponse.json({ uid, email, condominioId: finalCondominioId });
   } catch (err: any) {

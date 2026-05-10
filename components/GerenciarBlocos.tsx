@@ -96,7 +96,7 @@ export default function GerenciarBlocos({ condominioId: adminCondominioId }: Pro
         id: d.id,
         nome: d.nome,
         condominioId: d.condominio_id,
-        ativo: d.ativo,
+        ativo: d.ativo ?? true,
         criadoEm: d.criado_em,
         ordem: d.ordem ?? null,
       }));

@@ -30,7 +30,9 @@ CREATE TABLE IF NOT EXISTS blocos (
   condominio_id UUID NOT NULL REFERENCES condominios(id) ON DELETE CASCADE,
   nome TEXT NOT NULL,
   ordem INTEGER DEFAULT 0,
-  criado_em TIMESTAMPTZ DEFAULT NOW()
+  ativo BOOLEAN DEFAULT true,
+  criado_em TIMESTAMPTZ DEFAULT NOW(),
+  atualizado_em TIMESTAMPTZ
 );
 
 CREATE INDEX idx_blocos_condominio ON blocos(condominio_id);

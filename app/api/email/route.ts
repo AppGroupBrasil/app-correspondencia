@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { Resend } from 'resend';
+import nodemailer from 'nodemailer';
 import { ensureSameCondominio, RequestAuthError, requireRequestAuth } from '@/app/lib/server-auth';
 
 export const dynamic = 'force-dynamic';
@@ -105,18 +105,24 @@ function isAllowedAttachmentUrl(url: string): boolean {
   }
 }
 
-// Inicialização lazy do Resend para evitar erro durante o build
-let resendInstance: Resend | null = null;
+// Inicialização lazy do transporter SMTP (Gmail)
+let transporterInstance: nodemailer.Transporter | null = null;
 
-function getResend(): Resend {
-  if (!resendInstance) {
-    const apiKey = process.env.RESEND_API_KEY;
-    if (!apiKey) {
-      throw new Error('RESEND_API_KEY não configurada. Configure no arquivo .env.local');
+function getTransporter(): nodemailer.Transporter {
+  if (!transporterInstance) {
+    const smtpUser = process.env.SMTP_USER;
+    const smtpPass = process.env.SMTP_PASS;
+    if (!smtpUser || !smtpPass) {
+      throw new Error('SMTP_USER e SMTP_PASS não configurados. Configure no arquivo .env.local');
     }
-    resendInstance = new Resend(apiKey);
+    transporterInstance = nodemailer.createTransport({
+      host: process.env.SMTP_HOST || 'smtp.gmail.com',
+      port: Number(process.env.SMTP_PORT) || 587,
+      secure: false,
+      auth: { user: smtpUser, pass: smtpPass },
+    });
   }
-  return resendInstance;
+  return transporterInstance;
 }
 
 export async function POST(request: NextRequest) {
@@ -216,27 +222,24 @@ export async function POST(request: NextRequest) {
         return NextResponse.json({ error: 'Tipo de email inválido' }, { status: 400 });
     }
 
-    // Obter instância do Resend
-    const resend = getResend();
+    // Obter transporter SMTP
+    const transporter = getTransporter();
     const replyToEmail = process.env.EMAIL_REPLY_TO;
 
-    // Envio
-    const { data, error } = await resend.emails.send({
+    // Envio via SMTP
+    const info = await transporter.sendMail({
       from: fromEmail,
       to: destinatario,
       replyTo: replyToEmail,
       subject,
       html: htmlContent,
-      attachments: attachments.length > 0 ? attachments : undefined,
+      attachments: attachments.length > 0
+        ? attachments.map((a) => ({ filename: a.filename, path: a.path }))
+        : undefined,
     });
 
-    if (error) {
-      console.error('[Email API] Erro Resend:', error);
-      return NextResponse.json({ error: error.message }, { status: 500 });
-    }
-
-    console.log(`[Email API] Email enviado com sucesso: ${data?.id}`);
-    return NextResponse.json({ success: true, emailId: data?.id });
+    console.log(`[Email API] Email enviado com sucesso: ${info.messageId}`);
+    return NextResponse.json({ success: true, emailId: info.messageId });
   } catch (err: any) {
     if (err instanceof RequestAuthError) {
       return NextResponse.json({ error: err.message }, { status: err.status });

@@ -5,7 +5,7 @@ import { supabase } from "@/app/lib/supabase";
 import jsPDF from "jspdf";
 import QRCode from "qrcode";
 import imageCompression from "browser-image-compression";
-import { getApiUrl } from "@/utils/platform";
+import { EmailService } from "@/services/emailService";
 
 // --- CONFIGURAÇÃO DE URL (WEB / APP) ---
 const API_BASE_URL = process.env.NEXT_PUBLIC_APP_URL || (globalThis.window === undefined ? "https://appcorrespondencia.com.br" : globalThis.window.location.origin);
@@ -180,21 +180,17 @@ export function useCorrespondencias() {
 
         // 5. Enviar E-mail (Sem travar se falhar)
         if (emailDestino) {
-            fetch(getApiUrl("/api/email"), {
-                method: 'POST',
-                headers: {'Content-Type': 'application/json'},
-                body: JSON.stringify({
-                    tipo: 'nova-correspondencia',
-                    destinatario: emailDestino,
-                    dados: {
-                        nomeMorador,
-                        protocolo,
-                        condominioNome: params.condominioNome,
-                        blocoNome: params.blocoNome,
-                        numeroUnidade: params.apartamento,
-                        dashboardUrl: `${API_BASE_URL}/login`
-                    }
-                })
+            const now = new Date();
+            EmailService.enviarNovaCorrespondencia(emailDestino, {
+                nomeMorador,
+                tipoCorrespondencia: params.observacao || 'Encomenda',
+                dataChegada: now.toLocaleDateString('pt-BR'),
+                horaChegada: now.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }),
+                condominioNome: params.condominioNome || 'Condomínio',
+                blocoNome: params.blocoNome || '',
+                numeroUnidade: params.apartamento || '',
+                localRetirada: params.localArmazenamento || 'Portaria',
+                dashboardUrl: `${API_BASE_URL}/login`
             }).catch(e => console.error("Erro envio email:", e));
         }
 

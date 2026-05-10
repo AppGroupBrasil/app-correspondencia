@@ -13,6 +13,7 @@ import withAuth from "@/components/withAuth";
 import { Package, FileText, CheckCircle, Loader2, Building2, Camera, MapPin } from "lucide-react"; 
 import { gerarEtiquetaPDF } from "@/utils/gerarEtiquetaPDF"; 
 import BotaoVoltar from "@/components/BotaoVoltar";
+import { EmailService } from "@/services/emailService";
 
 // Cache para dados já carregados
 const dataCache = new Map<string, { data: any; timestamp: number }>();
@@ -332,6 +333,30 @@ Aguardamos a sua retirada`;
 
           if (insertErr) throw insertErr;
           console.log("✅ [Background] Correspondência salva com sucesso! ID:", docId);
+
+          // Envio de E-mail em background (não bloqueia)
+          if (emailMorador) {
+            try {
+              const now = new Date();
+              const dataHoje = now.toLocaleDateString('pt-BR');
+              const horaAgora = now.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+
+              await EmailService.enviarNovaCorrespondencia(emailMorador, {
+                nomeMorador: nomes.moradorNome,
+                tipoCorrespondencia: observacao || "Encomenda",
+                dataChegada: dataHoje,
+                horaChegada: horaAgora,
+                condominioNome: nomes.condominioNome || "Condomínio",
+                blocoNome: nomes.blocoNome,
+                numeroUnidade: nomes.apartamento,
+                localRetirada: localArmazenamento,
+                dashboardUrl: novoLinkPublico
+              });
+              console.log("📧 [Background] E-mail enviado com sucesso.");
+            } catch (emailErr) {
+              console.error("⚠️ [Background] Erro ao enviar e-mail:", emailErr);
+            }
+          }
 
         } catch (err) {
           console.error("❌ [Background] Erro ao salvar:", err);
