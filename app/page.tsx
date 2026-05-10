@@ -508,7 +508,7 @@ function Pricing() {
           {/* Plano Padrão */}
           <div className="w-full border border-gray-200 shadow-lg hover:shadow-xl transition-all duration-300 bg-white rounded-2xl flex flex-col h-full">
             <div className="text-center pt-10 pb-8 border-b border-gray-100">
-              <h3 className="text-2xl font-bold text-gray-900 mb-2">Condomínios até 299 Unidades</h3>
+              <h3 className="text-2xl font-bold text-gray-900 mb-2">Unidades Ilimitadas</h3>
               <p className="text-gray-500 text-sm">Para condomínios pequeno e médio porte</p>
               <div className="mt-6 flex items-baseline justify-center gap-1">
                 <span className="text-sm text-gray-500 font-medium">R$</span>
@@ -519,7 +519,7 @@ function Pricing() {
             </div>
             <div className="p-8 flex-grow">
               <ul className="space-y-4">
-                {['Até 299 Unidades', 'Envios Ilimitados de Notificações', 'Moradores Ilimitados', 'Porteiros Ilimitados', 'Armazenamento de Fotos Ilimitado', 'Suporte Prioritário via WhatsApp', 'Backup Automático Diário', 'Sem Taxa de Instalação'].map((feature, idx) => (
+                {['Unidades Ilimitadas', 'Envios Ilimitados de Notificações', 'Moradores Ilimitados', 'Porteiros Ilimitados', 'Armazenamento de Fotos Ilimitado', 'Suporte Prioritário via WhatsApp', 'Backup Automático Diário', 'Sem Taxa de Instalação'].map((feature, idx) => (
                   <li key={idx} className="flex items-start gap-3">
                     <div className="w-6 h-6 rounded-full bg-green-100 flex items-center justify-center shrink-0 mt-0.5">
                       <svg className="w-4 h-4 text-[#057321]" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" /></svg>
@@ -539,18 +539,17 @@ function Pricing() {
           {/* Plano Grande Porte */}
           <div className="w-full border border-gray-200 shadow-lg hover:shadow-xl transition-all duration-300 bg-white rounded-2xl flex flex-col h-full">
             <div className="text-center pt-10 pb-8 border-b border-gray-100">
-              <h3 className="text-2xl font-bold text-gray-900 mb-2">Condomínios acima de 300 Unidades</h3>
-              <p className="text-gray-500 text-sm">Para condomínios de grande porte</p>
+              <h3 className="text-2xl font-bold text-gray-900 mb-2">Condomínios Ilimitados</h3>
               <div className="mt-6 flex items-baseline justify-center gap-1">
                 <span className="text-sm text-gray-500 font-medium">R$</span>
-                <span className="text-5xl font-extrabold text-[#057321]">299</span>
+                <span className="text-5xl font-extrabold text-[#057321]">349</span>
                 <span className="text-xl text-gray-500 font-medium">,00</span>
                 <span className="text-gray-400 ml-2">/mês</span>
               </div>
             </div>
             <div className="p-8 flex-grow">
               <ul className="space-y-4">
-                {['Acima de 300 Unidades', 'Envios Ilimitados de Notificações', 'Moradores Ilimitados', 'Porteiros Ilimitados', 'Armazenamento de Fotos Ilimitado', 'Suporte Prioritário via WhatsApp', 'Backup Automático Diário', 'Sem Taxa de Instalação'].map((feature, idx) => (
+                {['Condomínios Ilimitados', 'Envios Ilimitados de Notificações', 'Moradores Ilimitados', 'Porteiros Ilimitados', 'Armazenamento de Fotos Ilimitado', 'Suporte Prioritário via WhatsApp', 'Backup Automático Diário', 'Sem Taxa de Instalação'].map((feature, idx) => (
                   <li key={idx} className="flex items-start gap-3">
                     <div className="w-6 h-6 rounded-full bg-green-100 flex items-center justify-center shrink-0 mt-0.5">
                       <svg className="w-4 h-4 text-[#057321]" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" /></svg>
@@ -561,7 +560,7 @@ function Pricing() {
               </ul>
             </div>
             <div className="p-8 bg-gray-50 border-t border-gray-100 mt-auto">
-              <button onClick={() => window.open('https://wa.me/5511933284364?text=Ol%C3%A1!%20Gostaria%20de%20contratar%20o%20plano%20de%20R$%20299,00%20para%20grandes%20condom%C3%ADnios.', '_blank')} className="w-full h-12 text-lg font-bold shadow-md hover:shadow-lg transition-all bg-[#057321] hover:bg-[#045a1a] text-white rounded-lg">
+              <button onClick={() => window.open('https://wa.me/5511933284364?text=Ol%C3%A1!%20Gostaria%20de%20contratar%20o%20plano%20de%20R$%20349,00%20para%20grandes%20condom%C3%ADnios.', '_blank')} className="w-full h-12 text-lg font-bold shadow-md hover:shadow-lg transition-all bg-[#057321] hover:bg-[#045a1a] text-white rounded-lg">
                 Contratar Agora
               </button>
             </div>
