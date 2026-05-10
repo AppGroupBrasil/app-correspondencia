@@ -294,9 +294,24 @@ function RegistrarRetiradaResponsavelPage() {
     try {
       if (navigator.vibrate) navigator.vibrate(200);
     } catch {}
-    let codigoLimpo = conteudo.trim();
-    if (codigoLimpo.includes("/"))
-      codigoLimpo = codigoLimpo.split("/").pop()!;
+    const texto = conteudo.trim();
+    let codigoLimpo = texto;
+    try {
+      if (/^https?:\/\//i.test(texto) || texto.includes("?")) {
+        const url = new URL(texto, "http://local");
+        const idParam = url.searchParams.get("id");
+        if (idParam) {
+          const item = todosPendentes.find((p) => p.id === idParam);
+          codigoLimpo = item ? String(item.protocolo) : idParam;
+        } else if (texto.includes("/")) {
+          codigoLimpo = texto.split("/").pop() || texto;
+        }
+      } else if (texto.includes("/")) {
+        codigoLimpo = texto.split("/").pop() || texto;
+      }
+    } catch {
+      if (texto.includes("/")) codigoLimpo = texto.split("/").pop() || texto;
+    }
     setMostrarCamera(false);
     setBusca(codigoLimpo);
   };
@@ -444,12 +459,31 @@ function RegistrarRetiradaResponsavelPage() {
                     onScan={(result) =>
                       result?.[0] && processarLeitura(result[0].rawValue)
                     }
+                    onError={(err) => {
+                      console.error("Scanner error:", err);
+                      const nome = (err as { name?: string })?.name || "";
+                      if (nome.includes("NotAllowed")) {
+                        setError("Permissão de câmera negada. Habilite o acesso nas configurações do navegador.");
+                      } else if (nome.includes("NotFound")) {
+                        setError("Nenhuma câmera disponível neste dispositivo.");
+                      } else {
+                        setError("Erro ao acessar a câmera. Verifique permissões e conexão HTTPS.");
+                      }
+                      setMostrarCamera(false);
+                    }}
                     styles={{ container: { width: "100%", height: "100%" } }}
                   />
                 </div>
               ) : (
                 <button
-                  onClick={() => setMostrarCamera(true)}
+                  onClick={() => {
+                    if (typeof window !== "undefined" && !window.isSecureContext) {
+                      setError("A leitura de QR Code exige HTTPS. Abra o sistema em uma URL segura (https://) ou via localhost.");
+                      return;
+                    }
+                    setError("");
+                    setMostrarCamera(true);
+                  }}
                   className="w-full mb-4 py-3 bg-green-600 hover:bg-green-700 text-white rounded-lg font-medium shadow-md flex items-center justify-center gap-2 transition-all"
                   type="button"
                 >

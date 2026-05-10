@@ -52,6 +52,26 @@ interface CorrespondenciaDocument {
   moradorTelefone?: string;
 }
 
+function resolverCodigoQR(
+  decodedText: string,
+  pendentes: { id: string; protocolo: string }[]
+): string {
+  const texto = decodedText.trim();
+  try {
+    if (/^https?:\/\//i.test(texto) || texto.includes("?")) {
+      const url = new URL(texto, "http://local");
+      const idParam = url.searchParams.get("id");
+      if (idParam) {
+        const item = pendentes.find((p) => p.id === idParam);
+        if (item) return String(item.protocolo);
+        return idParam;
+      }
+    }
+  } catch {}
+  if (texto.includes("/")) return texto.split("/").pop() || texto;
+  return texto;
+}
+
 function RegistrarRetiradaPorteiroPage() {
   const _router = useRouter();
   const searchParams = useSearchParams();
@@ -311,6 +331,10 @@ function RegistrarRetiradaPorteiroPage() {
 
   const iniciarScanner = () => {
     setError("");
+    if (typeof window !== "undefined" && !window.isSecureContext) {
+      setError("A leitura de QR Code exige HTTPS. Abra o sistema em uma URL segura (https://) ou via localhost.");
+      return;
+    }
     setShowScanner(true);
     Html5Qrcode.getCameras().then((devices) => {
       if (devices?.length) {
@@ -325,7 +349,14 @@ function RegistrarRetiradaPorteiroPage() {
       }
     }).catch((err) => {
       console.error(err);
-      setError("Erro ao acessar câmeras.");
+      const nome = (err && (err.name || err.code)) || "";
+      if (String(nome).includes("NotAllowed") || String(err).includes("Permission")) {
+        setError("Permissão de câmera negada. Habilite o acesso à câmera nas configurações do navegador.");
+      } else if (String(nome).includes("NotFound") || String(nome).includes("OverconstrainedError")) {
+        setError("Nenhuma câmera disponível neste dispositivo.");
+      } else {
+        setError("Erro ao acessar câmeras. Verifique permissões e conexão HTTPS.");
+      }
       setShowScanner(false);
     });
   };
@@ -341,9 +372,7 @@ function RegistrarRetiradaPorteiroPage() {
         scanner.stop().then(() => {
           scanner.clear();
           setShowScanner(false);
-          let codigoLimpo = decodedText.trim();
-          if (codigoLimpo.includes("/")) codigoLimpo = codigoLimpo.split("/").pop()!;
-          setBusca(codigoLimpo);
+          setBusca(resolverCodigoQR(decodedText, todosPendentes));
         }).catch(console.error);
       },
       () => {} 
