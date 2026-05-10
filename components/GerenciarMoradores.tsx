@@ -588,6 +588,7 @@ export default function GerenciarMoradores({ condominioId: adminCondominioId }: 
         unidade: findIdx(["unidade", "apto", "apartamento"]),
         compl: findIdx(["complemento", "obs"]),
         ativo: findIdx(["ativo", "status"]),
+        senha: findIdx(["senha", "password"]),
       };
 
       if (idx.nome === -1 || idx.email === -1 || idx.bloco === -1 || idx.unidade === -1) {
@@ -697,7 +698,9 @@ export default function GerenciarMoradores({ condominioId: adminCondominioId }: 
               headers: { "Content-Type": "application/json" },
               body: JSON.stringify({
                 email,
-                senha: gerarSenhaTemporaria(),
+                senha: (idx.senha !== -1 && String(row[idx.senha] || "").trim().length >= 6)
+                  ? String(row[idx.senha]).trim()
+                  : SENHA_INICIAL_PADRAO,
                 nome,
                 role: "morador",
                 condominioId: targetCondominioId,
@@ -885,10 +888,10 @@ export default function GerenciarMoradores({ condominioId: adminCondominioId }: 
                 <h3 className="text-lg font-bold mb-4">Importar Excel</h3>
                 <input type="file" accept=".xlsx,.xls" onChange={e => setArquivoImportacao(e.target.files?.[0] || null)} className="mb-4" />
                 <div className="bg-gray-100 p-2 text-xs rounded mb-4">
-                    Colunas: Nome | Email | WhatsApp | Perfil | Bloco | Unidade
+                    Colunas: Nome | Email | WhatsApp | Perfil | Bloco | Unidade | Senha
                 </div>
                 <div className="bg-yellow-50 border border-yellow-200 text-yellow-800 p-2 text-xs rounded mb-4">
-                    <strong>Senha inicial:</strong> {SENHA_INICIAL_PADRAO} — cada morador será solicitado a redefinir no primeiro login.
+                    <strong>Senha:</strong> mínimo 6 caracteres. Se vazia ou ausente, usa <strong>{SENHA_INICIAL_PADRAO}</strong>. O morador é solicitado a redefinir no primeiro login.
                 </div>
                 {logImportacao.length > 0 && <div className="max-h-32 overflow-auto bg-gray-50 p-2 mb-4 text-xs">{logImportacao.map((l, i) => <p key={i}>{l}</p>)}</div>}
                 <div className="flex gap-2">
