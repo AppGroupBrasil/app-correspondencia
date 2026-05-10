@@ -15,8 +15,7 @@ set +a
 : "${NEXT_PUBLIC_SUPABASE_ANON_KEY:?NEXT_PUBLIC_SUPABASE_ANON_KEY não configurada}"
 : "${SUPABASE_SERVICE_ROLE_KEY:?SUPABASE_SERVICE_ROLE_KEY não configurada}"
 : "${SUPABASE_JWT_SECRET:?SUPABASE_JWT_SECRET não configurada}"
-: "${SMTP_USER:?SMTP_USER não configurado}"
-: "${SMTP_PASS:?SMTP_PASS não configurado}"
+: "${RESEND_API_KEY:?RESEND_API_KEY não configurada}"
 : "${EMAIL_FROM:?EMAIL_FROM não configurado}"
 : "${EMAIL_REPLY_TO:?EMAIL_REPLY_TO não configurado}"
 
@@ -42,13 +41,10 @@ docker run -d \
   -e NEXT_PUBLIC_SUPABASE_ANON_KEY="$NEXT_PUBLIC_SUPABASE_ANON_KEY" \
   -e SUPABASE_SERVICE_ROLE_KEY="$SUPABASE_SERVICE_ROLE_KEY" \
   -e SUPABASE_JWT_SECRET="$SUPABASE_JWT_SECRET" \
-  -e SMTP_HOST="${SMTP_HOST:-smtp.gmail.com}" \
-  -e SMTP_PORT="${SMTP_PORT:-587}" \
-  -e SMTP_USER="$SMTP_USER" \
-  -e SMTP_PASS="$SMTP_PASS" \
+  -e RESEND_API_KEY="$RESEND_API_KEY" \
   -e EMAIL_FROM="$EMAIL_FROM" \
   -e EMAIL_REPLY_TO="$EMAIL_REPLY_TO" \
-  -e SMTP_ADMIN_EMAIL="${SMTP_ADMIN_EMAIL:-$SMTP_USER}" \
+  -e SMTP_ADMIN_EMAIL="${SMTP_ADMIN_EMAIL:-$EMAIL_FROM}" \
   -l traefik.enable=true \
   -l traefik.http.routers.corresp-http.entrypoints=http \
   -l "traefik.http.routers.corresp-http.rule=Host(${BT}appcorrespondencia.com.br${BT}) || Host(${BT}www.appcorrespondencia.com.br${BT})" \

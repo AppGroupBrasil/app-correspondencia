@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import nodemailer from 'nodemailer';
+import { Resend } from 'resend';
 import { createServerClient } from '@/app/lib/supabase';
 import { emailNovoCadastroAdmin } from '@/app/lib/email-templates/novo-cadastro-admin';
 
@@ -70,22 +70,16 @@ async function notificarAdminNovoCadastro(dados: {
   whatsapp?: string;
 }) {
   const adminEmail = process.env.SMTP_ADMIN_EMAIL;
-  const smtpUser = process.env.SMTP_USER;
-  const smtpPass = process.env.SMTP_PASS;
+  const resendKey = process.env.RESEND_API_KEY;
+  const fromEmail = process.env.EMAIL_FROM;
 
-  if (!adminEmail || !smtpUser || !smtpPass) {
-    console.warn('[Criar Usuário] SMTP_ADMIN_EMAIL, SMTP_USER ou SMTP_PASS não configurados. Notificação não enviada.');
+  if (!adminEmail || !resendKey || !fromEmail) {
+    console.warn('[Criar Usuário] SMTP_ADMIN_EMAIL, RESEND_API_KEY ou EMAIL_FROM não configurados. Notificação não enviada.');
     return;
   }
 
   try {
-    const transporter = nodemailer.createTransport({
-      host: process.env.SMTP_HOST || 'smtp.gmail.com',
-      port: Number(process.env.SMTP_PORT) || 587,
-      secure: false,
-      auth: { user: smtpUser, pass: smtpPass },
-    });
-
+    const resend = new Resend(resendKey);
     const htmlContent = emailNovoCadastroAdmin({
       nomeUsuario: dados.nome,
       emailUsuario: dados.email,
@@ -96,16 +90,16 @@ async function notificarAdminNovoCadastro(dados: {
       whatsapp: dados.whatsapp,
     });
 
-    await transporter.sendMail({
-      from: process.env.EMAIL_FROM || smtpUser,
+    const { error } = await resend.emails.send({
+      from: fromEmail,
       to: adminEmail,
       subject: `🆕 Novo cadastro: ${dados.nome} (${dados.role})`,
       html: htmlContent,
     });
-
-    console.log(`[Criar Usuário] ✅ Notificação de novo cadastro enviada para ${adminEmail}`);
+    if (error) throw error;
+    console.log(`[Criar Usuário] ✅ Notificação enviada para ${adminEmail}`);
   } catch (err) {
-    console.error('[Criar Usuário] ⚠️ Falha ao enviar notificação de novo cadastro:', err);
+    console.error('[Criar Usuário] ⚠️ Falha ao notificar novo cadastro:', err);
   }
 }
 
