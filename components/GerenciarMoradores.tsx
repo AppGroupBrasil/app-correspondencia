@@ -97,11 +97,8 @@ const validarEmail = (email: string) => {
     return re.test(emailLimpo);
 };
 
-const gerarSenhaTemporaria = () => {
-  const bytes = new Uint32Array(2);
-  globalThis.crypto.getRandomValues(bytes);
-  return `Tmp!${bytes[0].toString(36)}${bytes[1].toString(36)}`;
-};
+const SENHA_INICIAL_PADRAO = "123456";
+const gerarSenhaTemporaria = () => SENHA_INICIAL_PADRAO;
 
 // ============================================================================
 // 3. Componente Principal
@@ -889,6 +886,9 @@ export default function GerenciarMoradores({ condominioId: adminCondominioId }: 
                 <input type="file" accept=".xlsx,.xls" onChange={e => setArquivoImportacao(e.target.files?.[0] || null)} className="mb-4" />
                 <div className="bg-gray-100 p-2 text-xs rounded mb-4">
                     Colunas: Nome | Email | WhatsApp | Perfil | Bloco | Unidade
+                </div>
+                <div className="bg-yellow-50 border border-yellow-200 text-yellow-800 p-2 text-xs rounded mb-4">
+                    <strong>Senha inicial:</strong> {SENHA_INICIAL_PADRAO} — cada morador será solicitado a redefinir no primeiro login.
                 </div>
                 {logImportacao.length > 0 && <div className="max-h-32 overflow-auto bg-gray-50 p-2 mb-4 text-xs">{logImportacao.map((l, i) => <p key={i}>{l}</p>)}</div>}
                 <div className="flex gap-2">
