@@ -43,4 +43,4 @@ function BlocosAdminPage() {
   );
 }
 
-export default withAuth(BlocosAdminPage, ["adminMaster"]);
+export default withAuth(BlocosAdminPage, ["adminMaster", "admin"]);

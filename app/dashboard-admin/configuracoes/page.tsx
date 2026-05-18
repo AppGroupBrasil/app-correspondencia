@@ -176,4 +176,4 @@ function ConfiguracoesAdminPage() {
   );
 }
 
-export default withAuth(ConfiguracoesAdminPage, ["adminMaster"]);
+export default withAuth(ConfiguracoesAdminPage, ["adminMaster", "admin"]);

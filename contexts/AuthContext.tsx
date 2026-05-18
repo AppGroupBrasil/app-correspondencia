@@ -22,12 +22,14 @@ export interface UserData {
   apartamento?: string;
   bloco?: string;
   ativo?: boolean;
+  condominiosVinculados?: string[];
 }
 
 export interface UseAuthReturn {
   uid?: string;
   role?: "adminMaster" | "responsavel" | "porteiro" | "morador" | "admin";
   condominioId: string;
+  condominiosVinculados: string[];
   user?: UserData;
   loading: boolean;
   error: string | null;
@@ -42,6 +44,7 @@ export function AuthProvider({ children }: Readonly<{ children: React.ReactNode 
   const router = useRouter();
   const [uid, setUid] = useState<string | undefined>(undefined);
   const [condominioId, setCondominioId] = useState<string>("");
+  const [condominiosVinculados, setCondominiosVinculados] = useState<string[]>([]);
   const [role, setRole] = useState<UserData["role"] | undefined>(undefined);
   const [user, setUser] = useState<UserData | undefined>(undefined);
   const [loading, setLoading] = useState<boolean>(true);
@@ -51,6 +54,7 @@ export function AuthProvider({ children }: Readonly<{ children: React.ReactNode 
     setUid(undefined);
     setRole(undefined);
     setCondominioId("");
+    setCondominiosVinculados([]);
     setUser(undefined);
     if (globalThis.window !== undefined) {
       localStorage.removeItem(CACHE_KEY);
@@ -74,6 +78,15 @@ export function AuthProvider({ children }: Readonly<{ children: React.ReactNode 
         return;
       }
 
+      let vinculados: string[] = [];
+      if (profile.role === "admin") {
+        const { data: vinc } = await supabase
+          .from("admin_condominios")
+          .select("condominio_id")
+          .eq("admin_id", authUser.id);
+        vinculados = (vinc || []).map((v: { condominio_id: string }) => v.condominio_id);
+      }
+
       const userData: UserData = {
         uid: authUser.id,
         email: authUser.email || profile.email || "",
@@ -84,10 +97,12 @@ export function AuthProvider({ children }: Readonly<{ children: React.ReactNode 
         apartamento: profile.apartamento,
         bloco: profile.bloco_nome,
         ativo: profile.ativo !== false,
+        condominiosVinculados: vinculados,
       };
 
       setRole(profile.role);
       setCondominioId(profile.condominio_id || "");
+      setCondominiosVinculados(vinculados);
       setUser(userData);
       localStorage.setItem(
         CACHE_KEY,
@@ -190,8 +205,8 @@ export function AuthProvider({ children }: Readonly<{ children: React.ReactNode 
   }, [syncAuthState]);
 
   const value = useMemo<UseAuthReturn>(
-    () => ({ uid, role, condominioId, user, loading, error, logout }),
-    [uid, role, condominioId, user, loading, error, logout]
+    () => ({ uid, role, condominioId, condominiosVinculados, user, loading, error, logout }),
+    [uid, role, condominioId, condominiosVinculados, user, loading, error, logout]
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

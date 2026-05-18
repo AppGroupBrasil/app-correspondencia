@@ -19,4 +19,4 @@ function MoradoresAdminPage() {
   );
 }
 
-export default withAuth(MoradoresAdminPage, ["adminMaster"]);
+export default withAuth(MoradoresAdminPage, ["adminMaster", "admin"]);

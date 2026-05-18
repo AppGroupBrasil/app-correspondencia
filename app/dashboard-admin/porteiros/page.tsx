@@ -19,4 +19,4 @@ function PorteirosAdminPage() {
   );
 }
 
-export default withAuth(PorteirosAdminPage, ["adminMaster"]);
+export default withAuth(PorteirosAdminPage, ["adminMaster", "admin"]);

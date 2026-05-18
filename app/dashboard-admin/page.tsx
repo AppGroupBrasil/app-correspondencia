@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { supabase } from "@/app/lib/supabase";
 import Navbar from "@/components/Navbar";
 import withAuth from "@/components/withAuth";
+import { useAuth } from "@/hooks/useAuth";
 import { 
   Building2, 
   Users, 
@@ -16,6 +17,8 @@ import {
 
 function DashboardAdminPage() {
   const router = useRouter();
+  const { role } = useAuth();
+  const isMaster = role === "adminMaster";
   const [stats, setStats] = useState({
     condominios: 0,
     responsaveis: 0,
@@ -113,19 +116,37 @@ function DashboardAdminPage() {
         <h2 className="text-xl font-bold text-gray-800 mb-4">Gerenciamento</h2>
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
           
-          {/* Card Condomínios */}
-          <button
-            onClick={() => router.push("/dashboard-admin/condominios")}
-            className="group bg-white p-6 rounded-xl shadow-md hover:shadow-xl transition-all border border-gray-100 hover:border-blue-500 text-left flex flex-col gap-4"
-          >
-            <div className="bg-blue-100 w-12 h-12 rounded-full flex items-center justify-center group-hover:scale-110 transition-transform">
-              <Building2 className="text-blue-600" size={24} />
-            </div>
-            <div>
-              <h3 className="text-lg font-bold text-gray-900 group-hover:text-blue-600">Condomínios</h3>
-              <p className="text-gray-500 text-sm mt-1">Cadastrar e editar condomínios</p>
-            </div>
-          </button>
+          {/* Card Condomínios — apenas adminMaster */}
+          {isMaster && (
+            <button
+              onClick={() => router.push("/dashboard-admin/condominios")}
+              className="group bg-white p-6 rounded-xl shadow-md hover:shadow-xl transition-all border border-gray-100 hover:border-blue-500 text-left flex flex-col gap-4"
+            >
+              <div className="bg-blue-100 w-12 h-12 rounded-full flex items-center justify-center group-hover:scale-110 transition-transform">
+                <Building2 className="text-blue-600" size={24} />
+              </div>
+              <div>
+                <h3 className="text-lg font-bold text-gray-900 group-hover:text-blue-600">Condomínios</h3>
+                <p className="text-gray-500 text-sm mt-1">Cadastrar e editar condomínios</p>
+              </div>
+            </button>
+          )}
+
+          {/* Card Administradoras — apenas adminMaster */}
+          {isMaster && (
+            <button
+              onClick={() => router.push("/dashboard-admin/administradoras")}
+              className="group bg-white p-6 rounded-xl shadow-md hover:shadow-xl transition-all border border-gray-100 hover:border-indigo-500 text-left flex flex-col gap-4"
+            >
+              <div className="bg-indigo-100 w-12 h-12 rounded-full flex items-center justify-center group-hover:scale-110 transition-transform">
+                <ShieldCheck className="text-indigo-600" size={24} />
+              </div>
+              <div>
+                <h3 className="text-lg font-bold text-gray-900 group-hover:text-indigo-600">Administradoras</h3>
+                <p className="text-gray-500 text-sm mt-1">Gerenciar admins e vincular condomínios</p>
+              </div>
+            </button>
+          )}
 
           {/* Card Responsáveis */}
           <button
@@ -177,4 +198,4 @@ function DashboardAdminPage() {
   );
 }
 
-export default withAuth(DashboardAdminPage, ["adminMaster"]);
+export default withAuth(DashboardAdminPage, ["adminMaster", "admin"]);

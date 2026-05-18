@@ -3,9 +3,10 @@
 import { useEffect, useState } from "react";
 import { supabase } from "@/app/lib/supabase";
 import Image from "next/image";
-import { Home, Building2, Users, Building, UserCheck, DoorOpen, CheckCircle, LogOut } from "lucide-react";
+import { Home, Building2, Users, Building, UserCheck, DoorOpen, CheckCircle, LogOut, ShieldCheck } from "lucide-react";
 import { useRouter, usePathname } from "next/navigation";
 import withAuth from "@/components/withAuth";
+import { useAuth } from "@/hooks/useAuth";
 
 function DashboardAdminLayout({
   children,
@@ -17,6 +18,8 @@ function DashboardAdminLayout({
   const [loading, setLoading] = useState(true);
   const router = useRouter();
   const pathname = usePathname();
+  const { role, user } = useAuth();
+  const isMaster = role === "adminMaster";
 
   useEffect(() => {
     carregarCondominios();
@@ -83,7 +86,7 @@ function DashboardAdminLayout({
             {/* Perfil e Sair */}
             <div className="flex items-center space-x-4">
               <span className="text-gray-600 text-sm hidden md:inline">
-                Olá, <span className="font-semibold text-gray-800">Admin Master</span>
+                Olá, <span className="font-semibold text-gray-800">{user?.nome || (isMaster ? "Admin Master" : "Administradora")}</span>
               </span>
               <button
                 onClick={() => {
@@ -133,7 +136,8 @@ function DashboardAdminLayout({
               <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3">
                 {[
                   { href: "/dashboard-admin", icon: Home, label: "Início" },
-                  { href: "/dashboard-admin/condominios", icon: Building2, label: "Condomínios" },
+                  ...(isMaster ? [{ href: "/dashboard-admin/condominios", icon: Building2, label: "Condomínios" }] : []),
+                  ...(isMaster ? [{ href: "/dashboard-admin/administradoras", icon: ShieldCheck, label: "Administradoras" }] : []),
                   { href: "/dashboard-admin/responsaveis", icon: Users, label: "Responsáveis" },
                   { href: `/dashboard-admin/blocos?condominio=${condominioSelecionado}`, icon: Building, label: "Blocos" },
                   { href: `/dashboard-admin/moradores?condominio=${condominioSelecionado}`, icon: UserCheck, label: "Moradores" },
@@ -167,4 +171,4 @@ function DashboardAdminLayout({
   );
 }
 
-export default withAuth(DashboardAdminLayout, ["adminMaster"]);
+export default withAuth(DashboardAdminLayout, ["adminMaster", "admin"]);

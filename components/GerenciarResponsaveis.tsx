@@ -1,9 +1,10 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { Shield, Edit2, Trash2, UserCheck, UserX, Plus, X } from "lucide-react";
+import { Shield, Edit2, Trash2, UserCheck, UserX, Plus, X, ShieldCheck } from "lucide-react";
 import { supabase } from "@/app/lib/supabase";
 import { getApiUrl } from "@/utils/platform";
+import { useAuth } from "@/hooks/useAuth";
 
 interface Responsavel {
   id: string;
@@ -34,6 +35,12 @@ export default function GerenciarResponsaveis() {
   const [whatsapp, setWhatsapp] = useState("");
   const [condominioSelecionado, setCondominioSelecionado] = useState("");
   const [responsavelEditando, setResponsavelEditando] = useState<Responsavel | null>(null);
+
+  const { role } = useAuth();
+  const isMaster = role === "adminMaster";
+  const [promovendo, setPromovendo] = useState<Responsavel | null>(null);
+  const [promoverCondos, setPromoverCondos] = useState<Set<string>>(new Set());
+  const [promovendoSalvando, setPromovendoSalvando] = useState(false);
 
   useEffect(() => {
     carregarDados();
@@ -135,6 +142,42 @@ export default function GerenciarResponsaveis() {
     }
   };
 
+  const abrirPromover = (resp: Responsavel) => {
+    const inicial = new Set<string>();
+    if (resp.condominioId) inicial.add(resp.condominioId);
+    setPromoverCondos(inicial);
+    setPromovendo(resp);
+  };
+
+  const togglePromoverCondo = (id: string) => {
+    const novo = new Set(promoverCondos);
+    if (novo.has(id)) novo.delete(id); else novo.add(id);
+    setPromoverCondos(novo);
+  };
+
+  const confirmarPromocao = async () => {
+    if (!promovendo) return;
+    if (promoverCondos.size === 0) { alert("Selecione ao menos um condomínio."); return; }
+    setPromovendoSalvando(true);
+    try {
+      const { error: e1 } = await supabase
+        .from("users").update({ role: "admin", condominio_id: null }).eq("id", promovendo.id);
+      if (e1) throw e1;
+      const rows = Array.from(promoverCondos).map(c => ({ admin_id: promovendo.id, condominio_id: c }));
+      const { error: e2 } = await supabase
+        .from("admin_condominios").upsert(rows, { onConflict: "admin_id,condominio_id" });
+      if (e2) throw e2;
+      alert(`${promovendo.nome} agora é Administradora.`);
+      setPromovendo(null);
+      setPromoverCondos(new Set());
+      carregarDados();
+    } catch (e: any) {
+      alert("Falha ao promover: " + (e?.message || e));
+    } finally {
+      setPromovendoSalvando(false);
+    }
+  };
+
   const excluirResponsavel = async (responsavel: Responsavel) => {
     if (!confirm(`Tem certeza que deseja excluir ${responsavel.nome}?`)) return;
     try {
@@ -199,6 +242,11 @@ export default function GerenciarResponsaveis() {
           <button onClick={() => alternarStatus(resp)} className="p-2 text-yellow-600 hover:bg-yellow-50 rounded">
             {resp.status === 'ativo' ? <UserX size={18} /> : <UserCheck size={18} />}
           </button>
+          {isMaster && (
+            <button onClick={() => abrirPromover(resp)} className="p-2 text-indigo-600 hover:bg-indigo-50 rounded" title="Promover a Administradora">
+              <ShieldCheck size={18} />
+            </button>
+          )}
           <button onClick={() => excluirResponsavel(resp)} className="p-2 text-red-600 hover:bg-red-50 rounded">
             <Trash2 size={18} />
           </button>
@@ -274,6 +322,39 @@ export default function GerenciarResponsaveis() {
 
               <button onClick={salvarResponsavel} disabled={loading} className="w-full bg-green-600 text-white py-2 rounded font-bold hover:bg-green-700 disabled:opacity-50">
                 {loading ? "Salvando..." : "Salvar"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal Promover a Administradora */}
+      {promovendo && (
+        <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-xl shadow-lg p-6 w-full max-w-md max-h-[90vh] overflow-y-auto">
+            <div className="flex justify-between items-center mb-4 border-b pb-2">
+              <h3 className="font-bold text-lg flex items-center gap-2">
+                <ShieldCheck className="text-indigo-600" /> Promover a Administradora
+              </h3>
+              <button onClick={() => setPromovendo(null)}><X size={24} className="text-gray-400" /></button>
+            </div>
+            <p className="text-sm text-gray-700 mb-3">
+              <strong>{promovendo.nome}</strong> passará a ter perfil de Administradora, com acesso aos condomínios marcados abaixo.
+            </p>
+            <div className="max-h-60 overflow-y-auto border rounded-lg p-2 space-y-1 mb-4">
+              {condominios.length === 0 ? (
+                <p className="text-sm text-gray-500 px-2 py-1">Nenhum condomínio cadastrado.</p>
+              ) : condominios.map(c => (
+                <label key={c.id} className="flex items-center gap-2 px-2 py-1 hover:bg-gray-50 rounded cursor-pointer">
+                  <input type="checkbox" checked={promoverCondos.has(c.id)} onChange={() => togglePromoverCondo(c.id)} />
+                  <span>{c.nome}</span>
+                </label>
+              ))}
+            </div>
+            <div className="flex justify-end gap-2">
+              <button onClick={() => setPromovendo(null)} className="px-4 py-2 border rounded-lg">Cancelar</button>
+              <button onClick={confirmarPromocao} disabled={promovendoSalvando} className="px-4 py-2 bg-indigo-600 text-white rounded-lg disabled:opacity-50">
+                {promovendoSalvando ? "Promovendo..." : "Promover"}
               </button>
             </div>
           </div>

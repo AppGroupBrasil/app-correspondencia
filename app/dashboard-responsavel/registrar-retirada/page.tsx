@@ -289,31 +289,60 @@ function RegistrarRetiradaResponsavelPage() {
     }
   };
 
-  const processarLeitura = (conteudo: string) => {
+  const processarLeitura = async (conteudo: string) => {
     if (!conteudo) return;
     try {
       if (navigator.vibrate) navigator.vibrate(200);
     } catch {}
     const texto = conteudo.trim();
-    let codigoLimpo = texto;
+    const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+    let candidato = texto;
     try {
-      if (/^https?:\/\//i.test(texto) || texto.includes("?")) {
+      if (texto.startsWith("{")) {
+        const obj = JSON.parse(texto);
+        if (obj?.p) candidato = String(obj.p);
+        else if (obj?.id) candidato = String(obj.id);
+      } else if (/^https?:\/\//i.test(texto) || texto.includes("?")) {
         const url = new URL(texto, "http://local");
         const idParam = url.searchParams.get("id");
-        if (idParam) {
-          const item = todosPendentes.find((p) => p.id === idParam);
-          codigoLimpo = item ? String(item.protocolo) : idParam;
-        } else if (texto.includes("/")) {
-          codigoLimpo = texto.split("/").pop() || texto;
+        if (idParam) candidato = idParam;
+        else {
+          const ultimo = url.pathname.split("/").filter(Boolean).pop();
+          if (ultimo) candidato = ultimo;
         }
       } else if (texto.includes("/")) {
-        codigoLimpo = texto.split("/").pop() || texto;
+        candidato = texto.split("/").filter(Boolean).pop() || texto;
       }
     } catch {
-      if (texto.includes("/")) codigoLimpo = texto.split("/").pop() || texto;
+      if (texto.includes("/")) {
+        candidato = texto.split("/").filter(Boolean).pop() || texto;
+      }
     }
+
     setMostrarCamera(false);
-    setBusca(codigoLimpo);
+
+    const local = todosPendentes.find((p) => p.id === candidato);
+    if (local) {
+      setBusca(String(local.protocolo));
+      return;
+    }
+    if (UUID_REGEX.test(candidato) && user?.condominioId) {
+      try {
+        const { data } = await supabase
+          .from("correspondencias")
+          .select("protocolo")
+          .eq("id", candidato)
+          .eq("condominio_id", user.condominioId)
+          .maybeSingle();
+        if (data?.protocolo) {
+          await carregarDadosIniciais();
+          setBusca(String(data.protocolo));
+          return;
+        }
+      } catch (e) { console.warn("Falha ao buscar por id do QR:", e); }
+    }
+    setBusca(candidato);
   };
 
   const prepararMensagemRetirada = useCallback(
@@ -345,6 +374,20 @@ function RegistrarRetiradaResponsavelPage() {
     },
     [getFormattedMessage, user?.nome]
   );
+
+  useEffect(() => {
+    const termo = busca.trim();
+    if (!termo || showModal || correspondenciaSelecionada) return;
+    const match = todosPendentes.find((p) => String(p.protocolo) === termo);
+    if (match) {
+      (async () => {
+        setCorrespondenciaSelecionada(match);
+        await prepararMensagemRetirada(match);
+        setShowModal(true);
+      })();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [busca, todosPendentes]);
 
   const handleRetiradaSuccess = () => {
     setShowModal(false);
@@ -459,6 +502,11 @@ function RegistrarRetiradaResponsavelPage() {
                     onScan={(result) =>
                       result?.[0] && processarLeitura(result[0].rawValue)
                     }
+                    formats={["qr_code"]}
+                    constraints={{ facingMode: { ideal: "environment" } }}
+                    scanDelay={250}
+                    allowMultiple={false}
+                    components={{ finder: true, torch: true, zoom: true }}
                     onError={(err) => {
                       console.error("Scanner error:", err);
                       const nome = (err as { name?: string })?.name || "";

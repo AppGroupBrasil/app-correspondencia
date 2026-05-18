@@ -21,4 +21,4 @@ function ResponsaveisAdminPage() {
   );
 }
 
-export default withAuth(ResponsaveisAdminPage, ["adminMaster"]);
+export default withAuth(ResponsaveisAdminPage, ["adminMaster", "admin"]);

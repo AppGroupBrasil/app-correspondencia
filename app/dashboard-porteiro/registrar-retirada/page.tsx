@@ -52,24 +52,39 @@ interface CorrespondenciaDocument {
   moradorTelefone?: string;
 }
 
-function resolverCodigoQR(
-  decodedText: string,
-  pendentes: { id: string; protocolo: string }[]
-): string {
+const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+function extrairCandidato(decodedText: string): string {
   const texto = decodedText.trim();
+  try {
+    if (texto.startsWith("{")) {
+      const obj = JSON.parse(texto);
+      if (obj?.p) return String(obj.p);
+      if (obj?.id) return String(obj.id);
+    }
+  } catch {}
   try {
     if (/^https?:\/\//i.test(texto) || texto.includes("?")) {
       const url = new URL(texto, "http://local");
       const idParam = url.searchParams.get("id");
-      if (idParam) {
-        const item = pendentes.find((p) => p.id === idParam);
-        if (item) return String(item.protocolo);
-        return idParam;
-      }
+      if (idParam) return idParam;
+      const ultimo = url.pathname.split("/").filter(Boolean).pop();
+      if (ultimo) return ultimo;
     }
   } catch {}
-  if (texto.includes("/")) return texto.split("/").pop() || texto;
+  if (texto.includes("/")) {
+    return texto.split("/").filter(Boolean).pop() || texto;
+  }
   return texto;
+}
+
+function resolverCodigoQR(
+  decodedText: string,
+  pendentes: { id: string; protocolo: string }[]
+): string {
+  const candidato = extrairCandidato(decodedText);
+  const item = pendentes.find((p) => p.id === candidato);
+  return item ? String(item.protocolo) : candidato;
 }
 
 function RegistrarRetiradaPorteiroPage() {
@@ -367,12 +382,42 @@ function RegistrarRetiradaPorteiroPage() {
     scannerRef.current = scanner;
     scanner.start(
       cameraId,
-      { fps: 10, qrbox: { width: 250, height: 250 } },
+      {
+        fps: 15,
+        qrbox: (viewWidth: number, viewHeight: number) => {
+          const size = Math.floor(Math.min(viewWidth, viewHeight) * 0.85);
+          return { width: size, height: size };
+        },
+        aspectRatio: 1.0,
+        disableFlip: false,
+        experimentalFeatures: { useBarCodeDetectorIfSupported: true },
+      } as any,
       (decodedText) => {
-        scanner.stop().then(() => {
+        scanner.stop().then(async () => {
           scanner.clear();
           setShowScanner(false);
-          setBusca(resolverCodigoQR(decodedText, todosPendentes));
+          const candidato = extrairCandidato(decodedText);
+          const local = todosPendentes.find((p) => p.id === candidato);
+          if (local) {
+            setBusca(String(local.protocolo));
+            return;
+          }
+          if (UUID_REGEX.test(candidato) && user?.condominioId) {
+            try {
+              const { data } = await supabase
+                .from("correspondencias")
+                .select("protocolo")
+                .eq("id", candidato)
+                .eq("condominio_id", user.condominioId)
+                .maybeSingle();
+              if (data?.protocolo) {
+                await carregarPendencias();
+                setBusca(String(data.protocolo));
+                return;
+              }
+            } catch (e) { console.warn("Falha ao buscar por id do QR:", e); }
+          }
+          setBusca(candidato);
         }).catch(console.error);
       },
       () => {} 
@@ -422,6 +467,16 @@ function RegistrarRetiradaPorteiroPage() {
       await prepararMensagemRetirada(item);
       setShowModal(true);
   };
+
+  useEffect(() => {
+    const termo = busca.trim();
+    if (!termo || showModal || correspondenciaSelecionada) return;
+    const match = todosPendentes.find((p) => String(p.protocolo) === termo);
+    if (match) {
+      handleSelecionarItem(match);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [busca, todosPendentes]);
 
   const handleRetiradaSuccess = () => {
     setShowModal(false);
