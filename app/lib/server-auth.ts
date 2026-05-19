@@ -2,6 +2,52 @@ import "server-only";
 
 import type { NextRequest } from "next/server";
 import { createServerClient } from "@/app/lib/supabase";
+import { jwtVerify } from "jose";
+
+const APP_SLUG = "app-correspondencia";
+const STATUS_VALIDOS_LICENCA = new Set(["ativa", "trial"]);
+const JWT_SECRET = process.env.JWT_SECRET || "";
+
+function mapearRoleCentral(role: string): AppRole {
+  const r = (role || "").toLowerCase();
+  if (r === "superadmin" || r === "master") return "adminMaster";
+  if (r === "admin" || r === "administrador") return "admin";
+  if (r === "responsavel" || r === "supervisor") return "responsavel";
+  if (r === "porteiro") return "porteiro";
+  return "morador";
+}
+
+async function tryVerifyCentralToken(token: string): Promise<null | { sub: string; email: string; nome: string; apps: Array<{ slug: string; role: string; status: string; expira_em: string | null }> }> {
+  if (!JWT_SECRET) return null;
+  try {
+    const { payload } = await jwtVerify(token, new TextEncoder().encode(JWT_SECRET));
+    if (!Array.isArray((payload as any).apps)) return null;
+    return payload as any;
+  } catch {
+    return null;
+  }
+}
+
+async function ensureProfileFromCentral(uid: string, email: string, nome: string, roleCentral: string): Promise<{ role: AppRole; condominioId: string | null } | null> {
+  const supabaseAdmin = createServerClient();
+  const { data: existing } = await supabaseAdmin.from("users").select("*").eq("id", uid).single();
+  if (existing) {
+    const role = ((existing.role as string) || "morador") as AppRole;
+    return { role, condominioId: existing.condominio_id || null };
+  }
+  const roleLocal = mapearRoleCentral(roleCentral);
+  const { error } = await supabaseAdmin.from("users").insert({
+    id: uid,
+    email,
+    nome,
+    role: roleLocal,
+  });
+  if (error) {
+    console.error("[server-auth] Falha provisionar via central:", error.message);
+    return null;
+  }
+  return { role: roleLocal, condominioId: null };
+}
 
 export type AppRole = "adminMaster" | "admin" | "responsavel" | "porteiro" | "morador";
 
@@ -76,6 +122,33 @@ export async function requireRequestAuth(
     throw new RequestAuthError(401, "Token de autenticação ausente.");
   }
 
+  // 1) Tenta token do auth-central
+  const central = await tryVerifyCentralToken(token);
+  if (central) {
+    const licenca = central.apps.find((a) => a.slug === APP_SLUG);
+    if (!licenca || !STATUS_VALIDOS_LICENCA.has(licenca.status)) {
+      throw new RequestAuthError(403, "Sem licença ativa para App Correspondência.");
+    }
+    if (licenca.expira_em && new Date(licenca.expira_em) < new Date()) {
+      throw new RequestAuthError(403, "Licença expirada.");
+    }
+    const provisioned = await ensureProfileFromCentral(central.sub, central.email, central.nome, licenca.role);
+    if (!provisioned) {
+      throw new RequestAuthError(500, "Falha ao provisionar perfil.");
+    }
+    const ctx: RequestAuthContext = {
+      uid: central.sub,
+      email: central.email,
+      role: provisioned.role,
+      condominioId: provisioned.condominioId || "",
+    };
+    if (allowedRoles && !allowedRoles.includes(ctx.role)) {
+      throw new RequestAuthError(403, "Usuário sem permissão para esta operação.");
+    }
+    return ctx;
+  }
+
+  // 2) Fallback: token Supabase
   const supabaseAdmin = createServerClient();
   const { data: { user: authUser }, error } = await supabaseAdmin.auth.getUser(token);
 
