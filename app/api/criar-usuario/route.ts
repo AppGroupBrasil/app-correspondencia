@@ -189,8 +189,22 @@ export async function POST(req: NextRequest) {
       finalCondominioId = condData.id;
     }
 
-    // Inserir na tabela users (remove campos que não são colunas da tabela)
-    const { condominio_nome: _cn, ...dadosParaInserir } = normalizedDados;
+    // Inserir na tabela users — whitelist de colunas que realmente existem
+    // no schema da tabela `users` (ver supabase/schema.sql).
+    const USERS_COLUMNS = new Set([
+      'telefone', 'whatsapp', 'cpf', 'bloco_id', 'bloco_nome',
+      'apartamento', 'unidade_nome', 'foto_url', 'assinatura_padrao',
+      'ativo', 'aprovado',
+    ]);
+    const dadosParaInserir: Record<string, any> = {};
+    for (const [k, v] of Object.entries(normalizedDados)) {
+      if (USERS_COLUMNS.has(k)) dadosParaInserir[k] = v;
+    }
+    // numero_unidade do form mapeia para a coluna apartamento
+    if (!dadosParaInserir.apartamento && (normalizedDados as any).numero_unidade) {
+      dadosParaInserir.apartamento = (normalizedDados as any).numero_unidade;
+    }
+
     const userData = {
       id: uid,
       nome,
