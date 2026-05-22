@@ -189,14 +189,15 @@ export async function POST(req: NextRequest) {
       finalCondominioId = condData.id;
     }
 
-    // Inserir na tabela users
+    // Inserir na tabela users (remove campos que não são colunas da tabela)
+    const { condominio_nome: _cn, ...dadosParaInserir } = normalizedDados;
     const userData = {
       id: uid,
       nome,
       email,
       role,
       condominio_id: finalCondominioId,
-      ...normalizedDados,
+      ...dadosParaInserir,
       criado_em: new Date().toISOString(),
     };
 
