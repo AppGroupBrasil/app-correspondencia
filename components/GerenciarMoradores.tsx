@@ -142,6 +142,8 @@ export default function GerenciarMoradores({ condominioId: adminCondominioId }: 
   const [logImportacao, setLogImportacao] = useState<string[]>([]);
 
   const targetCondominioId = adminCondominioId || user?.condominioId || fetchedCondominioId;
+  // Master vê tudo quando não há condomínio escolhido explicitamente via prop.
+  const isMaster = user?.role === "adminMaster" && !adminCondominioId;
   const backRoute = user?.role === "porteiro" ? "/dashboard-porteiro" : "/dashboard-responsavel";
 
   // 🔥 COLEI A FUNÇÃO AQUI PARA VOCÊ
@@ -174,9 +176,9 @@ export default function GerenciarMoradores({ condominioId: adminCondominioId }: 
   }, [user, adminCondominioId]);
 
   useEffect(() => {
-    if (targetCondominioId) carregarDados();
+    if (targetCondominioId || isMaster) carregarDados();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [targetCondominioId]);
+  }, [targetCondominioId, isMaster]);
 
   const carregarDados = async () => {
     setLoading(true);
@@ -186,10 +188,9 @@ export default function GerenciarMoradores({ condominioId: adminCondominioId }: 
 
   const carregarBlocos = async () => {
     try {
-      const { data, error } = await supabase
-        .from("blocos")
-        .select("id, nome")
-        .eq("condominio_id", targetCondominioId);
+      let q = supabase.from("blocos").select("id, nome");
+      if (!isMaster) q = q.eq("condominio_id", targetCondominioId);
+      const { data, error } = await q;
       if (error) throw error;
       const mapped = (data || []).map((d: any) => ({ id: d.id, nome: d.nome })) as Bloco[];
       setBlocos(mapped.sort((a, b) => ordenacaoNatural(a.nome, b.nome)));
@@ -200,10 +201,9 @@ export default function GerenciarMoradores({ condominioId: adminCondominioId }: 
 
   const carregarUnidades = async () => {
     try {
-      const { data, error } = await supabase
-        .from("unidades")
-        .select("id, identificacao, tipo, bloco_setor, bloco_id")
-        .eq("condominio_id", targetCondominioId);
+      let q = supabase.from("unidades").select("id, identificacao, tipo, bloco_setor, bloco_id");
+      if (!isMaster) q = q.eq("condominio_id", targetCondominioId);
+      const { data, error } = await q;
       if (error) throw error;
       const mapped = (data || []).map((d: any) => ({
         id: d.id,
@@ -220,11 +220,9 @@ export default function GerenciarMoradores({ condominioId: adminCondominioId }: 
 
   const carregarMoradores = async () => {
     try {
-      const { data, error } = await supabase
-        .from("users")
-        .select("*")
-        .eq("condominio_id", targetCondominioId)
-        .eq("role", "morador");
+      let q = supabase.from("users").select("*").eq("role", "morador");
+      if (!isMaster) q = q.eq("condominio_id", targetCondominioId);
+      const { data, error } = await q;
       if (error) throw error;
       const mapped = (data || []).map((d: any) => ({
         id: d.id,
@@ -738,7 +736,7 @@ export default function GerenciarMoradores({ condominioId: adminCondominioId }: 
     }
   };
 
-  if (!targetCondominioId && !loading) {
+  if (!targetCondominioId && !isMaster && !loading) {
     return (
       <div className="flex flex-col items-center justify-center p-12 text-center">
         <XCircle className="text-red-500 mb-2" size={40} />
