@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { supabase } from '@/app/lib/supabase'
 import Image from 'next/image'
@@ -17,6 +17,18 @@ export default function LoginPage() {
   const [modalEsqueciSenha, setModalEsqueciSenha] = useState(false)
   const [emailRecuperacao, setEmailRecuperacao] = useState('')
   const [loadingRecuperacao, setLoadingRecuperacao] = useState(false)
+  const [lembrar, setLembrar] = useState(false)
+
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem('appcorresp:lembrar')
+      if (!raw) return
+      const saved = JSON.parse(raw) as { email?: string; senha?: string }
+      if (saved.email) setEmail(saved.email)
+      if (saved.senha) setSenha(saved.senha)
+      setLembrar(true)
+    } catch {}
+  }, [])
 
   const demo = process.env.NEXT_PUBLIC_DEMO === 'true'
 
@@ -54,6 +66,14 @@ export default function LoginPage() {
       }
 
       const uid = authData.user.id
+
+      try {
+        if (lembrar) {
+          localStorage.setItem('appcorresp:lembrar', JSON.stringify({ email, senha }))
+        } else {
+          localStorage.removeItem('appcorresp:lembrar')
+        }
+      } catch {}
 
       // 2. Dados do perfil
       const { data: userData, error: profileError } = await supabase.from('users').select('*').eq('id', uid).single()
@@ -128,9 +148,8 @@ export default function LoginPage() {
     // - paddingTop env(...): Protege contra o notch do iPhone.
     <div 
       className="bg-gradient-to-br from-green-50 to-green-100 flex justify-center py-10 px-4 sm:px-6 lg:px-8 overflow-y-auto w-full"
-      style={{ 
+      style={{
         minHeight: '100dvh',
-        paddingTop: 'max(2.5rem, env(safe-area-inset-top))' 
       }}
     >
       
@@ -216,6 +235,16 @@ export default function LoginPage() {
               </button>
             </div>
           </div>
+
+          <label className="flex items-center gap-2 text-sm text-gray-700 select-none cursor-pointer">
+            <input
+              type="checkbox"
+              checked={lembrar}
+              onChange={e => setLembrar(e.target.checked)}
+              className="w-4 h-4 rounded border-gray-300 text-primary-600 focus:ring-primary-500"
+            />
+            Lembrar login e senha neste dispositivo
+          </label>
 
           <button
             type="submit"
