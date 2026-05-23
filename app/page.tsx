@@ -90,10 +90,10 @@ function Hero() {
 
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 relative z-10 grid lg:grid-cols-2 gap-4 items-center py-2 overflow-hidden">
         <div className="space-y-4 text-center lg:text-left">
-          <h1 className="text-[1.65rem] sm:text-4xl md:text-5xl lg:text-7xl font-extrabold text-white leading-[1.5] tracking-tight">
+          <h1 className="text-[1.35rem] sm:text-3xl md:text-4xl lg:text-6xl font-extrabold text-white leading-[1.3] tracking-tight">
             Gestão de<br />
-            <span className="text-[#25D366] break-all">Correspondências</span><br />
-            <span className="block mt-2 sm:mt-4">via WhatsApp</span>
+            <span className="text-[#25D366]">Correspondências</span><br />
+            <span className="block mt-2 sm:mt-3">via WhatsApp</span>
           </h1>
 
           <p className="text-sm sm:text-base md:text-xl text-green-50 max-w-2xl mx-auto lg:mx-0 leading-relaxed">
@@ -130,7 +130,7 @@ function Hero() {
         </div>
 
         <div className="relative lg:h-[550px] flex items-center justify-center">
-          <div className="relative w-[240px] md:w-[300px]">
+          <div className="relative w-[190px] md:w-[250px] mt-4">
             <img
               src="/images/landing/mockup_mobile_real.png"
               alt="App Correspondência Mobile"
@@ -542,7 +542,7 @@ function Pricing() {
               <h3 className="text-2xl font-bold text-gray-900 mb-2">Condomínios Ilimitados</h3>
               <div className="mt-6 flex items-baseline justify-center gap-1">
                 <span className="text-sm text-gray-500 font-medium">R$</span>
-                <span className="text-5xl font-extrabold text-[#057321]">349</span>
+                <span className="text-5xl font-extrabold text-[#057321]">350</span>
                 <span className="text-xl text-gray-500 font-medium">,00</span>
                 <span className="text-gray-400 ml-2">/mês</span>
               </div>
@@ -560,7 +560,7 @@ function Pricing() {
               </ul>
             </div>
             <div className="p-8 bg-gray-50 border-t border-gray-100 mt-auto">
-              <button onClick={() => window.open('https://wa.me/5511933284364?text=Ol%C3%A1!%20Gostaria%20de%20contratar%20o%20plano%20de%20R$%20349,00%20para%20grandes%20condom%C3%ADnios.', '_blank')} className="w-full h-12 text-lg font-bold shadow-md hover:shadow-lg transition-all bg-[#057321] hover:bg-[#045a1a] text-white rounded-lg">
+              <button onClick={() => window.open('https://wa.me/5511933284364?text=Ol%C3%A1!%20Gostaria%20de%20contratar%20o%20plano%20de%20R$%20350,00%20para%20grandes%20condom%C3%ADnios.', '_blank')} className="w-full h-12 text-lg font-bold shadow-md hover:shadow-lg transition-all bg-[#057321] hover:bg-[#045a1a] text-white rounded-lg">
                 Contratar Agora
               </button>
             </div>

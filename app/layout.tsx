@@ -200,6 +200,7 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
             {children}
           </main>
         </AuthProvider>
+        <script src="https://appgroupbrasil.com.br/embed/app-group-banner.js" data-color="#057321" data-routes="/" defer></script>
       </body>
     </html>
   );
