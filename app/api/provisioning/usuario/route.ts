@@ -37,6 +37,17 @@ export async function POST(request: NextRequest) {
     }).eq("id", usuario_id);
     if (error) return NextResponse.json({ error: error.message }, { status: 500 });
   } else {
+    const { data: authUser, error: authErr } = await supabase.auth.admin.getUserById(usuario_id);
+    if (!authUser?.user || authErr) {
+      const { error: createErr } = await supabase.auth.admin.createUser({
+        id: usuario_id,
+        email,
+        email_confirm: true,
+        user_metadata: { nome, provisioned_by: "auth-central" },
+      });
+      if (createErr) return NextResponse.json({ error: `auth.admin.createUser: ${createErr.message}` }, { status: 500 });
+    }
+
     const { error } = await supabase.from("users").insert({
       id: usuario_id,
       email,
