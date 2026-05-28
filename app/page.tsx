@@ -735,21 +735,6 @@ function Footer() {
   )
 }
 
-// ==================== OUR SYSTEMS SECTION ====================
-function OurSystemsSection() {
-  return (
-    <section className="py-24 bg-gray-50">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        <div className="text-center max-w-3xl mx-auto mb-16">
-          <h2 className="text-3xl md:text-4xl font-bold text-gray-900 mb-4">Nossos Sistemas</h2>
-          <p className="text-lg text-[#057321] font-medium">Soluções completas para a gestão do seu condomínio</p>
-        </div>
-        <div id="apps-carousel-root"></div>
-      </div>
-    </section>
-  )
-}
-
 // ==================== WHATSAPP BUTTON ====================
 function WhatsAppButton() {
   return (
@@ -782,7 +767,6 @@ export default function LandingPage() {
         <Features />
         <PresentationSection />
         <TransparencySection />
-        <OurSystemsSection />
       </main>
       <Footer />
       <WhatsAppButton />
