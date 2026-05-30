@@ -9,6 +9,7 @@ import { supabase } from "@/app/lib/supabase";
 import { useAuth } from "@/hooks/useAuth";
 import BotaoVoltar from "@/components/BotaoVoltar";
 import { getApiUrl } from "@/utils/platform";
+import { buildAuthenticatedJsonHeaders } from "@/app/lib/client-auth";
 
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
@@ -48,6 +49,7 @@ export default function GerenciarPorteiros({ condominioId: adminCondominioId }: 
   const [porteiroEditando, setPorteiroEditando] = useState<Porteiro | null>(null);
 
   const targetCondominioId = adminCondominioId || user?.condominioId || fetchedCondominioId;
+  const isMaster = user?.role === "adminMaster" && !targetCondominioId;
   const backRoute = "/dashboard-responsavel";
 
   useEffect(() => {
@@ -71,21 +73,19 @@ export default function GerenciarPorteiros({ condominioId: adminCondominioId }: 
   }, [user, adminCondominioId]);
 
   useEffect(() => {
-    if (targetCondominioId) {
+    if (targetCondominioId || isMaster) {
       carregarPorteiros();
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [targetCondominioId]);
+  }, [targetCondominioId, isMaster]);
 
   const carregarPorteiros = async () => {
-    if (!targetCondominioId) return;
+    if (!targetCondominioId && !isMaster) return;
     try {
       setLoading(true);
-      const { data, error } = await supabase
-        .from("users")
-        .select("*")
-        .eq("role", "porteiro")
-        .eq("condominio_id", targetCondominioId);
+      let query = supabase.from("users").select("*").eq("role", "porteiro");
+      if (!isMaster) query = query.eq("condominio_id", targetCondominioId);
+      const { data, error } = await query;
 
       if (error) throw error;
 
@@ -144,7 +144,7 @@ export default function GerenciarPorteiros({ condominioId: adminCondominioId }: 
         // Criar via API route (server-side) para não deslogar o admin
         const res = await fetch(getApiUrl('/api/criar-usuario'), {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          headers: await buildAuthenticatedJsonHeaders(),
           body: JSON.stringify({
             email,
             senha,
@@ -277,7 +277,7 @@ export default function GerenciarPorteiros({ condominioId: adminCondominioId }: 
     XLSX.writeFile(wb, "porteiros.xlsx");
   };
 
-  if (loading && !targetCondominioId) {
+  if (loading && !targetCondominioId && !isMaster) {
     return (
       <div className="flex items-center justify-center p-12">
         <div className="text-center">
@@ -288,7 +288,7 @@ export default function GerenciarPorteiros({ condominioId: adminCondominioId }: 
     );
   }
 
-  if (!loading && !targetCondominioId) {
+  if (!loading && !targetCondominioId && !isMaster) {
     return (
         <div className="flex flex-col items-center justify-center p-12 text-center">
             <XCircle className="text-red-500 mb-2" size={40} />

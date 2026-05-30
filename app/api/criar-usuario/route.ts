@@ -2,6 +2,18 @@ import { NextRequest, NextResponse } from 'next/server';
 import { Resend } from 'resend';
 import { createServerClient } from '@/app/lib/supabase';
 import { emailNovoCadastroAdmin } from '@/app/lib/email-templates/novo-cadastro-admin';
+import { requireRequestAuth, RequestAuthError, type AppRole } from '@/app/lib/server-auth';
+
+// Roles que o cadastro público pode criar (auto-registro de morador/condomínio).
+const PUBLIC_ROLES = new Set(['morador', 'responsavel']);
+// Roles privilegiados: só podem ser criados por um usuário autenticado com
+// permissão suficiente. Mapeia role-alvo -> quem pode criá-lo.
+const CREATORS_BY_ROLE: Record<string, AppRole[]> = {
+  porteiro: ['responsavel', 'admin', 'adminMaster'],
+  admin: ['admin', 'adminMaster'],
+  adminMaster: ['adminMaster'],
+};
+const VALID_ROLES = new Set(['morador', 'responsavel', 'porteiro', 'admin', 'adminMaster']);
 
 function buildNormalizedDados(body: Record<string, any>) {
   const normalizedDados = body.dados ? { ...body.dados } : {};
@@ -129,6 +141,23 @@ export async function POST(req: NextRequest) {
 
     if (!email || !senha || !role) {
       return NextResponse.json({ error: 'Email, senha e role são obrigatórios' }, { status: 400 });
+    }
+
+    if (!VALID_ROLES.has(role)) {
+      return NextResponse.json({ error: 'Role inválido' }, { status: 400 });
+    }
+
+    // Roles privilegiados exigem token de um usuário com permissão. Os roles
+    // públicos (morador/responsavel) seguem liberados para o auto-cadastro.
+    if (!PUBLIC_ROLES.has(role)) {
+      try {
+        await requireRequestAuth(req, CREATORS_BY_ROLE[role]);
+      } catch (authErr) {
+        if (authErr instanceof RequestAuthError) {
+          return NextResponse.json({ error: authErr.message }, { status: authErr.status });
+        }
+        return NextResponse.json({ error: 'Não autorizado.' }, { status: 401 });
+      }
     }
 
     const normalizedDados = buildNormalizedDados({

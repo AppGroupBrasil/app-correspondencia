@@ -28,9 +28,9 @@ try {
 }
 
 // 2️⃣ ESLINT
-console.log("🧹 2/2 Next lint...");
+console.log("🧹 2/2 ESLint...");
 try {
-  execSync("npx next lint", { stdio: "pipe" }); // ← corrigido
+  execSync("npx eslint . --ext .js,.jsx,.ts,.tsx", { stdio: "pipe" });
   results.lint = true;
 } catch (err) {
   const logPath = path.join(reportsDir, `eslint_${timestamp}.log`);

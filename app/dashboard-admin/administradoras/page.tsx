@@ -5,6 +5,7 @@ import { supabase } from "@/app/lib/supabase";
 import withAuth from "@/components/withAuth";
 import { ShieldCheck, Plus, X, UserPlus, ArrowDownCircle } from "lucide-react";
 import { getApiUrl } from "@/utils/platform";
+import { buildAuthenticatedJsonHeaders } from "@/app/lib/client-auth";
 
 interface UsuarioBase {
   id: string;
@@ -129,7 +130,7 @@ function AdministradorasPage() {
     try {
       const res = await fetch(getApiUrl("/api/criar-usuario"), {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: await buildAuthenticatedJsonHeaders(),
         body: JSON.stringify({
           email: novoEmail,
           senha: novaSenha,
