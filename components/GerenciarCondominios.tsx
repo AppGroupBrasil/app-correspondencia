@@ -1,6 +1,7 @@
 "use client";
 import { useState, useEffect } from "react";
 import { supabase } from "@/app/lib/supabase";
+import { buildAuthenticatedJsonHeaders } from "@/app/lib/client-auth";
 import {
   Building2,
   Plus,
@@ -127,7 +128,7 @@ export default function GerenciarCondominios() {
       // Chama API route para transferir acesso (server-side)
       const res = await fetch('/api/transferir-acesso', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: await buildAuthenticatedJsonHeaders(),
         body: JSON.stringify({ condominioId: condominioEditando.id, novoEmail }),
       });
 

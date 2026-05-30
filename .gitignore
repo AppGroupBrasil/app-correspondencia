@@ -45,3 +45,16 @@ next-env.d.ts
 # OS
 Thumbs.db
 .DS_Store
+
+# Credenciais (apenas local)
+docs/CREDENCIAIS.md
+.env.supabase
+
+# Scripts one-off com service_role key hardcoded (manter local)
+scripts/importar-ldl.mjs
+scripts/aplicar-admin-multi.mjs
+scripts/promover-gap.mjs
+
+# Lixo de build/relatórios
+reports/
+supabase/.temp/

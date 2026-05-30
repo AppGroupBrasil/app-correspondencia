@@ -17,45 +17,25 @@
 ## App Correspondência
 - **Container**: app-correspondencia
 - **Porta**: 3000
-- **Código no servidor**: /apps/correspondencia/
 - **Domínio**: appcorrespondencia.com.br
 - **DNS**: Cloudflare → Hetzner (Traefik) → Container
+- **Stack**: Next.js 16 (standalone) + Supabase + Resend
 
-## Status Atual Verificado em 27/03/2026
-- **SSH**: OK com `~/.ssh/hetzner_key`
-- **Container `app-correspondencia`**: online
-- **Variáveis públicas e Resend**: configuradas no container
-- **Variáveis privadas do Firebase Admin**: ausentes no servidor (`FIREBASE_PROJECT_ID`, `FIREBASE_CLIENT_EMAIL`, `FIREBASE_PRIVATE_KEY`)
+## Stack de dados
+- **Supabase self-hosted**: containers `supabase-db`, `supabase-auth`, `supabase-rest`, `supabase-storage`, `supabase-kong`, `supabase-realtime`, `supabase-studio`, `supabase-meta`
+- **URL pública**: https://supabase.appcorrespondencia.com.br
+- **Tabelas em uso**: users, condominios, blocos, unidades, porteiros, correspondencias, retiradas, avisos_rapidos, configuracoes, configuracoes_retirada, message_templates
 
-## Variáveis Obrigatórias para o Build Atual
-```bash
-NEXT_PUBLIC_BASE_URL=https://appcorrespondencia.com.br
-NEXT_PUBLIC_APP_URL=https://appcorrespondencia.com.br
-NEXT_PUBLIC_FIREBASE_API_KEY=...
-NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN=...
-NEXT_PUBLIC_FIREBASE_PROJECT_ID=correspondencia-9a73a
-NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET=...
-NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID=...
-NEXT_PUBLIC_FIREBASE_APP_ID=...
+## Variáveis do container app-correspondencia
+```
+NEXT_PUBLIC_SUPABASE_URL=https://supabase.appcorrespondencia.com.br
+NEXT_PUBLIC_SUPABASE_ANON_KEY=...
+SUPABASE_SERVICE_ROLE_KEY=...
+SUPABASE_JWT_SECRET=...
 RESEND_API_KEY=...
-EMAIL_FROM=nao-responda@appcorrespondencia.com.br
-EMAIL_REPLY_TO=suporte@appcorrespondencia.com.br
-FIREBASE_PROJECT_ID=correspondencia-9a73a
-FIREBASE_CLIENT_EMAIL=firebase-adminsdk-xxxxx@correspondencia-9a73a.iam.gserviceaccount.com
-FIREBASE_PRIVATE_KEY="-----BEGIN PRIVATE KEY-----\n...\n-----END PRIVATE KEY-----\n"
-```
-
-## Preparação Recomendada no Servidor
-```bash
-cd /apps/correspondencia
-cp .env.local .env.local.backup-$(date +%F-%H%M%S)
-```
-
-Depois adicione no `.env.local` do servidor:
-```bash
-FIREBASE_PROJECT_ID=correspondencia-9a73a
-FIREBASE_CLIENT_EMAIL=firebase-adminsdk-xxxxx@correspondencia-9a73a.iam.gserviceaccount.com
-FIREBASE_PRIVATE_KEY="-----BEGIN PRIVATE KEY-----\n...\n-----END PRIVATE KEY-----\n"
+EMAIL_FROM=App Correspondencia <nao-responda@appcorrespondencia.com.br>
+EMAIL_REPLY_TO=appgroupbrasil@gmail.com
+SMTP_ADMIN_EMAIL=App Correspondencia <nao-responda@appcorrespondencia.com.br>
 ```
 
 ## Comandos Úteis
@@ -63,15 +43,38 @@ FIREBASE_PRIVATE_KEY="-----BEGIN PRIVATE KEY-----\n...\n-----END PRIVATE KEY----
 # Listar containers
 ssh -i ~/.ssh/hetzner_key root@46.225.191.114 "docker ps"
 
-# Logs do container
-ssh -i ~/.ssh/hetzner_key root@46.225.191.114 "docker logs app-correspondencia --tail 50"
+# Logs
+ssh -i ~/.ssh/hetzner_key root@46.225.191.114 "docker logs app-correspondencia --tail 100"
 
-# Restart container
+# Restart
 ssh -i ~/.ssh/hetzner_key root@46.225.191.114 "docker restart app-correspondencia"
 
-# Rebuild e restart
-ssh -i ~/.ssh/hetzner_key root@46.225.191.114 "cd /apps/correspondencia && docker build -t app-correspondencia:latest . && docker stop app-correspondencia && docker rm app-correspondencia && docker run -d --name app-correspondencia --network coolify -l 'traefik.enable=true' -l 'traefik.http.routers.corresp-http.entrypoints=http' -l 'traefik.http.routers.corresp-http.rule=Host(\`appcorrespondencia.com.br\`) || Host(\`www.appcorrespondencia.com.br\`)' -l 'traefik.http.routers.corresp-https.entrypoints=https' -l 'traefik.http.routers.corresp-https.rule=Host(\`appcorrespondencia.com.br\`) || Host(\`www.appcorrespondencia.com.br\`)' -l 'traefik.http.routers.corresp-https.tls.certresolver=letsencrypt' -l 'traefik.http.services.corresp.loadbalancer.server.port=3000' app-correspondencia:latest"
+# Acesso ao Postgres do Supabase
+ssh -i ~/.ssh/hetzner_key root@46.225.191.114 "docker exec -it supabase-db psql -U postgres"
 ```
 
-## Observação
-- O deploy do build atual fica bloqueado até as credenciais privadas do Firebase Admin serem adicionadas ao servidor.
+## Deploy
+A imagem `app-correspondencia:latest` em produção é construída a partir do código local da máquina do desenvolvedor (não há git pull automático no servidor). Fluxo:
+
+1. Local: `npm run build` para validar.
+2. Local: `docker build -t app-correspondencia:latest .`
+3. Local: `docker save app-correspondencia:latest | ssh -i ~/.ssh/hetzner_key root@46.225.191.114 "docker load"`
+4. Servidor: parar/remover/recriar container com o `docker run` (labels Traefik abaixo).
+
+### docker run de referência
+```bash
+docker stop app-correspondencia && docker rm app-correspondencia && \
+docker run -d --name app-correspondencia --network coolify \
+  --env-file /root/.env-correspondencia \
+  -l 'traefik.enable=true' \
+  -l 'traefik.http.routers.corresp-http.entrypoints=http' \
+  -l 'traefik.http.routers.corresp-http.rule=Host(`appcorrespondencia.com.br`) || Host(`www.appcorrespondencia.com.br`)' \
+  -l 'traefik.http.routers.corresp-https.entrypoints=https' \
+  -l 'traefik.http.routers.corresp-https.rule=Host(`appcorrespondencia.com.br`) || Host(`www.appcorrespondencia.com.br`)' \
+  -l 'traefik.http.routers.corresp-https.tls=true' \
+  -l 'traefik.http.routers.corresp-https.tls.certresolver=letsencrypt' \
+  -l 'traefik.http.services.corresp.loadbalancer.server.port=3000' \
+  app-correspondencia:latest
+```
+
+> Observação: o diretório `/apps/correspondencia/` no servidor é um snapshot antigo (pré-Supabase) e não é mais usado pelo container em produção. Pode ser removido com segurança.

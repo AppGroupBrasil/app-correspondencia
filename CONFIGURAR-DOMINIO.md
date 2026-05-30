@@ -41,10 +41,10 @@ No arquivo `deploy-run.sh`, configure:
 -e EMAIL_FROM=nao-responda@appcorrespondencia.com.br
 ```
 
-## 5. Autorizar no Firebase Authentication
+## 5. Autorizar no Supabase Auth
 
-Para que o login funcione no domínio:
+Para que o login e redirect funcionem no domínio:
 
-1. No [Console do Firebase](https://console.firebase.google.com/), vá em **Authentication**.
-2. Clique na aba **Settings** > **Authorized domains**.
-3. Adicione `appcorrespondencia.com.br` à lista.
+1. No painel do Supabase em https://supabase.appcorrespondencia.com.br, abra **Authentication > URL Configuration**.
+2. Em **Site URL**, defina `https://appcorrespondencia.com.br`.
+3. Em **Redirect URLs**, adicione `https://appcorrespondencia.com.br/**`.

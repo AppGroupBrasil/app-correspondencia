@@ -20,12 +20,24 @@ export async function POST(request: NextRequest) {
 
     const supabaseAdmin = createServerClient();
 
-    const { data: condominioData, error: condErr } = await supabaseAdmin
+    const cnpjMascarado = `${cnpjNormalizado.slice(0, 2)}.${cnpjNormalizado.slice(2, 5)}.${cnpjNormalizado.slice(5, 8)}/${cnpjNormalizado.slice(8, 12)}-${cnpjNormalizado.slice(12, 14)}`;
+
+    const { data: candidatos, error: condErr } = await supabaseAdmin
       .from("condominios")
       .select("id, nome, cnpj")
-      .eq("cnpj", cnpjOriginal)
-      .limit(1)
-      .single();
+      .or(`cnpj.eq.${cnpjOriginal},cnpj.eq.${cnpjNormalizado},cnpj.eq.${cnpjMascarado}`)
+      .limit(50);
+
+    let condominioData = candidatos?.find(
+      (c: any) => (c.cnpj || "").replace(/\D/g, "") === cnpjNormalizado
+    );
+
+    if (!condominioData) {
+      const { data: todos } = await supabaseAdmin.from("condominios").select("id, nome, cnpj");
+      condominioData = (todos || []).find(
+        (c: any) => (c.cnpj || "").replace(/\D/g, "") === cnpjNormalizado
+      );
+    }
 
     if (condErr || !condominioData) {
       return NextResponse.json({ error: "Condomínio não encontrado" }, { status: 404 });

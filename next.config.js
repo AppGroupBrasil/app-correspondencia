@@ -27,27 +27,15 @@ const nextConfig = {
     // App precisa de unoptimized. Web pode usar otimização.
     unoptimized: isAppBuild,
     // Usar remotePatterns em vez de domains (deprecated)
-    remotePatterns: [
-      {
-        protocol: 'https',
-        hostname: 'firebasestorage.googleapis.com',
-        pathname: '/**',
-      },
-      {
-        protocol: 'https',
-        hostname: '*.firebasestorage.app',
-        pathname: '/**',
-      },
-      ...(supabaseHostname
-        ? [
-            {
-              protocol: 'https',
-              hostname: supabaseHostname,
-              pathname: '/**',
-            },
-          ]
-        : []),
-    ],
+    remotePatterns: supabaseHostname
+      ? [
+          {
+            protocol: 'https',
+            hostname: supabaseHostname,
+            pathname: '/**',
+          },
+        ]
+      : [],
     formats: ['image/avif', 'image/webp'],
     // Tamanhos de dispositivo para otimização
     deviceSizes: [640, 750, 828, 1080, 1200, 1920, 2048],

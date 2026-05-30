@@ -1,6 +1,5 @@
 -- ============================================
 -- APP CORRESPONDÊNCIA — Schema PostgreSQL (Supabase)
--- Migração de Firebase Firestore → PostgreSQL
 -- ============================================
 
 -- Extensões necessárias
@@ -238,7 +237,7 @@ CREATE TRIGGER tr_templates_updated BEFORE UPDATE ON message_templates FOR EACH 
 CREATE TRIGGER tr_config_updated BEFORE UPDATE ON configuracoes_retirada FOR EACH ROW EXECUTE FUNCTION update_updated_at();
 
 -- ============================================
--- ROW LEVEL SECURITY (RLS) — Substitui Firestore Rules
+-- ROW LEVEL SECURITY (RLS)
 -- ============================================
 
 -- Habilitar RLS em todas as tabelas
@@ -281,37 +280,43 @@ CREATE POLICY "blocos_read" ON blocos FOR SELECT USING (
   condominio_id = get_my_condominio_id() OR get_my_role() = 'adminMaster'
 );
 CREATE POLICY "blocos_write" ON blocos FOR ALL USING (
-  condominio_id = get_my_condominio_id() AND get_my_role() IN ('responsavel', 'admin', 'adminMaster')
+  get_my_role() = 'adminMaster'
+  OR (condominio_id = get_my_condominio_id() AND get_my_role() IN ('responsavel', 'admin'))
 );
 
 -- ---------- USERS ----------
 CREATE POLICY "users_read_self" ON users FOR SELECT USING (id = auth.uid());
 CREATE POLICY "users_read_same_condo" ON users FOR SELECT USING (
-  condominio_id = get_my_condominio_id() AND get_my_role() IN ('responsavel', 'porteiro', 'admin', 'adminMaster')
+  get_my_role() = 'adminMaster'
+  OR (condominio_id = get_my_condominio_id() AND get_my_role() IN ('responsavel', 'porteiro', 'admin', 'adminMaster'))
 );
 CREATE POLICY "users_insert" ON users FOR INSERT WITH CHECK (id = auth.uid());
 CREATE POLICY "users_update_self" ON users FOR UPDATE USING (id = auth.uid());
 CREATE POLICY "users_update_admin" ON users FOR UPDATE USING (
-  condominio_id = get_my_condominio_id() AND get_my_role() IN ('responsavel', 'admin', 'adminMaster')
+  get_my_role() = 'adminMaster'
+  OR (condominio_id = get_my_condominio_id() AND get_my_role() IN ('responsavel', 'admin'))
 );
 CREATE POLICY "users_delete" ON users FOR DELETE USING (
-  condominio_id = get_my_condominio_id() AND get_my_role() IN ('responsavel', 'admin', 'adminMaster')
+  get_my_role() = 'adminMaster'
+  OR (condominio_id = get_my_condominio_id() AND get_my_role() IN ('responsavel', 'admin'))
 );
 
 -- ---------- UNIDADES ----------
 CREATE POLICY "unidades_read" ON unidades FOR SELECT USING (
-  condominio_id = get_my_condominio_id()
+  get_my_role() = 'adminMaster' OR condominio_id = get_my_condominio_id()
 );
 CREATE POLICY "unidades_write" ON unidades FOR ALL USING (
-  condominio_id = get_my_condominio_id() AND get_my_role() IN ('responsavel', 'admin', 'adminMaster')
+  get_my_role() = 'adminMaster'
+  OR (condominio_id = get_my_condominio_id() AND get_my_role() IN ('responsavel', 'admin'))
 );
 
 -- ---------- PORTEIROS ----------
 CREATE POLICY "porteiros_read" ON porteiros FOR SELECT USING (
-  condominio_id = get_my_condominio_id()
+  get_my_role() = 'adminMaster' OR condominio_id = get_my_condominio_id()
 );
 CREATE POLICY "porteiros_write" ON porteiros FOR ALL USING (
-  condominio_id = get_my_condominio_id() AND get_my_role() IN ('responsavel', 'admin', 'adminMaster')
+  get_my_role() = 'adminMaster'
+  OR (condominio_id = get_my_condominio_id() AND get_my_role() IN ('responsavel', 'admin'))
 );
 
 -- ---------- CORRESPONDENCIAS ----------
@@ -320,7 +325,8 @@ CREATE POLICY "corresp_insert" ON correspondencias FOR INSERT WITH CHECK (
   get_my_role() IN ('porteiro', 'responsavel', 'admin', 'adminMaster')
 );
 CREATE POLICY "corresp_update" ON correspondencias FOR UPDATE USING (
-  condominio_id = get_my_condominio_id() AND get_my_role() IN ('porteiro', 'responsavel', 'admin', 'adminMaster')
+  get_my_role() = 'adminMaster'
+  OR (condominio_id = get_my_condominio_id() AND get_my_role() IN ('porteiro', 'responsavel', 'admin'))
 );
 CREATE POLICY "corresp_delete" ON correspondencias FOR DELETE USING (
   get_my_role() IN ('admin', 'adminMaster')
@@ -332,12 +338,13 @@ CREATE POLICY "avisos_insert" ON avisos_rapidos FOR INSERT WITH CHECK (
   get_my_role() IN ('porteiro', 'responsavel', 'admin', 'adminMaster')
 );
 CREATE POLICY "avisos_update" ON avisos_rapidos FOR UPDATE USING (
-  condominio_id = get_my_condominio_id() AND get_my_role() IN ('porteiro', 'responsavel', 'admin', 'adminMaster')
+  get_my_role() = 'adminMaster'
+  OR (condominio_id = get_my_condominio_id() AND get_my_role() IN ('porteiro', 'responsavel', 'admin'))
 );
 
 -- ---------- RETIRADAS ----------
 CREATE POLICY "retiradas_read" ON retiradas FOR SELECT USING (
-  condominio_id = get_my_condominio_id()
+  get_my_role() = 'adminMaster' OR condominio_id = get_my_condominio_id()
 );
 CREATE POLICY "retiradas_insert" ON retiradas FOR INSERT WITH CHECK (
   get_my_role() IN ('porteiro', 'responsavel', 'admin', 'adminMaster')
@@ -351,10 +358,11 @@ CREATE POLICY "templates_write" ON message_templates FOR ALL USING (
 
 -- ---------- CONFIGURACOES_RETIRADA ----------
 CREATE POLICY "config_read" ON configuracoes_retirada FOR SELECT USING (
-  condominio_id = get_my_condominio_id()
+  get_my_role() = 'adminMaster' OR condominio_id = get_my_condominio_id()
 );
 CREATE POLICY "config_write" ON configuracoes_retirada FOR ALL USING (
-  condominio_id = get_my_condominio_id() AND get_my_role() IN ('responsavel', 'admin', 'adminMaster')
+  get_my_role() = 'adminMaster'
+  OR (condominio_id = get_my_condominio_id() AND get_my_role() IN ('responsavel', 'admin'))
 );
 
 -- ============================================

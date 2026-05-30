@@ -1,6 +1,5 @@
 /**
  * Conversão snake_case (PostgreSQL) ↔ camelCase (JavaScript)
- * Usado na migração Firebase → Supabase para manter compatibilidade
  */
 
 /** Converte um objeto de camelCase para snake_case (para INSERT/UPDATE no Supabase) */

@@ -44,6 +44,7 @@ export default function GerenciarBlocos({ condominioId: adminCondominioId }: Pro
   const [ativo, setAtivo] = useState(true);
 
   const targetCondominioId = adminCondominioId || user?.condominioId || fetchedCondominioId;
+  const isMaster = user?.role === "adminMaster" && !targetCondominioId;
   const backRoute = user?.role === "porteiro" ? "/dashboard-porteiro" : "/dashboard-responsavel";
 
   const extrairOrdemDoNome = (n: string): number | null => {
@@ -74,21 +75,20 @@ export default function GerenciarBlocos({ condominioId: adminCondominioId }: Pro
   }, [user, adminCondominioId]);
 
   useEffect(() => {
-    if (targetCondominioId) {
+    if (targetCondominioId || isMaster) {
       carregarBlocos();
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [targetCondominioId]);
+  }, [targetCondominioId, isMaster]);
 
   const carregarBlocos = async () => {
-    if (!targetCondominioId) return;
+    if (!targetCondominioId && !isMaster) return;
     try {
       setLoading(true);
 
-      const { data, error } = await supabase
-        .from("blocos")
-        .select("*")
-        .eq("condominio_id", targetCondominioId);
+      let q = supabase.from("blocos").select("*");
+      if (!isMaster) q = q.eq("condominio_id", targetCondominioId);
+      const { data, error } = await q;
 
       if (error) throw error;
 
@@ -346,7 +346,7 @@ export default function GerenciarBlocos({ condominioId: adminCondominioId }: Pro
     }
   };
 
-  if (loading && !targetCondominioId) {
+  if (loading && !targetCondominioId && !isMaster) {
     return (
       <div className="flex items-center justify-center p-12">
         <div className="text-center">
@@ -358,7 +358,7 @@ export default function GerenciarBlocos({ condominioId: adminCondominioId }: Pro
   }
 
   // Se passou do loading inicial e ainda não tem ID
-  if (!loading && !targetCondominioId) {
+  if (!loading && !targetCondominioId && !isMaster) {
     return (
         <div className="flex flex-col items-center justify-center p-12 text-center">
             <XCircle className="text-red-500 mb-2" size={40} />
