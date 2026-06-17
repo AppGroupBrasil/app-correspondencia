@@ -62,7 +62,7 @@ export function AuthProvider({ children }: Readonly<{ children: React.ReactNode 
   }, []);
 
   const loadUserProfile = useCallback(
-    async (authUser: { id: string; email?: string | null }) => {
+    async (authUser: { id: string; email?: string | null }, registrarAcesso = false) => {
       setUid(authUser.id);
 
       const { data: profile, error: profileError } = await supabase
@@ -113,12 +113,21 @@ export function AuthProvider({ children }: Readonly<{ children: React.ReactNode 
         })
       );
       setError(null);
+
+      // Registra o acesso (apenas em login efetivo) para o controle de uso no
+      // painel Master. Best-effort: se a tabela `acessos` não existir, ignora.
+      if (registrarAcesso && profile.condominio_id) {
+        supabase
+          .from("acessos")
+          .insert({ condominio_id: profile.condominio_id, user_id: authUser.id })
+          .then(() => {}, () => {});
+      }
     },
     [clearAuthState]
   );
 
   const syncAuthState = useCallback(
-    async (sessionUser?: { id: string; email?: string | null } | null) => {
+    async (sessionUser?: { id: string; email?: string | null } | null, registrarAcesso = false) => {
       try {
         if (!sessionUser) {
           clearAuthState();
@@ -126,7 +135,7 @@ export function AuthProvider({ children }: Readonly<{ children: React.ReactNode 
           return;
         }
 
-        await loadUserProfile(sessionUser);
+        await loadUserProfile(sessionUser, registrarAcesso);
       } catch (err) {
         console.error("Erro ao verificar autenticação:", err);
         setError(MENSAGENS?.ERRO?.AUTENTICACAO || "Erro de autenticação.");
@@ -195,7 +204,7 @@ export function AuthProvider({ children }: Readonly<{ children: React.ReactNode 
       data: { subscription },
     } = supabase.auth.onAuthStateChange((_event, session) => {
       if (!isMounted) return;
-      void syncAuthState(session?.user);
+      void syncAuthState(session?.user, _event === "SIGNED_IN");
     });
 
     return () => {

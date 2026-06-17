@@ -12,6 +12,9 @@ import {
   MapPin,
   Image as ImageIcon,
   X,
+  Calendar,
+  Activity,
+  Send,
 } from "lucide-react";
 
 interface Condominio {
@@ -21,9 +24,18 @@ interface Condominio {
   logoUrl?: string;
   status: "ativo" | "inativo";
   criadoEm?: any;
+  acessosSemana?: number;
+  avisosSemana?: number;
 
   authUid?: string;
   emailLogin?: string;
+}
+
+function formatarData(valor?: any): string {
+  if (!valor) return "—";
+  const d = new Date(valor);
+  if (isNaN(d.getTime())) return "—";
+  return d.toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit", year: "numeric" });
 }
 
 export default function GerenciarCondominios() {
@@ -52,6 +64,29 @@ export default function GerenciarCondominios() {
         .select("*")
         .order("criado_em", { ascending: false });
       if (error) throw error;
+
+      // Métricas dos últimos 7 dias por condomínio.
+      // - Acessos: logins efetivos (tabela `acessos`, opcional — se não existir
+      //   fica zerado). Não conta refresh de quem deixa logado.
+      // - Avisos enviados: correspondências registradas + avisos rápidos. Conta
+      //   o trabalho real, independente de login.
+      const seteDiasAtras = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
+      const acessosContagem: Record<string, number> = {};
+      const avisosContagem: Record<string, number> = {};
+      const tally = (alvo: Record<string, number>, rows: any[] | null) => {
+        (rows || []).forEach((r: any) => {
+          if (r.condominio_id) alvo[r.condominio_id] = (alvo[r.condominio_id] || 0) + 1;
+        });
+      };
+      const [acessosRes, correspRes, avisosRes] = await Promise.all([
+        supabase.from("acessos").select("condominio_id").gte("criado_em", seteDiasAtras),
+        supabase.from("correspondencias").select("condominio_id").gte("criado_em", seteDiasAtras),
+        supabase.from("avisos_rapidos").select("condominio_id").gte("criado_em", seteDiasAtras),
+      ]);
+      tally(acessosContagem, acessosRes.data);
+      tally(avisosContagem, correspRes.data);
+      tally(avisosContagem, avisosRes.data);
+
       const lista: Condominio[] = (data || []).map((d: any) => ({
         id: d.id,
         nome: d.nome || "",
@@ -59,6 +94,8 @@ export default function GerenciarCondominios() {
         logoUrl: d.logo_url || "",
         status: d.status || "ativo",
         criadoEm: d.criado_em,
+        acessosSemana: acessosContagem[d.id] || 0,
+        avisosSemana: avisosContagem[d.id] || 0,
         authUid: d.auth_uid || "",
         emailLogin: d.email_login || "",
       }));
@@ -262,6 +299,9 @@ export default function GerenciarCondominios() {
               <tr>
                 <th className="px-6 py-3">Condomínio</th>
                 <th className="px-6 py-3">Endereço</th>
+                <th className="px-6 py-3">Cadastro</th>
+                <th className="px-6 py-3">Acessos (7 dias)</th>
+                <th className="px-6 py-3">Avisos (7 dias)</th>
                 <th className="px-6 py-3">Status</th>
                 <th className="px-6 py-3 text-right">Ações</th>
               </tr>
@@ -269,13 +309,13 @@ export default function GerenciarCondominios() {
             <tbody className="divide-y divide-gray-100">
               {loading ? (
                 <tr>
-                  <td colSpan={4} className="p-8 text-center text-gray-500">
+                  <td colSpan={7} className="p-8 text-center text-gray-500">
                     Carregando...
                   </td>
                 </tr>
               ) : condominiosFiltrados.length === 0 ? (
                 <tr>
-                  <td colSpan={4} className="p-8 text-center text-gray-500">
+                  <td colSpan={7} className="p-8 text-center text-gray-500">
                     Nenhum condomínio encontrado.
                   </td>
                 </tr>
@@ -301,6 +341,21 @@ export default function GerenciarCondominios() {
                     <td className="px-6 py-4 text-gray-600">
                       <div className="flex items-center gap-1">
                         <MapPin size={14} className="text-gray-400" /> {c.endereco}
+                      </div>
+                    </td>
+                    <td className="px-6 py-4 text-gray-600 whitespace-nowrap">
+                      <div className="flex items-center gap-1">
+                        <Calendar size={14} className="text-gray-400" /> {formatarData(c.criadoEm)}
+                      </div>
+                    </td>
+                    <td className="px-6 py-4">
+                      <div className="flex items-center gap-1 font-bold text-gray-900">
+                        <Activity size={14} className="text-emerald-500" /> {c.acessosSemana ?? 0}
+                      </div>
+                    </td>
+                    <td className="px-6 py-4">
+                      <div className="flex items-center gap-1 font-bold text-gray-900">
+                        <Send size={14} className="text-blue-500" /> {c.avisosSemana ?? 0}
                       </div>
                     </td>
                     <td className="px-6 py-4">
