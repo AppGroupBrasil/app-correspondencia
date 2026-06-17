@@ -66,6 +66,25 @@ const PERFIS_MORADOR = [
   { value: "outro", label: "Outro" },
 ];
 
+// Faz o parse de uma resposta de API tolerando casos em que o servidor devolve
+// HTML (página de erro 502/504 do proxy, app reiniciando) em vez de JSON.
+// Evita o erro críptico "Unexpected token '<', "<!DOCTYPE"... is not valid JSON".
+async function parseApiResponse(res: Response): Promise<{ ok: boolean; data: any; error?: string }> {
+  const texto = await res.text();
+  let data: any = null;
+  try {
+    data = texto ? JSON.parse(texto) : null;
+  } catch {
+    // Resposta não-JSON (provavelmente HTML do proxy)
+    return {
+      ok: false,
+      data: null,
+      error: "Servidor temporariamente indisponível. Aguarde alguns instantes e tente novamente.",
+    };
+  }
+  return { ok: res.ok, data, error: res.ok ? undefined : data?.error };
+}
+
 // ============================================================================
 // 2. Funções Auxiliares
 // ============================================================================
@@ -424,9 +443,9 @@ export default function GerenciarMoradores({ condominioId: adminCondominioId }: 
             dados: dadosMorador,
           }),
         });
-        const result = await res.json();
-        if (!res.ok) {
-          alert(result.error || "Erro ao criar usuário");
+        const { ok, error } = await parseApiResponse(res);
+        if (!ok) {
+          alert(error || "Erro ao criar usuário");
         } else {
           alert("Morador cadastrado!");
         }
@@ -708,12 +727,12 @@ export default function GerenciarMoradores({ condominioId: adminCondominioId }: 
                 },
               }),
             });
-            const result = await res.json();
-            if (!res.ok) {
-              if (result.error?.includes("já está em uso") || result.error?.includes("already been registered")) {
+            const { ok, error } = await parseApiResponse(res);
+            if (!ok) {
+              if (error?.includes("já está em uso") || error?.includes("already been registered")) {
                 logsTemp.push(`Linha ${i + 1}: E-mail já existe no Auth sem documento correspondente. Revisão manual necessária.`);
               } else {
-                logsTemp.push(`Linha ${i + 1}: Erro Auth (${result.error})`);
+                logsTemp.push(`Linha ${i + 1}: Erro Auth (${error})`);
               }
             } else {
               criados++;

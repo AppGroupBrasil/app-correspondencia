@@ -18,6 +18,18 @@ export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
   },
 });
 
+// O gateway (Kong) do Supabase self-hosted exige `apikey` até na rota
+// /storage/v1/object/public/. Uma tag <img> não envia header, então anexamos a
+// anon key (já pública, embutida no bundle) na query string para o navegador
+// conseguir carregar a imagem. Sem isso o storage responde 401 e a imagem quebra.
+export function comApiKeyStorage(url?: string | null): string {
+  if (!url) return '';
+  if (!url.includes('/storage/v1/object/')) return url;
+  if (url.includes('apikey=')) return url;
+  const sep = url.includes('?') ? '&' : '?';
+  return `${url}${sep}apikey=${supabaseAnonKey}`;
+}
+
 // Cliente para server-side (API routes)
 export function createServerClient() {
   const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY || '';

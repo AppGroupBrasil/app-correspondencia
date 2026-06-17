@@ -572,9 +572,9 @@ Aguardamos a sua retirada`;
         {/* ✅ MODAL PADRÃO (Configurar msg WhatsApp) */}
         {mostrarConfigMsg && (
           <div className="fixed inset-0 bg-black bg-opacity-60 flex items-center justify-center z-[60] p-4 animate-in fade-in duration-200">
-            <div className="bg-white rounded-2xl shadow-2xl max-w-2xl w-full overflow-hidden animate-in zoom-in-95">
+            <div className="bg-white rounded-2xl shadow-2xl max-w-2xl w-full overflow-hidden animate-in zoom-in-95 max-h-[90vh] flex flex-col">
               {/* Header */}
-              <div className="bg-gradient-to-r from-[#057321] to-[#046119] px-6 py-5 flex items-center justify-between">
+              <div className="bg-gradient-to-r from-[#057321] to-[#046119] px-6 py-5 flex items-center justify-between flex-shrink-0">
                 <div className="flex items-center gap-3">
                   <div className="bg-white p-2 rounded-full shadow-sm">
                     <Settings className="text-[#057321]" size={20} />
@@ -596,7 +596,7 @@ Aguardamos a sua retirada`;
               </div>
 
               {/* Body */}
-              <div className="p-6">
+              <div className="p-6 overflow-y-auto flex-1">
                 <div className="bg-yellow-50 border-l-4 border-yellow-400 p-4 rounded-r-lg flex items-start gap-3 mb-5">
                   <AlertTriangle className="text-yellow-700 flex-shrink-0 mt-0.5" size={18} />
                   <div className="text-sm text-yellow-900">

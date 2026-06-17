@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useCallback } from "react";
-import { supabase } from "@/app/lib/supabase";
+import { supabase, comApiKeyStorage } from "@/app/lib/supabase";
 import jsPDF from "jspdf";
 import QRCode from "qrcode";
 import imageCompression from "browser-image-compression";
@@ -205,7 +205,7 @@ export function useCorrespondencias() {
                     moradorNome: nomeMorador,
                     protocolo,
                     dataHora: new Date().toLocaleString(),
-                    imagemUrl,
+                    imagemUrl: comApiKeyStorage(imagemUrl),
                     qrCodeDataUrl: qr
                 });
                 const pdfBlob = pdf.output('blob');
@@ -262,9 +262,9 @@ export function useCorrespondencias() {
             observacao: d.observacao,
             localArmazenamento: d.local_armazenamento,
             status: d.status,
-            imagemUrl: d.imagem_url,
-            pdfUrl: d.pdf_url,
-            reciboUrl: d.recibo_url,
+            imagemUrl: comApiKeyStorage(d.imagem_url),
+            pdfUrl: comApiKeyStorage(d.pdf_url),
+            reciboUrl: comApiKeyStorage(d.recibo_url),
             moradorTelefone: d.morador_telefone,
             moradorEmail: d.morador_email,
             criadoPor: d.criado_por,
