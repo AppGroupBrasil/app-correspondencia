@@ -17,7 +17,7 @@ import {
 
 function DashboardAdminPage() {
   const router = useRouter();
-  const { role } = useAuth();
+  const { role, condominioId, condominiosVinculados } = useAuth();
   const isMaster = role === "adminMaster";
   const [stats, setStats] = useState({
     condominios: 0,
@@ -29,25 +29,28 @@ function DashboardAdminPage() {
   useEffect(() => {
     const carregarDados = async () => {
       try {
+        // adminMaster vê tudo; admin vê apenas os condomínios vinculados a ele.
+        const condIds = isMaster
+          ? null
+          : (condominiosVinculados?.length ? condominiosVinculados : [condominioId].filter(Boolean));
+        const aplicarCond = (q: any) =>
+          condIds === null ? q : condIds.length ? q.in("condominio_id", condIds) : q.eq("condominio_id", "__nenhum__");
+
         // Consultas otimizadas (apenas contagem)
-        const { count: condominiosCount } = await supabase
-          .from("condominios")
-          .select("*", { count: "exact", head: true });
+        const { count: condominiosCount } = condIds === null
+          ? await supabase.from("condominios").select("*", { count: "exact", head: true })
+          : await supabase.from("condominios").select("*", { count: "exact", head: true })
+              .in("id", condIds.length ? condIds : ["__nenhum__"]);
 
-        const { count: responsaveisCount } = await supabase
-          .from("users")
-          .select("*", { count: "exact", head: true })
-          .eq("role", "responsavel");
+        const { count: responsaveisCount } = await aplicarCond(
+          supabase.from("users").select("*", { count: "exact", head: true }).eq("role", "responsavel"));
 
-        const { count: porteirosCount } = await supabase
-          .from("users")
-          .select("*", { count: "exact", head: true })
-          .eq("role", "porteiro");
+        const { count: porteirosCount } = await aplicarCond(
+          supabase.from("users").select("*", { count: "exact", head: true }).eq("role", "porteiro"));
 
-        // Total de correspondências
-        const { count: correspondenciasCount } = await supabase
-          .from("correspondencias")
-          .select("*", { count: "exact", head: true });
+        // Total de correspondências (escopado ao(s) condomínio(s) do admin)
+        const { count: correspondenciasCount } = await aplicarCond(
+          supabase.from("correspondencias").select("*", { count: "exact", head: true }));
 
         setStats({
           condominios: condominiosCount ?? 0,
@@ -60,8 +63,8 @@ function DashboardAdminPage() {
       }
     };
 
-    carregarDados();
-  }, []);
+    if (role) carregarDados();
+  }, [role, condominioId, condominiosVinculados, isMaster]);
 
   const handleLogout = async () => {
     await supabase.auth.signOut();
