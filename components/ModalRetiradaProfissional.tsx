@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect } from "react";
 import { useAuth } from "@/hooks/useAuth";
 import { supabase } from "@/app/lib/supabase";
 import { X, Save, AlertCircle, ArrowRight, ArrowLeft } from "lucide-react";
@@ -136,8 +136,6 @@ export default function ModalRetiradaProfissional({
   const [moradorEmail, setMoradorEmail] = useState(
     correspondencia.emailMorador || correspondencia.moradorEmail || ""
   );
-
-  const backgroundTaskRef = useRef<Promise<void> | null>(null);
 
   const [config, setConfig] = useState<ConfiguracoesRetirada>({
     assinaturaMoradorObrigatoria: true,
@@ -305,6 +303,25 @@ export default function ModalRetiradaProfissional({
         codigoVerificacao: gerarCodigoVerificacao(),
       };
 
+      const timestamp = Date.now();
+
+      // Sobe a foto ao storage em PARALELO com a geração/upload do PDF — a foto
+      // já chega comprimida do UploadImagem, aqui é só transmissão de rede.
+      const fotoUploadPromise: Promise<string> = arquivoImagemFinal
+        ? (async () => {
+            try {
+              const fotoFileName = `retirada_${correspondencia.protocolo}_${timestamp}.jpg`;
+              const { error: fotoError } = await supabase.storage
+                .from("retiradas")
+                .upload(fotoFileName, arquivoImagemFinal!, { contentType: "image/jpeg" });
+              if (fotoError) return "";
+              return supabase.storage.from("retiradas").getPublicUrl(fotoFileName).data.publicUrl;
+            } catch {
+              return "";
+            }
+          })()
+        : Promise.resolve("");
+
       if (arquivoImagemFinal) {
         const localBase64 = await fileToBase64(arquivoImagemFinal);
         dadosRetiradaBruto.fotoComprovanteUrl = localBase64;
@@ -325,7 +342,6 @@ export default function ModalRetiradaProfissional({
       });
 
       setMessage("Finalizando...");
-      const timestamp = Date.now();
       const pdfFileName = `recibo_${correspondencia.protocolo}_${timestamp}.pdf`;
 
       const { error: uploadError } = await supabase.storage
@@ -339,6 +355,36 @@ export default function ModalRetiradaProfissional({
       const publicPdfUrl = urlData.publicUrl;
 
       setFinalPdfUrl(publicPdfUrl);
+
+      // Aguarda o upload da foto (iniciado em paralelo). Se subiu, grava a URL
+      // do storage; se falhou, mantém o base64 já embutido como fallback.
+      setMessage("Registrando baixa...");
+      const fotoUrlSupabase = await fotoUploadPromise;
+      if (fotoUrlSupabase) dadosRetiradaBruto.fotoComprovanteUrl = fotoUrlSupabase;
+
+      const dadosRetirada = removerUndefined(dadosRetiradaBruto);
+
+      // GRAVAÇÃO CRÍTICA DA BAIXA — aguardada e verificada antes do sucesso.
+      // .select() retorna as linhas afetadas: vazio = não persistiu (RLS ou
+      // registro inexistente), caso em que o Supabase não acusa erro.
+      const { data: updRows, error: updError } = await supabase
+        .from("correspondencias")
+        .update({
+          status: "retirada",
+          retirado_em: new Date().toISOString(),
+          dados_retirada: dadosRetirada,
+          recibo_url: publicPdfUrl,
+        })
+        .eq("id", correspondencia.id)
+        .select("id");
+
+      if (updError) throw updError;
+      if (!updRows || updRows.length === 0) {
+        throw new Error(
+          "Não foi possível registrar a baixa: sem permissão ou correspondência não encontrada."
+        );
+      }
+
       setProgress(100);
 
       const dataHoje = new Date().toLocaleString("pt-BR", {
@@ -370,51 +416,23 @@ Obrigado!
       setLoading(false);
       setShowSuccessModal(true);
 
-      backgroundTaskRef.current = (async () => {
-        try {
-          let fotoUrlSupabase = "";
-          if (arquivoImagemFinal) {
-            const fotoFileName = `retirada_${correspondencia.protocolo}_${timestamp}.jpg`;
-            const { error: fotoError } = await supabase.storage
-              .from("retiradas")
-              .upload(fotoFileName, arquivoImagemFinal, { contentType: "image/jpeg" });
-            if (!fotoError) {
-              const { data: fotoUrlData } = supabase.storage
-                .from("retiradas")
-                .getPublicUrl(fotoFileName);
-              fotoUrlSupabase = fotoUrlData.publicUrl;
-            }
-          }
-
-          if (fotoUrlSupabase) dadosRetiradaBruto.fotoComprovanteUrl = fotoUrlSupabase;
-          else delete dadosRetiradaBruto.fotoComprovanteUrl;
-
-          const dadosRetirada = removerUndefined(dadosRetiradaBruto);
-
-          // Update correspondencia
-          await supabase.from("correspondencias").update({
-            status: "retirada",
-            retirado_em: new Date().toISOString(),
-            dados_retirada: dadosRetirada,
-            recibo_url: publicPdfUrl,
-          }).eq("id", correspondencia.id);
-
-          // Insert retirada record
-          await supabase.from("retiradas").insert(
-            removerUndefined({
-              correspondencia_id: correspondencia.id,
-              protocolo: correspondencia.protocolo,
-              condominio_id: user?.condominioId || "",
-              ...dadosRetirada,
-              status: "concluida",
-              criado_em: new Date().toISOString(),
-            })
-          );
-
-        } catch (bgError) {
-          console.error("❌ [Background] Erro:", bgError);
-        }
-      })();
+      // Histórico em `retiradas` é secundário (não altera o status da
+      // correspondência) — best-effort, não bloqueia a confirmação.
+      supabase
+        .from("retiradas")
+        .insert(
+          removerUndefined({
+            correspondencia_id: correspondencia.id,
+            protocolo: correspondencia.protocolo,
+            condominio_id: user?.condominioId || "",
+            ...dadosRetirada,
+            status: "concluida",
+            criado_em: new Date().toISOString(),
+          })
+        )
+        .then(({ error: histError }) => {
+          if (histError) console.error("Erro ao registrar histórico de retirada:", histError);
+        });
     } catch (err: any) {
       console.error("Erro crítica:", err);
       setError(`Erro: ${err?.message || "Falha ao processar"}`);
@@ -430,8 +448,7 @@ Obrigado!
     }
   };
 
-  const handleCloseSuccess = async () => {
-    if (backgroundTaskRef.current) await backgroundTaskRef.current;
+  const handleCloseSuccess = () => {
     onSuccess();
   };
 
