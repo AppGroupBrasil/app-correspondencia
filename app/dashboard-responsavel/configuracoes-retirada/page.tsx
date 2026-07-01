@@ -122,7 +122,7 @@ function ConfiguracoesRetiradaPage() {
       <Navbar />
 
       {/* 2. ESPAÇAMENTO CORRETO (pt-20) */}
-      <main className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 pt-28 pb-12">
+      <main className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 pb-12" style={{ paddingTop: 'calc(6rem + env(safe-area-inset-top))' }}>
         
         {/* 3. BOTÃO VOLTAR PADRONIZADO */}
         <BotaoVoltar url="/dashboard-responsavel/registrar-retirada" />

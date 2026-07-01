@@ -869,7 +869,7 @@ function CorrespondenciasResponsavelPage() {
   return (
     <div className="min-h-screen bg-gray-50">
       <Navbar />
-      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-28 sm:pt-32 pb-12 space-y-6">
+      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pb-12 space-y-6" style={{ paddingTop: 'calc(6rem + env(safe-area-inset-top))' }}>
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
           <BotaoVoltar url={backRoute} />
 

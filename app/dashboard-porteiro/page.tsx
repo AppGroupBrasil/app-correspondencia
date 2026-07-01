@@ -38,7 +38,7 @@ function PorteiroPage() {
       </div>
 
       {/* 2. Espaçamento Ajustado para Mobile (Safe Area) */}
-      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-28 pb-12">
+      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pb-12" style={{ paddingTop: 'calc(6rem + env(safe-area-inset-top))' }}>
         
         {/* ID: intro-painel */}
         <div id="intro-painel" className="mb-8">

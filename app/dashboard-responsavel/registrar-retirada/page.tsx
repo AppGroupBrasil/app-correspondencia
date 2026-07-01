@@ -416,7 +416,7 @@ function RegistrarRetiradaResponsavelPage() {
     <div className="min-h-screen bg-gray-50">
       <Navbar />
 
-      <div className="min-h-screen flex flex-col items-center pt-28 pb-8 px-4">
+      <div className="min-h-screen flex flex-col items-center pb-8 px-4" style={{ paddingTop: 'calc(6rem + env(safe-area-inset-top))' }}>
         <div className="max-w-4xl w-full">
           <div className="mb-6">
             <button

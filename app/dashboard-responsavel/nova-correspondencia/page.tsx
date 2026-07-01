@@ -399,7 +399,7 @@ function NovaCorrespondenciaResponsavelPage() {
         />
       )}
 
-      <main className="max-w-4xl mx-auto px-4 pt-28 pb-12">
+      <main className="max-w-4xl mx-auto px-4 pb-12" style={{ paddingTop: 'calc(6rem + env(safe-area-inset-top))' }}>
         <BotaoVoltar url={backRoute} />
 
         <div className="mb-8 flex items-center justify-between">

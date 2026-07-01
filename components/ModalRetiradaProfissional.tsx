@@ -51,55 +51,6 @@ interface Props {
   mensagemFormatada?: string;
 }
 
-// --- FUNÇÃO DE COMPRESSÃO ---
-const compressImage = async (file: File): Promise<File> => {
-  return new Promise((resolve) => {
-    const reader = new FileReader();
-    reader.readAsDataURL(file);
-    reader.onload = (event) => {
-      const img = new Image();
-      img.src = event.target?.result as string;
-      img.onload = () => {
-        const canvas = document.createElement("canvas");
-        const MAX_WIDTH = 500;
-        let width = img.width;
-        let height = img.height;
-
-        if (width > MAX_WIDTH) {
-          height = height * (MAX_WIDTH / width);
-          width = MAX_WIDTH;
-        }
-
-        canvas.width = width;
-        canvas.height = height;
-
-        const ctx = canvas.getContext("2d");
-        if (ctx) {
-          ctx.fillStyle = "#FFFFFF";
-          ctx.fillRect(0, 0, canvas.width, canvas.height);
-          ctx.drawImage(img, 0, 0, width, height);
-        }
-
-        canvas.toBlob(
-          (blob) => {
-            if (blob) {
-              const newFile = new File([blob], file.name, {
-                type: "image/jpeg",
-                lastModified: Date.now(),
-              });
-              resolve(newFile);
-            } else {
-              resolve(file);
-            }
-          },
-          "image/jpeg",
-          0.6
-        );
-      };
-    };
-  });
-};
-
 const fileToBase64 = (file: File): Promise<string> => {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
@@ -271,8 +222,8 @@ export default function ModalRetiradaProfissional({
     }
 
     setLoading(true);
-    setMessage("Preparando arquivos...");
-    setProgress(5);
+    setMessage("Registrando baixa...");
+    setProgress(30);
     setError("");
 
     try {
@@ -284,12 +235,24 @@ export default function ModalRetiradaProfissional({
         });
       }
 
-      let arquivoImagemFinal = imagemFile;
-      if (imagemFile) {
-        setMessage("Otimizando foto...");
-        arquivoImagemFinal = await compressImage(imagemFile);
-        setProgress(15);
-      }
+      const timestamp = Date.now();
+
+      // A foto já chega comprimida do UploadImagem — sobe ao storage em background,
+      // sem recomprimir e sem bloquear a baixa. Só transmissão de rede.
+      const fotoUploadPromise: Promise<string> = imagemFile
+        ? (async () => {
+            try {
+              const fotoFileName = `retirada_${correspondencia.protocolo}_${timestamp}.jpg`;
+              const { error: fotoError } = await supabase.storage
+                .from("retiradas")
+                .upload(fotoFileName, imagemFile, { contentType: "image/jpeg" });
+              if (fotoError) return "";
+              return supabase.storage.from("retiradas").getPublicUrl(fotoFileName).data.publicUrl;
+            } catch {
+              return "";
+            }
+          })()
+        : Promise.resolve("");
 
       const dadosRetiradaBruto: DadosRetirada = {
         nomeQuemRetirou: nomeQuemRetirou.trim(),
@@ -303,68 +266,12 @@ export default function ModalRetiradaProfissional({
         codigoVerificacao: gerarCodigoVerificacao(),
       };
 
-      const timestamp = Date.now();
-
-      // Sobe a foto ao storage em PARALELO com a geração/upload do PDF — a foto
-      // já chega comprimida do UploadImagem, aqui é só transmissão de rede.
-      const fotoUploadPromise: Promise<string> = arquivoImagemFinal
-        ? (async () => {
-            try {
-              const fotoFileName = `retirada_${correspondencia.protocolo}_${timestamp}.jpg`;
-              const { error: fotoError } = await supabase.storage
-                .from("retiradas")
-                .upload(fotoFileName, arquivoImagemFinal!, { contentType: "image/jpeg" });
-              if (fotoError) return "";
-              return supabase.storage.from("retiradas").getPublicUrl(fotoFileName).data.publicUrl;
-            } catch {
-              return "";
-            }
-          })()
-        : Promise.resolve("");
-
-      if (arquivoImagemFinal) {
-        const localBase64 = await fileToBase64(arquivoImagemFinal);
-        dadosRetiradaBruto.fotoComprovanteUrl = localBase64;
-      }
-
       const baseUrl = typeof window !== "undefined" ? window.location.origin : "";
       const linkAviso = `${baseUrl}/ver?id=${encodeURIComponent(correspondencia.id)}&type=aviso`;
       const linkRecibo = `${baseUrl}/ver?id=${encodeURIComponent(correspondencia.id)}&type=recibo`;
 
-      setMessage("Gerando recibo...");
-      const pdfBlob = await gerarReciboPDF({
-        correspondencia,
-        dadosRetirada: dadosRetiradaBruto,
-        nomeCondominio: correspondencia.condominioNome || "Condomínio",
-        logoUrl: "/logo-app-correspondencia.png",
-        linkPublicoRecibo: linkRecibo,
-        onProgress: (val) => setProgress(20 + val * 0.4),
-      });
-
-      setMessage("Finalizando...");
-      const pdfFileName = `recibo_${correspondencia.protocolo}_${timestamp}.pdf`;
-
-      const { error: uploadError } = await supabase.storage
-        .from("correspondencias")
-        .upload(pdfFileName, pdfBlob, { contentType: "application/pdf" });
-      if (uploadError) throw uploadError;
-
-      const { data: urlData } = supabase.storage
-        .from("correspondencias")
-        .getPublicUrl(pdfFileName);
-      const publicPdfUrl = urlData.publicUrl;
-
-      setFinalPdfUrl(publicPdfUrl);
-
-      // Aguarda o upload da foto (iniciado em paralelo). Se subiu, grava a URL
-      // do storage; se falhou, mantém o base64 já embutido como fallback.
-      setMessage("Registrando baixa...");
-      const fotoUrlSupabase = await fotoUploadPromise;
-      if (fotoUrlSupabase) dadosRetiradaBruto.fotoComprovanteUrl = fotoUrlSupabase;
-
-      const dadosRetirada = removerUndefined(dadosRetiradaBruto);
-
-      // GRAVAÇÃO CRÍTICA DA BAIXA — aguardada e verificada antes do sucesso.
+      // GRAVAÇÃO CRÍTICA DA BAIXA — feita PRIMEIRO, aguardada e verificada.
+      // É a única etapa que precisa concluir antes de liberar o usuário.
       // .select() retorna as linhas afetadas: vazio = não persistiu (RLS ou
       // registro inexistente), caso em que o Supabase não acusa erro.
       const { data: updRows, error: updError } = await supabase
@@ -372,8 +279,7 @@ export default function ModalRetiradaProfissional({
         .update({
           status: "retirada",
           retirado_em: new Date().toISOString(),
-          dados_retirada: dadosRetirada,
-          recibo_url: publicPdfUrl,
+          dados_retirada: removerUndefined(dadosRetiradaBruto),
         })
         .eq("id", correspondencia.id)
         .select("id");
@@ -413,26 +319,77 @@ Obrigado!
 
       setMensagemFormatada(msgFinal);
 
+      // Baixa confirmada: libera o porteiro imediatamente.
       setLoading(false);
       setShowSuccessModal(true);
 
-      // Histórico em `retiradas` é secundário (não altera o status da
-      // correspondência) — best-effort, não bloqueia a confirmação.
-      supabase
-        .from("retiradas")
-        .insert(
-          removerUndefined({
-            correspondencia_id: correspondencia.id,
-            protocolo: correspondencia.protocolo,
-            condominio_id: user?.condominioId || "",
-            ...dadosRetirada,
-            status: "concluida",
-            criado_em: new Date().toISOString(),
-          })
-        )
-        .then(({ error: histError }) => {
-          if (histError) console.error("Erro ao registrar histórico de retirada:", histError);
-        });
+      // BACKGROUND: recibo em PDF, uploads e anexos — não bloqueiam a confirmação.
+      void (async () => {
+        try {
+          const fotoUrl = await fotoUploadPromise;
+
+          // Base64 local só para renderizar a foto no PDF (evita ida à rede);
+          // no banco fica a URL do storage.
+          let fotoParaPdf = "";
+          if (imagemFile) {
+            try { fotoParaPdf = await fileToBase64(imagemFile); } catch {}
+          }
+
+          const pdfBlob = await gerarReciboPDF({
+            correspondencia,
+            dadosRetirada: { ...dadosRetiradaBruto, fotoComprovanteUrl: fotoParaPdf || fotoUrl },
+            nomeCondominio: correspondencia.condominioNome || "Condomínio",
+            logoUrl: "/logo-app-correspondencia.png",
+            linkPublicoRecibo: linkRecibo,
+          });
+
+          const pdfFileName = `recibo_${correspondencia.protocolo}_${timestamp}.pdf`;
+          const { error: uploadError } = await supabase.storage
+            .from("correspondencias")
+            .upload(pdfFileName, pdfBlob, { contentType: "application/pdf" });
+
+          let publicPdfUrl = "";
+          if (!uploadError) {
+            publicPdfUrl = supabase.storage
+              .from("correspondencias")
+              .getPublicUrl(pdfFileName).data.publicUrl;
+            setFinalPdfUrl(publicPdfUrl);
+          }
+
+          // Anexa recibo e URL da foto (storage) à baixa já registrada.
+          // Mantém base64 como fallback só se o upload da foto falhou.
+          dadosRetiradaBruto.fotoComprovanteUrl = fotoUrl || fotoParaPdf || undefined;
+          await supabase
+            .from("correspondencias")
+            .update(
+              removerUndefined({
+                recibo_url: publicPdfUrl || undefined,
+                dados_retirada: removerUndefined(dadosRetiradaBruto),
+              })
+            )
+            .eq("id", correspondencia.id);
+
+          // Histórico em `retiradas` é secundário — best-effort.
+          supabase
+            .from("retiradas")
+            .insert(
+              removerUndefined({
+                correspondencia_id: correspondencia.id,
+                protocolo: correspondencia.protocolo,
+                condominio_id: user?.condominioId || "",
+                ...removerUndefined(dadosRetiradaBruto),
+                recibo_url: publicPdfUrl || undefined,
+                status: "concluida",
+                criado_em: new Date().toISOString(),
+              })
+            )
+            .then(({ error: histError }) => {
+              if (histError) console.error("Erro ao registrar histórico de retirada:", histError);
+            });
+        } catch (bgErr) {
+          console.error("Erro no processamento em background da retirada:", bgErr);
+        }
+      })();
     } catch (err: any) {
       console.error("Erro crítica:", err);
       setError(`Erro: ${err?.message || "Falha ao processar"}`);
