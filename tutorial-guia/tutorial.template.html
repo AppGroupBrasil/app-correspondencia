@@ -1,0 +1,290 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<title>Guia Rápido — App Correspondência</title>
+<style>
+  @page { size: A4; margin: 0; }
+  * { margin: 0; padding: 0; box-sizing: border-box; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+  :root{
+    --green:#057321; --green-d:#046119; --green-l:#0a9f2f;
+    --ink:#1b2430; --muted:#5b6b73; --line:#e4ece6;
+    --bg-soft:#f1faf4;
+  }
+  body{ font-family:'Segoe UI', Tahoma, Arial, sans-serif; color:var(--ink); }
+
+  .page{
+    position:relative; width:210mm; height:296mm; padding:15mm 16mm;
+    page-break-after:always; break-after:page; overflow:hidden; background:#fff;
+  }
+  .page:last-child{ page-break-after:auto; }
+
+  /* ---------- CAPA ---------- */
+  .cover{
+    display:flex; flex-direction:column; align-items:center; justify-content:center;
+    text-align:center; padding:0;
+    background:
+      radial-gradient(120% 80% at 50% 0%, #ffffff 0%, #f1faf4 55%, #e4f5ea 100%);
+  }
+  .cover::before{
+    content:""; position:absolute; top:0; left:0; right:0; height:14mm;
+    background:linear-gradient(90deg,var(--green),var(--green-l));
+  }
+  .cover::after{
+    content:""; position:absolute; bottom:0; left:0; right:0; height:8mm;
+    background:linear-gradient(90deg,var(--green-d),var(--green));
+  }
+  .cover-logo{
+    width:128px; height:128px; border-radius:32px; object-fit:cover;
+    box-shadow:0 18px 40px rgba(5,115,33,.28); border:4px solid #fff;
+    background:#fff;
+  }
+  .cover h1{ font-size:40px; font-weight:800; margin-top:30px; letter-spacing:-.5px; }
+  .cover h1 span{ color:var(--green); }
+  .cover .sub{ font-size:17px; color:var(--muted); margin-top:10px; max-width:380px; line-height:1.5; }
+  .cover .pill{
+    margin-top:34px; display:inline-flex; gap:8px; align-items:center;
+    background:#fff; border:1.5px solid var(--green); color:var(--green);
+    font-weight:700; font-size:13px; padding:9px 18px; border-radius:999px;
+    box-shadow:0 6px 18px rgba(5,115,33,.12);
+  }
+  .cover .index{
+    margin-top:40px; display:flex; gap:14px; flex-wrap:wrap; justify-content:center; max-width:430px;
+  }
+  .cover .index .it{
+    background:#fff; border:1px solid var(--line); border-radius:16px;
+    padding:14px 18px; min-width:120px; box-shadow:0 8px 20px rgba(16,40,24,.06);
+  }
+  .cover .index .n{
+    width:26px;height:26px;border-radius:50%;background:linear-gradient(135deg,var(--green),var(--green-d));
+    color:#fff;font-weight:800;font-size:13px;display:flex;align-items:center;justify-content:center;margin:0 auto 8px;
+  }
+  .cover .index .t{ font-size:12.5px; font-weight:700; color:var(--ink); }
+  .cover .foot{ position:absolute; bottom:14mm; font-size:12px; color:var(--muted); }
+
+  /* ---------- CABEÇALHO DE FUNÇÃO ---------- */
+  .fn-head{
+    display:flex; align-items:center; gap:15px;
+    background:linear-gradient(135deg,var(--green),var(--green-d));
+    color:#fff; border-radius:18px; padding:16px 20px;
+    box-shadow:0 12px 26px rgba(5,115,33,.22);
+  }
+  .fn-head .ic{
+    width:48px;height:48px;border-radius:14px;background:rgba(255,255,255,.18);
+    display:flex;align-items:center;justify-content:center;font-size:24px;flex-shrink:0;
+  }
+  .fn-head .kick{ font-size:11px; letter-spacing:2px; text-transform:uppercase; opacity:.85; font-weight:700; }
+  .fn-head h2{ font-size:24px; font-weight:800; margin-top:2px; }
+  .fn-head p{ font-size:13px; opacity:.92; margin-top:3px; }
+
+  /* ---------- PASSOS ---------- */
+  .steps{ margin-top:16px; display:flex; flex-direction:column; gap:9px; }
+  .step{
+    display:flex; gap:13px; align-items:flex-start;
+    background:#fff; border:1px solid var(--line); border-radius:13px;
+    padding:10px 15px; box-shadow:0 4px 12px rgba(16,40,24,.04);
+  }
+  .step .num{
+    width:30px;height:30px;border-radius:50%;flex-shrink:0;
+    background:linear-gradient(135deg,var(--green),var(--green-l));
+    color:#fff;font-weight:800;font-size:14px;
+    display:flex;align-items:center;justify-content:center;
+    box-shadow:0 4px 10px rgba(5,115,33,.25);
+  }
+  .step .tx{ font-size:14px; line-height:1.5; padding-top:3px; }
+  .step .tx b{ color:var(--green-d); }
+  .step .ex{
+    display:block; margin-top:6px; font-size:12.5px; color:var(--muted);
+    background:var(--bg-soft); border-left:3px solid var(--green-l);
+    padding:7px 11px; border-radius:0 8px 8px 0;
+  }
+  .step .ex i{ font-style:normal; color:var(--green-d); font-weight:600; }
+
+  /* ---------- TELAS / PRINTS ---------- */
+  /* página dedicada às telas */
+  .telas-head{ text-align:center; margin-bottom:6mm; }
+  .telas-head .kick{
+    display:inline-flex; align-items:center; gap:8px;
+    background:var(--bg-soft); color:var(--green-d); border:1.5px solid var(--green);
+    font-size:11px; letter-spacing:1.5px; text-transform:uppercase; font-weight:800;
+    padding:7px 16px; border-radius:999px;
+  }
+  .telas-head h3{ font-size:22px; font-weight:800; margin-top:12px; }
+  .telas-head p{ font-size:13px; color:var(--muted); margin-top:5px; }
+  .shots-wrap{ display:flex; align-items:center; justify-content:center; height:200mm; break-inside:avoid; page-break-inside:avoid; }
+  .shots-title{
+    margin:18px 0 10px; font-size:12px; letter-spacing:1.5px; text-transform:uppercase;
+    color:var(--muted); font-weight:700; display:flex; align-items:center; gap:10px;
+  }
+  .shots-title::after{ content:""; flex:1; height:1px; background:var(--line); }
+  .shots{ display:flex; gap:14px; justify-content:center; break-inside:avoid; page-break-inside:avoid; }
+  .phone{
+    width:82mm; border-radius:26px; padding:7px;
+    background:linear-gradient(160deg,#0d2a16,#057321);
+    box-shadow:0 14px 30px rgba(5,115,33,.28);
+    break-inside:avoid; page-break-inside:avoid;
+  }
+  .phone .scr{
+    position:relative; border-radius:18px; overflow:hidden; background:#fff;
+    aspect-ratio:9/16; display:flex; align-items:center; justify-content:center;
+  }
+  .phone .scr .empty{
+    width:100%; height:100%;
+    border:2px dashed #bcd8c6; border-radius:18px;
+    display:flex; flex-direction:column; align-items:center; justify-content:center;
+    gap:10px; color:#8fa899; text-align:center; padding:18px; background:#fafefb;
+  }
+  .phone .scr .empty .cam{ font-size:34px; opacity:.6; }
+  .phone .scr .empty .lb{ font-size:12px; font-weight:700; color:var(--green-d); }
+  .phone .scr .empty .cap{ font-size:11px; line-height:1.4; color:#8fa899; }
+  .phone .scr img{ width:100%; height:100%; object-fit:cover; display:block; }
+  .phone .tag{
+    text-align:center; color:#fff; font-size:11.5px; font-weight:700;
+    padding:8px 4px 3px; opacity:.95;
+  }
+
+  .pg-foot{
+    position:absolute; bottom:10mm; left:16mm; right:16mm;
+    display:flex; justify-content:space-between; align-items:center;
+    font-size:10.5px; color:var(--muted); border-top:1px solid var(--line); padding-top:7px;
+  }
+  .pg-foot .brand{ display:flex; align-items:center; gap:7px; font-weight:700; color:var(--green-d); }
+  .pg-foot .brand img{ width:16px;height:16px;border-radius:5px; }
+</style>
+</head>
+<body>
+
+  <!-- ============ CAPA ============ -->
+  <section class="page cover">
+    <img class="cover-logo" src="{{LOGO}}" alt="logo">
+    <h1>Guia <span>Rápido</span></h1>
+    <div class="sub">Passo a passo das principais funções do aplicativo de portaria</div>
+    <div class="pill">App Correspondência · Manual da Portaria</div>
+    <div class="index">
+      <div class="it"><div class="n">1</div><div class="t">Avisar Nova<br>Correspondência</div></div>
+      <div class="it"><div class="n">2</div><div class="t">Registrar<br>Retirada</div></div>
+      <div class="it"><div class="n">3</div><div class="t">Avisos<br>Rápidos</div></div>
+    </div>
+    <div class="foot">appcorrespondencia.com.br</div>
+  </section>
+
+  <!-- ============ FUNÇÃO 1 ============ -->
+  <section class="page">
+    <div class="fn-head">
+      <div class="ic">📦</div>
+      <div>
+        <div class="kick">Função 1</div>
+        <h2>Avisar Nova Correspondência</h2>
+        <p>Registre a chegada de uma encomenda e avise o morador na hora.</p>
+      </div>
+    </div>
+
+    <div class="steps">
+      <div class="step"><div class="num">1</div><div class="tx">Na tela da portaria, toque em <b>“Nova Encomenda”</b>.</div></div>
+      <div class="step"><div class="num">2</div><div class="tx">Em <b>Destinatário</b>, selecione o <b>Bloco</b> e depois o <b>Apartamento (morador)</b>.</div></div>
+      <div class="step"><div class="num">3</div><div class="tx">Escolha o <b>Local de Retirada</b> (Portaria, Administração, Recepção...).</div></div>
+      <div class="step"><div class="num">4</div><div class="tx">Descreva a encomenda em <b>Detalhes / Observação</b>.
+        <span class="ex">Exemplo: <i>“Caixa Amazon — média, lacrada”</i> · <i>“Envelope dos Correios — registrado”</i></span>
+      </div></div>
+      <div class="step"><div class="num">5</div><div class="tx">Toque em <b>Foto da Encomenda</b> e fotografe o pacote <i>(recomendado)</i>.</div></div>
+      <div class="step"><div class="num">6</div><div class="tx">Toque em <b>“Registrar Entrada”</b>. O morador é avisado automaticamente e a <b>etiqueta com QR Code</b> é gerada.</div></div>
+    </div>
+
+    <div class="pg-foot"><div class="brand"><img src="{{LOGO}}">App Correspondência</div><div>Guia Rápido · Função 1</div></div>
+  </section>
+
+  <!-- ============ FUNÇÃO 1 · TELAS ============ -->
+  <section class="page">
+    <div class="telas-head">
+      <span class="kick">📦 Função 1 · Telas</span>
+      <h3>Avisar Nova Correspondência</h3>
+      <p>Veja como fica no aplicativo, passo a passo.</p>
+    </div>
+    <div class="shots-wrap">
+      <div class="shots">
+        <div class="phone"><div class="scr"><!--SLOT:p1a--><div class="empty"><div class="cam">📷</div><div class="lb">Print 1</div><div class="cap">Tela “Nova Encomenda”<br>(formulário preenchido)</div></div></div><div class="tag">Preenchendo o cadastro</div></div>
+        <div class="phone"><div class="scr"><!--SLOT:p1b--><div class="empty"><div class="cam">📷</div><div class="lb">Print 2</div><div class="cap">Tela de confirmação<br>(etiqueta / envio)</div></div></div><div class="tag">Aviso enviado</div></div>
+      </div>
+    </div>
+    <div class="pg-foot"><div class="brand"><img src="{{LOGO}}">App Correspondência</div><div>Guia Rápido · Função 1</div></div>
+  </section>
+
+  <!-- ============ FUNÇÃO 2 ============ -->
+  <section class="page">
+    <div class="fn-head">
+      <div class="ic">✅</div>
+      <div>
+        <div class="kick">Função 2</div>
+        <h2>Registrar Retirada (Baixa)</h2>
+        <p>Dê baixa quando o morador retirar a correspondência, com assinatura.</p>
+      </div>
+    </div>
+
+    <div class="steps">
+      <div class="step"><div class="num">1</div><div class="tx">Na tela da portaria, toque em <b>“Registrar Saída”</b>.</div></div>
+      <div class="step"><div class="num">2</div><div class="tx">Busque por <b>Nome, Apartamento ou Protocolo</b> — ou toque em <b>“Ler QR”</b> e aponte para a etiqueta.</div></div>
+      <div class="step"><div class="num">3</div><div class="tx">Toque na <b>correspondência</b> desejada na lista.</div></div>
+      <div class="step"><div class="num">4</div><div class="tx">Preencha <b>“Nome de quem retirou”</b> (obrigatório). CPF e telefone são opcionais.</div></div>
+      <div class="step"><div class="num">5</div><div class="tx">Se quiser, tire a <b>foto da retirada</b> e adicione observações. Toque em <b>“Próximo: Assinaturas”</b>.</div></div>
+      <div class="step"><div class="num">6</div><div class="tx">Colete a <b>assinatura</b> e confirme. A baixa é registrada e o <b>recibo em PDF</b> fica salvo.</div></div>
+    </div>
+
+    <div class="pg-foot"><div class="brand"><img src="{{LOGO}}">App Correspondência</div><div>Guia Rápido · Função 2</div></div>
+  </section>
+
+  <!-- ============ FUNÇÃO 2 · TELAS ============ -->
+  <section class="page">
+    <div class="telas-head">
+      <span class="kick">✅ Função 2 · Telas</span>
+      <h3>Registrar Retirada (Baixa)</h3>
+      <p>Veja como fica no aplicativo, passo a passo.</p>
+    </div>
+    <div class="shots-wrap">
+      <div class="shots">
+        <div class="phone"><div class="scr"><!--SLOT:p2a--><div class="empty"><div class="cam">📷</div><div class="lb">Print 1</div><div class="cap">Tela “Registrar Saída”<br>(busca / lista)</div></div></div><div class="tag">Localizar correspondência</div></div>
+        <div class="phone"><div class="scr"><!--SLOT:p2b--><div class="empty"><div class="cam">📷</div><div class="lb">Print 2</div><div class="cap">Dados de quem retirou<br>+ assinatura</div></div></div><div class="tag">Confirmar a baixa</div></div>
+      </div>
+    </div>
+    <div class="pg-foot"><div class="brand"><img src="{{LOGO}}">App Correspondência</div><div>Guia Rápido · Função 2</div></div>
+  </section>
+
+  <!-- ============ FUNÇÃO 3 ============ -->
+  <section class="page">
+    <div class="fn-head">
+      <div class="ic">⚡</div>
+      <div>
+        <div class="kick">Função 3</div>
+        <h2>Avisos Rápidos</h2>
+        <p>Envie um aviso direto pelo WhatsApp do morador em poucos toques.</p>
+      </div>
+    </div>
+
+    <div class="steps">
+      <div class="step"><div class="num">1</div><div class="tx">Na tela da portaria, toque em <b>“Avisos Rápidos”</b>.</div></div>
+      <div class="step"><div class="num">2</div><div class="tx">Escolha o <b>Bloco</b> ou use <b>“Buscar Morador”</b> (por nome ou apartamento).</div></div>
+      <div class="step"><div class="num">3</div><div class="tx">Toque em <b>“Avisar”</b> no card do morador.</div></div>
+      <div class="step"><div class="num">4</div><div class="tx">Confira o <b>protocolo</b> gerado. Anexe uma <b>foto</b> se quiser <i>(opcional)</i>.</div></div>
+      <div class="step"><div class="num">5</div><div class="tx">Toque em <b>“Enviar WhatsApp”</b> — a mensagem abre pronta para envio ao morador.</div></div>
+    </div>
+
+    <div class="pg-foot"><div class="brand"><img src="{{LOGO}}">App Correspondência</div><div>Guia Rápido · Função 3</div></div>
+  </section>
+
+  <!-- ============ FUNÇÃO 3 · TELAS ============ -->
+  <section class="page">
+    <div class="telas-head">
+      <span class="kick">⚡ Função 3 · Telas</span>
+      <h3>Avisos Rápidos</h3>
+      <p>Veja como fica no aplicativo, passo a passo.</p>
+    </div>
+    <div class="shots-wrap">
+      <div class="shots">
+        <div class="phone"><div class="scr"><!--SLOT:p3a--><div class="empty"><div class="cam">📷</div><div class="lb">Print 1</div><div class="cap">Tela “Avisos Rápidos”<br>(blocos / moradores)</div></div></div><div class="tag">Escolher o morador</div></div>
+        <div class="phone"><div class="scr"><!--SLOT:p3b--><div class="empty"><div class="cam">📷</div><div class="lb">Print 2</div><div class="cap">Confirmar aviso<br>e enviar WhatsApp</div></div></div><div class="tag">Enviar mensagem</div></div>
+      </div>
+    </div>
+    <div class="pg-foot"><div class="brand"><img src="{{LOGO}}">App Correspondência</div><div>Guia Rápido · Função 3</div></div>
+  </section>
+
+</body>
+</html>
