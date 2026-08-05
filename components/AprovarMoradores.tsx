@@ -8,6 +8,7 @@ import { Check, X, Trash2, Edit, UserCheck, Ban, Save, XCircle } from "lucide-re
 import BotaoVoltar from "@/components/BotaoVoltar";
 import BotaoLinkCadastro from "@/components/BotaoLinkCadastro";
 import { buildAuthenticatedJsonHeaders } from '@/app/lib/client-auth';
+import { formatarTelefone, limparTelefone, telefoneValido, MSG_TELEFONE_INVALIDO } from "@/utils/telefone";
 
 interface Morador {
   id: string;
@@ -241,7 +242,7 @@ export default function AprovarMoradores({ condominioId: adminCondominioId }: { 
     setMoradorEditando(morador);
     setEditNome(morador.nome);
     setEditEmail(morador.email);
-    setEditWhatsapp(morador.whatsapp);
+    setEditWhatsapp(formatarTelefone(morador.whatsapp));
     setEditPerfil(morador.perfil);
     setEditBlocoId(morador.blocoId || "");
     setEditUnidade(morador.numeroUnidade || morador.unidadeNome || "");
@@ -250,12 +251,13 @@ export default function AprovarMoradores({ condominioId: adminCondominioId }: { 
 
   const salvarEdicao = async () => {
     if (!moradorEditando) return;
+    if (!telefoneValido(editWhatsapp)) return alert(MSG_TELEFONE_INVALIDO);
     try {
       const blocoSelecionado = blocos.find(b => b.id === editBlocoId);
       const updates: any = {
         nome: editNome,
         email: editEmail,
-        whatsapp: editWhatsapp,
+        whatsapp: limparTelefone(editWhatsapp),
         perfil: editPerfil,
         bloco_id: editBlocoId,
         bloco_nome: blocoSelecionado?.nome || "",
@@ -465,7 +467,7 @@ export default function AprovarMoradores({ condominioId: adminCondominioId }: { 
                  </div>
                  <div>
                     <label className="block text-sm font-medium text-gray-700 mb-1">WhatsApp</label>
-                    <input className="w-full border border-gray-300 rounded-lg p-2.5 focus:ring-2 focus:ring-[#057321] outline-none" value={editWhatsapp} onChange={e => setEditWhatsapp(e.target.value)} />
+                    <input className="w-full border border-gray-300 rounded-lg p-2.5 focus:ring-2 focus:ring-[#057321] outline-none" type="tel" inputMode="numeric" maxLength={15} placeholder="(81) 99999-9999" value={editWhatsapp} onChange={e => setEditWhatsapp(formatarTelefone(e.target.value))} />
                  </div>
                  <div className="grid grid-cols-2 gap-4">
                     <div>

@@ -5,6 +5,7 @@ import { Shield, Edit2, Trash2, UserCheck, UserX, Plus, X, ShieldCheck } from "l
 import { supabase } from "@/app/lib/supabase";
 import { getApiUrl } from "@/utils/platform";
 import { useAuth } from "@/hooks/useAuth";
+import { formatarTelefone, limparTelefone, telefoneValido, MSG_TELEFONE_INVALIDO } from "@/utils/telefone";
 import ModalProximoPasso from "@/components/ModalProximoPasso";
 import type { PassoId } from "@/app/lib/onboarding";
 
@@ -83,6 +84,13 @@ export default function GerenciarResponsaveis() {
       return;
     }
 
+    if (!telefoneValido(whatsapp)) {
+      alert(MSG_TELEFONE_INVALIDO);
+      return;
+    }
+
+    const whatsappLimpo = limparTelefone(whatsapp);
+
     if (!responsavelEditando && (!senha || senha.length < 6)) {
       alert("Senha deve ter no mínimo 6 caracteres.");
       return;
@@ -96,7 +104,7 @@ export default function GerenciarResponsaveis() {
         await supabase.from("users").update({
           nome,
           email,
-          whatsapp,
+          whatsapp: whatsappLimpo,
           condominio_id: condominioSelecionado,
           atualizado_em: new Date().toISOString()
         }).eq("id", responsavelEditando.id);
@@ -111,7 +119,7 @@ export default function GerenciarResponsaveis() {
             email,
             senha,
             nome,
-            whatsapp,
+            whatsapp: whatsappLimpo,
             role: "responsavel",
             condominioId: condominioSelecionado,
             status: "ativo",
@@ -234,7 +242,7 @@ export default function GerenciarResponsaveis() {
               setResponsavelEditando(resp);
               setNome(resp.nome);
               setEmail(resp.email);
-              setWhatsapp(resp.whatsapp);
+              setWhatsapp(formatarTelefone(resp.whatsapp));
               setCondominioSelecionado(resp.condominioId);
               setModalAberto(true);
             }}
@@ -321,7 +329,7 @@ export default function GerenciarResponsaveis() {
               <input type="text" placeholder="Nome Completo" value={nome} onChange={e => setNome(e.target.value)} className="w-full border p-2 rounded" />
               <input type="email" placeholder="Email" value={email} onChange={e => setEmail(e.target.value)} className="w-full border p-2 rounded" />
               {!responsavelEditando && <input type="password" placeholder="Senha (mín 6)" value={senha} onChange={e => setSenha(e.target.value)} className="w-full border p-2 rounded" />}
-              <input type="text" placeholder="WhatsApp (com DDD)" value={whatsapp} onChange={e => setWhatsapp(e.target.value)} className="w-full border p-2 rounded" />
+              <input type="tel" inputMode="numeric" maxLength={15} placeholder="WhatsApp (com DDD) - (81) 99999-9999" value={whatsapp} onChange={e => setWhatsapp(formatarTelefone(e.target.value))} className="w-full border p-2 rounded" />
               
               <select value={condominioSelecionado} onChange={e => setCondominioSelecionado(e.target.value)} className="w-full border p-2 rounded bg-white">
                 <option value="">Selecione o Condomínio</option>

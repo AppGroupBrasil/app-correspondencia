@@ -9,6 +9,7 @@ import UploadImagem from "./UploadImagem";
 import { gerarReciboPDF } from "@/utils/gerarReciboPDF";
 import { LoadingOverlay } from "@/components/LoadingOverlay";
 import ModalSucessoRetirada from "./ModalSucessoRetirada";
+import { formatarTelefone } from "@/utils/telefone";
 
 // --- DEFINIÇÃO DE TIPOS INLINE ---
 interface ConfiguracoesRetirada {
@@ -529,8 +530,10 @@ Obrigado!
                     <label className="block text-sm font-medium text-gray-700 mb-2">Telefone</label>
                     <input
                       type="text"
+                      inputMode="numeric"
+                      maxLength={15}
                       value={telefoneQuemRetirou}
-                      onChange={(e) => setTelefoneQuemRetirou(e.target.value)}
+                      onChange={(e) => setTelefoneQuemRetirou(formatarTelefone(e.target.value))}
                       className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-[#057321] focus:border-[#057321]"
                       placeholder="(00) 00000-0000"
                       disabled={loading}

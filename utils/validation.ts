@@ -55,12 +55,4 @@ export const validarFormularioPorteiro = (
   }
 }
 
-export const formatarWhatsApp = (valor: string): string => {
-  const numeros = valor.replace(/\D/g, '')
-  
-  if (numeros.length <= 10) {
-    return numeros.replace(/(\d{2})(\d{4})(\d{4})/, '($1) $2-$3')
-  }
-  
-  return numeros.replace(/(\d{2})(\d{5})(\d{4})/, '($1) $2-$3')
-}
+export { formatarTelefone as formatarWhatsApp } from '@/utils/telefone'

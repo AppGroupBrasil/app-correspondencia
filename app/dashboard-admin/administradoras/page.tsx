@@ -6,6 +6,7 @@ import withAuth from "@/components/withAuth";
 import { ShieldCheck, Plus, X, UserPlus, ArrowDownCircle } from "lucide-react";
 import { getApiUrl } from "@/utils/platform";
 import { buildAuthenticatedJsonHeaders } from "@/app/lib/client-auth";
+import { formatarTelefone, limparTelefone, telefoneValido, MSG_TELEFONE_INVALIDO } from "@/utils/telefone";
 
 interface UsuarioBase {
   id: string;
@@ -126,6 +127,10 @@ function AdministradorasPage() {
       alert("Preencha nome, e-mail, senha (mín. 6) e ao menos um condomínio.");
       return;
     }
+    if (novoWhatsapp.trim() && !telefoneValido(novoWhatsapp)) {
+      alert(MSG_TELEFONE_INVALIDO);
+      return;
+    }
     setSalvando(true);
     try {
       const res = await fetch(getApiUrl("/api/criar-usuario"), {
@@ -135,7 +140,7 @@ function AdministradorasPage() {
           email: novoEmail,
           senha: novaSenha,
           nome: novoNome,
-          whatsapp: novoWhatsapp,
+          whatsapp: limparTelefone(novoWhatsapp),
           role: "admin",
           condominioId: null,
           status: "ativo",
@@ -307,7 +312,7 @@ function AdministradorasPage() {
           <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mb-3">
             <input value={novoNome} onChange={e => setNovoNome(e.target.value)} placeholder="Nome" className="p-2 border rounded-lg" />
             <input value={novoEmail} onChange={e => setNovoEmail(e.target.value)} placeholder="E-mail" type="email" className="p-2 border rounded-lg" />
-            <input value={novoWhatsapp} onChange={e => setNovoWhatsapp(e.target.value)} placeholder="WhatsApp" className="p-2 border rounded-lg" />
+            <input type="tel" inputMode="numeric" maxLength={15} value={novoWhatsapp} onChange={e => setNovoWhatsapp(formatarTelefone(e.target.value))} placeholder="WhatsApp - (81) 99999-9999" className="p-2 border rounded-lg" />
             <input value={novaSenha} onChange={e => setNovaSenha(e.target.value)} placeholder="Senha (mín. 6)" type="password" className="p-2 border rounded-lg" />
           </div>
           <label className="block text-sm font-bold mb-1">Condomínios vinculados</label>

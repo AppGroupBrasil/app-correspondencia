@@ -5,6 +5,7 @@ import { useAuth } from "@/hooks/useAuth";
 import { supabase } from "@/app/lib/supabase";
 import { User, Mail, Phone, Lock, Trash2, Save, ArrowLeft } from "lucide-react";
 import withAuth from "@/components/withAuth";
+import { formatarTelefone, limparTelefone, telefoneValido, MSG_TELEFONE_INVALIDO } from "@/utils/telefone";
 
 function MinhaContaPage() {
   const { user } = useAuth();
@@ -29,7 +30,7 @@ function MinhaContaPage() {
     if (user) {
       setNome(user.nome || "");
       setEmail(user.email || "");
-      setTelefone(user.telefone || "");
+      setTelefone(formatarTelefone(user.telefone || ""));
     }
   }, [user]);
 
@@ -47,6 +48,11 @@ function MinhaContaPage() {
   const handleSalvar = async () => {
     if (!user) return;
 
+    if (telefone.trim() && !telefoneValido(telefone)) {
+      setError(MSG_TELEFONE_INVALIDO);
+      return;
+    }
+
     try {
       setLoading(true);
       setError("");
@@ -55,7 +61,7 @@ function MinhaContaPage() {
       // Atualizar dados na tabela users
       const { error: dbError } = await supabase
         .from("users")
-        .update({ nome, telefone })
+        .update({ nome, telefone: limparTelefone(telefone) })
         .eq("id", user.uid);
 
       if (dbError) throw new Error(dbError.message);
@@ -265,7 +271,9 @@ function MinhaContaPage() {
               <input
                 type="tel"
                 value={telefone}
-                onChange={(e) => setTelefone(e.target.value)}
+                inputMode="numeric"
+                maxLength={15}
+                onChange={(e) => setTelefone(formatarTelefone(e.target.value))}
                 className="w-full border border-gray-300 rounded-lg px-4 py-2 focus:ring-2 focus:ring-primary-500 focus:border-transparent"
                 placeholder="(00) 00000-0000"
               />

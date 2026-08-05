@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { supabase } from "@/app/lib/supabase";
 // 🔥 AJUSTE: Uso de alias '@/' para evitar erros de caminho relativo
 import { enviarConfirmacaoCadastro } from '@/app/lib/email-helper';
+import { formatarTelefone, limparTelefone, telefoneValido, MSG_TELEFONE_INVALIDO } from '@/utils/telefone';
 
 export default function CadastroMoradorPage() {
   const router = useRouter();
@@ -38,34 +39,6 @@ export default function CadastroMoradorPage() {
     { value: "funcionario", label: "Funcionário" },
     { value: "outro", label: "Outro" },
   ];
-
-  // 🔥 NOVA FUNÇÃO DE FORMATAÇÃO DE TELEFONE
-  const formatarTelefone = (valor: string) => {
-    // Remove tudo que não é número
-    let v = valor.replaceAll(/\D/g, "");
-    
-    // Limita a 11 dígitos
-    v = v.substring(0, 11);
-
-    // Aplica a máscara passo a passo
-    if (v.length > 10) {
-      // Formato Celular: (11) 99999-9999
-      return v.replace(/^(\d{2})(\d{5})(\d{4})/, "($1) $2-$3");
-    }
-    if (v.length > 6) {
-      // Formato Fixo/Incompleto: (11) 9999-9999
-      return v.replace(/^(\d{2})(\d{4})(\d{0,4})/, "($1) $2-$3");
-    }
-    if (v.length > 2) {
-      // Apenas DDD + começo: (11) 9...
-      return v.replace(/^(\d{2})(\d{0,5})/, "($1) $2");
-    }
-    if (v.length > 0) {
-      // Apenas DDD: (11...
-      return v.replace(/^(\d{0,2})/, "($1");
-    }
-    return v;
-  };
 
   const buscarCondominio = async () => {
     if (!cnpj.trim()) {
@@ -107,7 +80,8 @@ export default function CadastroMoradorPage() {
     if (!nome.trim()) return setErro("Nome é obrigatório");
     if (!email.trim()) return setErro("Email é obrigatório");
     if (!whatsapp.trim()) return setErro("WhatsApp é obrigatório");
-    
+    if (!telefoneValido(whatsapp)) return setErro(MSG_TELEFONE_INVALIDO);
+
     if (blocos.length > 0 && !blocoId) return setErro("Selecione o bloco");
     
     if (!numeroUnidade.trim()) return setErro("Digite o número da sua unidade");
@@ -147,7 +121,7 @@ export default function CadastroMoradorPage() {
           role: "morador",
           condominioId: condominioEncontrado.id,
           dados: {
-            whatsapp,
+            whatsapp: limparTelefone(whatsapp),
             perfil,
             perfil_morador: perfil,
             condominio_nome: condominioEncontrado.nome,

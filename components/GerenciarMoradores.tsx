@@ -15,6 +15,7 @@ import {
 import { supabase } from "@/app/lib/supabase";
 import { useAuth } from "@/hooks/useAuth";
 import BotaoVoltar from "@/components/BotaoVoltar";
+import { formatarTelefone, telefoneValido, aplicarDddPadrao, limparTelefone, MSG_TELEFONE_INVALIDO } from "@/utils/telefone";
 import ModalProximoPasso from "@/components/ModalProximoPasso";
 import type { PassoId } from "@/app/lib/onboarding";
 
@@ -182,6 +183,7 @@ export default function GerenciarMoradores({ condominioId: adminCondominioId }: 
 
   const [modalImportacao, setModalImportacao] = useState(false);
   const [arquivoImportacao, setArquivoImportacao] = useState<File | null>(null);
+  const [dddPadrao, setDddPadrao] = useState("");
   const [importando, setImportando] = useState(false);
   const [statusImportacao, setStatusImportacao] = useState("");
   const [cooldown, setCooldown] = useState(0);
@@ -193,17 +195,6 @@ export default function GerenciarMoradores({ condominioId: adminCondominioId }: 
   // Master vê tudo quando não há condomínio escolhido explicitamente via prop.
   const isMaster = user?.role === "adminMaster" && !adminCondominioId;
   const backRoute = user?.role === "porteiro" ? "/dashboard-porteiro" : "/dashboard-responsavel";
-
-  // 🔥 COLEI A FUNÇÃO AQUI PARA VOCÊ
-  const formatarTelefone = (valor: string) => {
-    let v = valor.replace(/\D/g, "");
-    v = v.substring(0, 11);
-    if (v.length > 10) return v.replace(/^(\d{2})(\d{5})(\d{4})/, "($1) $2-$3");
-    if (v.length > 6) return v.replace(/^(\d{2})(\d{4})(\d{0,4})/, "($1) $2-$3");
-    if (v.length > 2) return v.replace(/^(\d{2})(\d{0,5})/, "($1) $2");
-    if (v.length > 0) return v.replace(/^(\d{0,2})/, "($1");
-    return v;
-  };
 
   useEffect(() => {
     async function garantirCondominioId() {
@@ -367,7 +358,7 @@ export default function GerenciarMoradores({ condominioId: adminCondominioId }: 
     setForm({
       nome: morador.nome,
       email: morador.email,
-      whatsapp: morador.whatsapp,
+      whatsapp: formatarTelefone(morador.whatsapp),
       perfil: morador.perfil || "proprietario",
       blocoSelecionado: blocoIdRestaurado,
       numeroApartamento: unidadeVinculada ? unidadeVinculada.identificacao : morador.unidadeNome || "",
@@ -384,6 +375,10 @@ export default function GerenciarMoradores({ condominioId: adminCondominioId }: 
 
     if (!nome.trim() || !email.trim() || !whatsapp.trim() || !blocoSelecionado || !numeroApartamento) {
       alert("Preencha todos os campos obrigatórios.");
+      return;
+    }
+    if (!telefoneValido(whatsapp)) {
+      alert(MSG_TELEFONE_INVALIDO);
       return;
     }
     if (!modoEdicao && !senha.trim()) {
@@ -619,6 +614,13 @@ export default function GerenciarMoradores({ condominioId: adminCondominioId }: 
       return;
     }
 
+    if (dddPadrao.length !== 2) {
+      const seguir = confirm(
+        "Você não informou o DDD do estado. Moradores que preencheram o WhatsApp sem DDD ficarão com número incompleto e não receberão avisos. Continuar mesmo assim?"
+      );
+      if (!seguir) return;
+    }
+
     setImportando(true);
     setLogImportacao([]);
     setStatusImportacao("Iniciando leitura do arquivo...");
@@ -738,10 +740,19 @@ export default function GerenciarMoradores({ condominioId: adminCondominioId }: 
             unidades.push({ id: unidadeId, identificacao: unidadeRaw, tipo: "apt", blocoSetor: blocoMatch.nome, blocoId: blocoMatch.id });
         }
 
+        const whatsappBruto = String(row[idx.whats] || "").trim();
+        const whatsappLinha = aplicarDddPadrao(whatsappBruto, dddPadrao);
+
+        if (whatsappBruto && !telefoneValido(whatsappLinha)) {
+            logsTemp.push(
+              `Linha ${i + 1}: WhatsApp inválido (${whatsappBruto}) — importado assim mesmo, corrija no cadastro.`
+            );
+        }
+
         const dadosMorador = {
             nome,
             email,
-            whatsapp: String(row[idx.whats] || "").replace(/\D/g, ""),
+            whatsapp: whatsappLinha,
             perfil: normalizarPerfil(row[idx.perfil]),
             unidade_id: unidadeId,
             unidade_nome: unidadeRaw,
@@ -1006,6 +1017,27 @@ export default function GerenciarMoradores({ condominioId: adminCondominioId }: 
                 <input type="file" accept=".xlsx,.xls" onChange={e => setArquivoImportacao(e.target.files?.[0] || null)} className="mb-4" />
                 <div className="bg-gray-100 p-2 text-xs rounded mb-4">
                     Colunas: Nome | Email | WhatsApp | Perfil | Bloco | Unidade | Senha
+                </div>
+
+                <div className="mb-4">
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                        DDD do seu estado <span className="font-normal text-gray-500">(código de discagem direta à distância)</span>
+                    </label>
+                    <input
+                        type="tel"
+                        inputMode="numeric"
+                        maxLength={2}
+                        value={dddPadrao}
+                        onChange={e => setDddPadrao(limparTelefone(e.target.value).substring(0, 2))}
+                        placeholder="81"
+                        className="w-24 border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-[#057321] outline-none"
+                    />
+                    <p className="text-xs text-gray-500 mt-1">
+                        Exemplos: <strong>11</strong> = São Paulo · <strong>81</strong> = Recife · <strong>21</strong> = Rio de Janeiro
+                    </p>
+                    <p className="text-xs text-gray-500 mt-1">
+                        Usado só quando o número da planilha vier <strong>sem DDD</strong>. Se o morador já informou o DDD dele, o sistema respeita o que está na planilha.
+                    </p>
                 </div>
                 <div className="bg-yellow-50 border border-yellow-200 text-yellow-800 p-2 text-xs rounded mb-4">
                     <strong>Senha:</strong> mínimo 6 caracteres. Se vazia ou ausente, usa <strong>{SENHA_INICIAL_PADRAO}</strong>. O morador é solicitado a redefinir no primeiro login.

@@ -10,6 +10,7 @@ import { useAuth } from "@/hooks/useAuth";
 import BotaoVoltar from "@/components/BotaoVoltar";
 import { getApiUrl } from "@/utils/platform";
 import { buildAuthenticatedJsonHeaders } from "@/app/lib/client-auth";
+import { formatarTelefone, limparTelefone, telefoneValido, MSG_TELEFONE_INVALIDO } from "@/utils/telefone";
 import ModalProximoPasso from "@/components/ModalProximoPasso";
 import type { PassoId } from "@/app/lib/onboarding";
 
@@ -120,6 +121,9 @@ export default function GerenciarPorteiros({ condominioId: adminCondominioId }: 
     if (!nome.trim()) return alert("Nome é obrigatório");
     if (!email.trim() || !email.includes("@")) return alert("Email válido é obrigatório");
     if (!whatsapp.trim()) return alert("WhatsApp é obrigatório");
+    if (!telefoneValido(whatsapp)) return alert(MSG_TELEFONE_INVALIDO);
+
+    const whatsappLimpo = limparTelefone(whatsapp);
 
     if (!porteiroEditando) {
       if (!senha || senha.length < 6) return alert("Senha deve ter no mínimo 6 caracteres");
@@ -133,7 +137,7 @@ export default function GerenciarPorteiros({ condominioId: adminCondominioId }: 
         const dadosAtualizacao: any = {
           nome,
           email,
-          whatsapp,
+          whatsapp: whatsappLimpo,
           atualizado_em: new Date().toISOString(),
         };
 
@@ -155,7 +159,7 @@ export default function GerenciarPorteiros({ condominioId: adminCondominioId }: 
             role: 'porteiro',
             condominioId: targetCondominioId,
             dados: {
-              whatsapp,
+              whatsapp: whatsappLimpo,
               status: 'ativo',
             },
           }),
@@ -222,7 +226,7 @@ export default function GerenciarPorteiros({ condominioId: adminCondominioId }: 
     setPorteiroEditando(p);
     setNome(p.nome);
     setEmail(p.email);
-    setWhatsapp(p.whatsapp);
+    setWhatsapp(formatarTelefone(p.whatsapp));
     setSenha("");
     setConfirmarSenha("");
     setModalAberto(true);
@@ -481,7 +485,7 @@ export default function GerenciarPorteiros({ condominioId: adminCondominioId }: 
 
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">WhatsApp *</label>
-                <input type="tel" value={whatsapp} onChange={(e) => setWhatsapp(e.target.value)} className="w-full border border-gray-300 rounded-lg px-4 py-2 focus:ring-2 focus:ring-[#057321] outline-none" placeholder="(81) 99999-9999" />
+                <input type="tel" inputMode="numeric" maxLength={15} value={whatsapp} onChange={(e) => setWhatsapp(formatarTelefone(e.target.value))} className="w-full border border-gray-300 rounded-lg px-4 py-2 focus:ring-2 focus:ring-[#057321] outline-none" placeholder="(81) 99999-9999" />
               </div>
 
               {!porteiroEditando && (

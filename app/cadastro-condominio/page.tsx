@@ -2,7 +2,8 @@
 import { useState, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { supabase } from "@/app/lib/supabase";
-import { gerarAmbienteTeste } from "@/utils/gerarAmbienteTeste"; 
+import { gerarAmbienteTeste } from "@/utils/gerarAmbienteTeste";
+import { formatarTelefone, limparTelefone, telefoneValido, MSG_TELEFONE_INVALIDO } from "@/utils/telefone";
 
 export default function CadastroCondominioPage() {
   const router = useRouter();
@@ -35,16 +36,6 @@ export default function CadastroCondominioPage() {
     if (v.length > 8) return v.replace(/^(\d{2})(\d{3})(\d{3})(\d{0,4})/, "$1.$2.$3/$4");
     if (v.length > 5) return v.replace(/^(\d{2})(\d{3})(\d{0,3})/, "$1.$2.$3");
     if (v.length > 2) return v.replace(/^(\d{2})(\d{0,3})/, "$1.$2");
-    return v;
-  };
-
-  // Máscara de telefone
-  const formatarTelefone = (valor: string) => {
-    let v = valor.replaceAll(/\D/g, "").substring(0, 11);
-    if (v.length > 10) return v.replace(/^(\d{2})(\d{5})(\d{4})/, "($1) $2-$3");
-    if (v.length > 6) return v.replace(/^(\d{2})(\d{4})(\d{0,4})/, "($1) $2-$3");
-    if (v.length > 2) return v.replace(/^(\d{2})(\d{0,5})/, "($1) $2");
-    if (v.length > 0) return v.replace(/^(\d{0,2})/, "($1");
     return v;
   };
 
@@ -117,6 +108,7 @@ export default function CadastroCondominioPage() {
     if (!senha || senha.length < 6) return alert("Senha deve ter no mínimo 6 caracteres");
     if (senha !== confirmarSenha) return alert("As senhas não conferem");
     if (!whatsapp.trim()) return alert("WhatsApp é obrigatório");
+    if (!telefoneValido(whatsapp)) return alert(MSG_TELEFONE_INVALIDO);
     return true;
   };
 
@@ -139,7 +131,7 @@ export default function CadastroCondominioPage() {
           nome: nomeResponsavel,
           role: "responsavel",
           dados: {
-            whatsapp,
+            whatsapp: limparTelefone(whatsapp),
             status: "ativo",
           },
           condominio: {
@@ -161,7 +153,7 @@ export default function CadastroCondominioPage() {
           await gerarAmbienteTeste({
             condominioId: condominioId,
             condominioNome: nomeCondominio,
-            whatsappDestino: whatsapp
+            whatsappDestino: limparTelefone(whatsapp)
           });
       } catch (error) {
           console.warn("⚠️ Aviso: Ambiente de teste não gerado.", error);
