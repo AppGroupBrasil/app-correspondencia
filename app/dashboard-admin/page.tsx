@@ -6,13 +6,16 @@ import { supabase } from "@/app/lib/supabase";
 import Navbar from "@/components/Navbar";
 import withAuth from "@/components/withAuth";
 import { useAuth } from "@/hooks/useAuth";
-import { 
-  Building2, 
-  Users, 
-  FileText, 
-  LogOut, 
-  ShieldCheck, 
-  LayoutDashboard
+import WizardStories from "@/components/WizardStories";
+import { CHAVE_WIZARD } from "@/app/lib/onboarding";
+import {
+  Building2,
+  Users,
+  FileText,
+  LogOut,
+  ShieldCheck,
+  LayoutDashboard,
+  Compass
 } from "lucide-react";
 
 function DashboardAdminPage() {
@@ -25,6 +28,13 @@ function DashboardAdminPage() {
     porteiros: 0,
     correspondencias: 0
   });
+  const [wizardAberto, setWizardAberto] = useState(false);
+
+  useEffect(() => {
+    try {
+      if (!localStorage.getItem(CHAVE_WIZARD)) setWizardAberto(true);
+    } catch {}
+  }, []);
 
   useEffect(() => {
     const carregarDados = async () => {
@@ -75,6 +85,8 @@ function DashboardAdminPage() {
     <div className="min-h-screen bg-gray-50">
       <Navbar />
 
+      <WizardStories aberto={wizardAberto} onFechar={() => setWizardAberto(false)} role={role} />
+
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-28 pb-12">
         
         {/* Header */}
@@ -87,12 +99,20 @@ function DashboardAdminPage() {
             <p className="text-gray-600 mt-1">Visão geral do sistema</p>
           </div>
           
-          <button 
-            onClick={handleLogout}
-            className="flex items-center gap-2 text-red-600 font-medium hover:bg-red-50 px-4 py-2 rounded-lg transition-colors"
-          >
-            <LogOut size={20} /> Sair do Sistema
-          </button>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => setWizardAberto(true)}
+              className="flex items-center gap-2 text-blue-600 font-medium hover:bg-blue-50 px-4 py-2 rounded-lg transition-colors"
+            >
+              <Compass size={20} /> Guia de 4 passos
+            </button>
+            <button
+              onClick={handleLogout}
+              className="flex items-center gap-2 text-red-600 font-medium hover:bg-red-50 px-4 py-2 rounded-lg transition-colors"
+            >
+              <LogOut size={20} /> Sair do Sistema
+            </button>
+          </div>
         </div>
 
         {/* Cards de Estatísticas (Topo) */}

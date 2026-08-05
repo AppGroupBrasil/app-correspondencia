@@ -2,6 +2,8 @@
 import { useState, useEffect } from "react";
 import { supabase } from "@/app/lib/supabase";
 import { buildAuthenticatedJsonHeaders } from "@/app/lib/client-auth";
+import ModalProximoPasso from "@/components/ModalProximoPasso";
+import type { PassoId } from "@/app/lib/onboarding";
 import {
   Building2,
   Plus,
@@ -51,6 +53,7 @@ export default function GerenciarCondominios() {
   const [logoUrl, setLogoUrl] = useState("");
   const [emailLogin, setEmailLogin] = useState("");
   const [condominioEditando, setCondominioEditando] = useState<Condominio | null>(null);
+  const [passoConcluido, setPassoConcluido] = useState<PassoId | null>(null);
 
   useEffect(() => {
     carregarCondominios();
@@ -132,7 +135,7 @@ export default function GerenciarCondominios() {
           status: "ativo",
           criado_em: new Date().toISOString(),
         });
-        alert("Cadastrado com sucesso!");
+        setPassoConcluido("condominio");
       }
       setModalAberto(false);
       limparFormulario();
@@ -249,6 +252,7 @@ export default function GerenciarCondominios() {
 
   return (
     <div className="space-y-6">
+      <ModalProximoPasso passoConcluido={passoConcluido} onFechar={() => setPassoConcluido(null)} />
       {/* Header */}
       <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-200 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
         <div>

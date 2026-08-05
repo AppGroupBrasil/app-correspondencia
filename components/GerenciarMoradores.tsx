@@ -15,6 +15,8 @@ import {
 import { supabase } from "@/app/lib/supabase";
 import { useAuth } from "@/hooks/useAuth";
 import BotaoVoltar from "@/components/BotaoVoltar";
+import ModalProximoPasso from "@/components/ModalProximoPasso";
+import type { PassoId } from "@/app/lib/onboarding";
 
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
@@ -110,6 +112,29 @@ const normalizarPerfil = (valorBruto: string): string => {
   return peloLabel ? peloLabel.value : "proprietario";
 };
 
+const PREFIXOS_BLOCO = /^(blocos?|bl|torres?|tr|quadras?|qd|alas?|edificios?|edificio|ed|predios?|predio|modulos?|modulo|md)\b\.?\s*/;
+
+const REGEX_ACENTOS = new RegExp("[\\u0300-\\u036f]", "g");
+
+const normalizarChaveBloco = (valor: string, removerPrefixo = true): string => {
+  let v = (valor || "")
+    .toString()
+    .normalize("NFD")
+    .replace(REGEX_ACENTOS, "")
+    .toLowerCase()
+    .trim()
+    .replace(/[.\-_/\\]+/g, " ")
+    .replace(/\s+/g, " ");
+
+  if (removerPrefixo) {
+    while (PREFIXOS_BLOCO.test(v)) v = v.replace(PREFIXOS_BLOCO, "").trim();
+  }
+
+  v = v.replace(/\s+/g, "");
+  v = v.replace(/\d+/g, (n) => String(parseInt(n, 10)));
+  return v;
+};
+
 const validarEmail = (email: string) => {
     const emailLimpo = email.trim();
     const re = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -117,6 +142,8 @@ const validarEmail = (email: string) => {
 };
 
 const SENHA_INICIAL_PADRAO = "123456";
+
+const LIMITE_TRAVA_IMPORTACAO = 30;
 const gerarSenhaTemporaria = () => SENHA_INICIAL_PADRAO;
 
 // ============================================================================
@@ -159,6 +186,8 @@ export default function GerenciarMoradores({ condominioId: adminCondominioId }: 
   const [statusImportacao, setStatusImportacao] = useState("");
   const [cooldown, setCooldown] = useState(0);
   const [logImportacao, setLogImportacao] = useState<string[]>([]);
+  const [passoConcluido, setPassoConcluido] = useState<PassoId | null>(null);
+  const [mensagemPasso, setMensagemPasso] = useState<string>("");
 
   const targetCondominioId = adminCondominioId || user?.condominioId || fetchedCondominioId;
   // Master vê tudo quando não há condomínio escolhido explicitamente via prop.
@@ -447,7 +476,7 @@ export default function GerenciarMoradores({ condominioId: adminCondominioId }: 
         if (!ok) {
           alert(error || "Erro ao criar usuário");
         } else {
-          alert("Morador cadastrado!");
+          setPassoConcluido("moradores");
         }
       }
 
@@ -581,6 +610,15 @@ export default function GerenciarMoradores({ condominioId: adminCondominioId }: 
   // --- IMPORTAÇÃO COM RECUPERAÇÃO E ANTI-BLOQUEIO ---
   const processarImportacao = async () => {
     if (!arquivoImportacao || !targetCondominioId) return;
+
+    if (blocos.length === 0) {
+      const aviso =
+        "Nenhum bloco cadastrado neste condomínio. Cadastre os blocos em 'Gerenciar Blocos' antes de importar — sem eles nenhuma linha da planilha pode ser validada.";
+      setLogImportacao([aviso]);
+      alert(aviso);
+      return;
+    }
+
     setImportando(true);
     setLogImportacao([]);
     setStatusImportacao("Iniciando leitura do arquivo...");
@@ -617,6 +655,28 @@ export default function GerenciarMoradores({ condominioId: adminCondominioId }: 
       let logsTemp: string[] = [];
       const total = json.length - 1;
 
+      // Match em duas camadas: primeiro o nome inteiro ("torre 1" != "bloco 1"),
+      // depois só o identificador ("Bloco 01" == "01" == "1"), ignorando chaves ambíguas.
+      const mapaEstrito = new Map<string, Bloco>();
+      const mapaFrouxo = new Map<string, Bloco | null>();
+      blocos.forEach((b) => {
+        const estrita = normalizarChaveBloco(b.nome, false);
+        if (estrita && !mapaEstrito.has(estrita)) mapaEstrito.set(estrita, b);
+
+        const frouxa = normalizarChaveBloco(b.nome);
+        if (!frouxa) return;
+        mapaFrouxo.set(frouxa, mapaFrouxo.has(frouxa) ? null : b);
+      });
+
+      const acharBloco = (valor: string): Bloco | undefined =>
+        mapaEstrito.get(normalizarChaveBloco(valor, false)) ||
+        mapaFrouxo.get(normalizarChaveBloco(valor)) ||
+        undefined;
+
+      let linhasProcessadas = 0;
+      let abortadoPorTrava = false;
+      const blocosNaoEncontrados = new Set<string>();
+
       for (let i = 1; i < json.length; i++) {
         // Delay padrão de 1s (sem secondary app, pode ser menor)
         if (i > 1) await delay(1000); 
@@ -631,20 +691,25 @@ export default function GerenciarMoradores({ condominioId: adminCondominioId }: 
 
         if (!nome || !email || !blocoRaw || !unidadeRaw) continue;
 
+        linhasProcessadas++;
+
         if (!validarEmail(email)) {
             logsTemp.push(`Linha ${i + 1}: E-mail inválido (${email}).`);
             continue;
         }
 
-        const blocoAlvo = blocoRaw.toLowerCase().replace(/^bloco\s*/, "");
-        const blocoMatch = blocos.find(b => 
-           b.nome.toLowerCase().replace(/^bloco\s*/, "") === blocoAlvo
-        );
+        const blocoMatch = acharBloco(blocoRaw);
 
         if (!blocoMatch) {
+            blocosNaoEncontrados.add(blocoRaw);
             logsTemp.push(`Linha ${i + 1}: Bloco '${blocoRaw}' não existe.`);
+            if (linhasProcessadas >= LIMITE_TRAVA_IMPORTACAO && criados + atualizados === 0) {
+              abortadoPorTrava = true;
+              break;
+            }
             continue;
         }
+
 
         let unidadeId = "";
         const unidExistente = unidades.find(u => u.blocoId === blocoMatch.id && u.identificacao === unidadeRaw);
@@ -741,10 +806,35 @@ export default function GerenciarMoradores({ condominioId: adminCondominioId }: 
         } catch (e: any) {
           logsTemp.push(`Linha ${i + 1}: Erro Geral (${e.message})`);
         }
+
+        if (linhasProcessadas >= LIMITE_TRAVA_IMPORTACAO && criados + atualizados === 0) {
+          abortadoPorTrava = true;
+          break;
+        }
+      }
+
+      if (abortadoPorTrava) {
+        const cadastrados = blocos.map((b) => b.nome).join(", ") || "nenhum bloco cadastrado";
+        const naPlanilha = Array.from(blocosNaoEncontrados).slice(0, 10).join(", ");
+        const cabecalho = [
+          `IMPORTAÇÃO INTERROMPIDA: nenhum cadastro foi importado de forma válida nas primeiras ${linhasProcessadas} linhas.`,
+          blocosNaoEncontrados.size > 0
+            ? `Blocos da planilha que não existem no condomínio: ${naPlanilha}${blocosNaoEncontrados.size > 10 ? " ..." : ""}.`
+            : "",
+          `Blocos cadastrados no sistema: ${cadastrados}.`,
+          "Corrija os nomes dos blocos (na planilha ou em Gerenciar Blocos) e importe novamente.",
+        ].filter(Boolean);
+        setLogImportacao([...cabecalho, ...logsTemp]);
+        alert(cabecalho.join("\n\n"));
+        return;
       }
 
       setLogImportacao([`Finalizado: ${criados} criados e ${atualizados} atualizados.`, ...logsTemp]);
-      await carregarDados(); 
+      if (criados + atualizados > 0) {
+        setMensagemPasso(`${criados + atualizados} moradores importados!`);
+        setPassoConcluido("moradores");
+      }
+      await carregarDados();
 
     } catch (err: any) {
       alert("Erro fatal: " + err.message);
@@ -766,7 +856,17 @@ export default function GerenciarMoradores({ condominioId: adminCondominioId }: 
 
   return (
     <div className="space-y-6">
-      
+
+      <ModalProximoPasso
+        passoConcluido={passoConcluido}
+        role={user?.role}
+        mensagem={mensagemPasso || undefined}
+        onFechar={() => {
+          setPassoConcluido(null);
+          setMensagemPasso("");
+        }}
+      />
+
       {importando && (
         <div className="fixed inset-0 z-[60] bg-black/90 flex flex-col items-center justify-center text-white p-4 transition-all">
             {cooldown > 0 ? (

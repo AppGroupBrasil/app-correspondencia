@@ -5,6 +5,8 @@ import { Shield, Edit2, Trash2, UserCheck, UserX, Plus, X, ShieldCheck } from "l
 import { supabase } from "@/app/lib/supabase";
 import { getApiUrl } from "@/utils/platform";
 import { useAuth } from "@/hooks/useAuth";
+import ModalProximoPasso from "@/components/ModalProximoPasso";
+import type { PassoId } from "@/app/lib/onboarding";
 
 interface Responsavel {
   id: string;
@@ -41,6 +43,7 @@ export default function GerenciarResponsaveis() {
   const [promovendo, setPromovendo] = useState<Responsavel | null>(null);
   const [promoverCondos, setPromoverCondos] = useState<Set<string>>(new Set());
   const [promovendoSalvando, setPromovendoSalvando] = useState(false);
+  const [passoConcluido, setPassoConcluido] = useState<PassoId | null>(null);
 
   useEffect(() => {
     carregarDados();
@@ -117,7 +120,7 @@ export default function GerenciarResponsaveis() {
 
         const result = await res.json();
         if (!res.ok) throw new Error(result.error || "Erro ao criar responsável");
-        alert("Responsável criado com sucesso!");
+        setPassoConcluido("responsavel");
       }
 
       setModalAberto(false);
@@ -257,6 +260,11 @@ export default function GerenciarResponsaveis() {
 
   return (
     <div className="space-y-6 bg-white p-6 rounded-xl shadow-sm border border-gray-200">
+      <ModalProximoPasso
+        passoConcluido={passoConcluido}
+        role={role}
+        onFechar={() => setPassoConcluido(null)}
+      />
       
       {/* Header */}
       <div className="flex flex-col md:flex-row justify-between items-center gap-4">

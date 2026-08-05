@@ -10,6 +10,8 @@ import { useAuth } from "@/hooks/useAuth";
 import BotaoVoltar from "@/components/BotaoVoltar";
 import { getApiUrl } from "@/utils/platform";
 import { buildAuthenticatedJsonHeaders } from "@/app/lib/client-auth";
+import ModalProximoPasso from "@/components/ModalProximoPasso";
+import type { PassoId } from "@/app/lib/onboarding";
 
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
@@ -47,6 +49,7 @@ export default function GerenciarPorteiros({ condominioId: adminCondominioId }: 
   const [confirmarSenha, setConfirmarSenha] = useState("");
   const [whatsapp, setWhatsapp] = useState("");
   const [porteiroEditando, setPorteiroEditando] = useState<Porteiro | null>(null);
+  const [passoConcluido, setPassoConcluido] = useState<PassoId | null>(null);
 
   const targetCondominioId = adminCondominioId || user?.condominioId || fetchedCondominioId;
   const isMaster = user?.role === "adminMaster" && !targetCondominioId;
@@ -161,7 +164,7 @@ export default function GerenciarPorteiros({ condominioId: adminCondominioId }: 
         const result = await res.json();
         if (!res.ok) throw new Error(result.error || 'Erro ao criar porteiro');
 
-        alert("Porteiro cadastrado com sucesso!");
+        setPassoConcluido("portaria");
       }
 
       limparFormulario();
@@ -300,6 +303,11 @@ export default function GerenciarPorteiros({ condominioId: adminCondominioId }: 
 
   return (
     <div className="space-y-6">
+      <ModalProximoPasso
+        passoConcluido={passoConcluido}
+        role={user?.role}
+        onFechar={() => setPassoConcluido(null)}
+      />
       
       {!adminCondominioId && (
         <div className="w-fit">

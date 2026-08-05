@@ -5,7 +5,10 @@ import { useRouter } from "next/navigation";
 import { useAuth } from "@/hooks/useAuth";
 import withAuth from "@/components/withAuth";
 import { supabase } from "@/app/lib/supabase";
+import WizardStories from "@/components/WizardStories";
+import { CHAVE_WIZARD } from "@/app/lib/onboarding";
 import {
+  Compass,
   Building2,
   Users,
   Package,
@@ -50,6 +53,13 @@ function DashboardMasterPage() {
   });
   const [recentActivities, setRecentActivities] = useState<RecentActivity[]>([]);
   const [loading, setLoading] = useState(true);
+  const [wizardAberto, setWizardAberto] = useState(false);
+
+  useEffect(() => {
+    try {
+      if (!localStorage.getItem(CHAVE_WIZARD)) setWizardAberto(true);
+    } catch {}
+  }, []);
 
   useEffect(() => {
     const fetchStats = async () => {
@@ -171,9 +181,11 @@ function DashboardMasterPage() {
       className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100"
       style={{ paddingTop: "calc(4rem + env(safe-area-inset-top))" }}
     >
+      <WizardStories aberto={wizardAberto} onFechar={() => setWizardAberto(false)} role={user?.role} />
+
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         {/* Header */}
-        <div className="mb-8">
+        <div className="mb-8 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
           <div className="flex items-center gap-3 mb-2">
             <div className="p-2 bg-gradient-to-br from-[#057321] to-[#046119] rounded-xl shadow-lg">
               <Shield className="w-6 h-6 text-white" />
@@ -187,6 +199,13 @@ function DashboardMasterPage() {
               </p>
             </div>
           </div>
+
+          <button
+            onClick={() => setWizardAberto(true)}
+            className="flex items-center gap-2 text-[#057321] font-medium hover:bg-green-50 px-4 py-2 rounded-lg transition-colors self-start"
+          >
+            <Compass size={20} /> Guia de 4 passos
+          </button>
         </div>
 
         {/* Stats Cards */}

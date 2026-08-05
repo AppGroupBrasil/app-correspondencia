@@ -25,10 +25,13 @@ import {
   UserCog,
   Users,
   HelpCircle,
-  Share2
+  Share2,
+  Compass
 } from "lucide-react";
 
 import TutorialGuide from "@/components/TutorialGuide";
+import WizardStories from "@/components/WizardStories";
+import { CHAVE_WIZARD } from "@/app/lib/onboarding";
 import GerarFolder from "@/components/GerarFolder";
 import { supabase } from "@/app/lib/supabase";
 import { useAuth } from "@/hooks/useAuth";
@@ -48,6 +51,13 @@ function DashboardResponsavel() {
     pendentes: 0,
   });
   const [showInfo, setShowInfo] = useState(true);
+  const [wizardAberto, setWizardAberto] = useState(false);
+
+  useEffect(() => {
+    try {
+      if (!localStorage.getItem(CHAVE_WIZARD)) setWizardAberto(true);
+    } catch {}
+  }, []);
 
   useEffect(() => {
     setIsMounted(true);
@@ -371,6 +381,8 @@ function DashboardResponsavel() {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-50 to-green-50/30 relative">
+      <WizardStories aberto={wizardAberto} onFechar={() => setWizardAberto(false)} role={user?.role} />
+
       <header className="bg-gradient-to-r from-[#057321] to-[#046119] shadow-md sticky top-0 z-[100]">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-3">
           <div className="flex items-center justify-between">
@@ -389,6 +401,15 @@ function DashboardResponsavel() {
             </div>
 
             <div className="flex items-center gap-2">
+              <button
+                onClick={() => setWizardAberto(true)}
+                title="Guia de 4 passos"
+                className="flex items-center gap-2 px-3 py-2 text-white hover:bg-white/20 rounded-lg transition-all"
+              >
+                <Compass size={22} />
+                <span className="hidden lg:inline font-medium text-sm">Guia</span>
+              </button>
+
               {user && (
                 <button
                   id="menu-minha-conta"
@@ -664,7 +685,7 @@ function DashboardResponsavel() {
         <HelpCircle size={28} />
       </button>
 
-      <TutorialGuide
+      {!wizardAberto && <TutorialGuide
         chaveLocalStorage="tutorial_dashboard_full_v4"
         passos={[
           {
@@ -733,7 +754,7 @@ function DashboardResponsavel() {
           { element: "#btn-gestao-link", popover: { title: "Link de Cadastro", description: "Copie o link de cadastro e compartilhe com moradores." } },
           { element: "#btn-gestao-impressao", popover: { title: "Impressão", description: "Gere um folder/cartaz com QR Code para cadastro." } },
         ]}
-      />
+      />}
     </div>
   );
 }
