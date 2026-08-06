@@ -483,6 +483,7 @@ function RegistrarRetiradaResponsavelPage() {
                     condoId={user?.condominioId || ""}
                     category="PICKUP"
                     label="Mensagem"
+                    className="w-full py-3 bg-[#057321] text-white rounded-lg shadow-sm hover:bg-[#046119] transition-all flex items-center justify-center gap-2 font-bold text-sm uppercase disabled:opacity-50 disabled:cursor-not-allowed"
                   />
                 </div>
               )}

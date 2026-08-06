@@ -80,6 +80,19 @@ export function useTemplates(condoId: string) {
     fetchTemplates();
   }, [fetchTemplates]);
 
+  // A tela de registro fica aberta enquanto o texto é alterado no modal, que
+  // usa outra instância deste hook. Sem o aviso, o envio continuaria usando o
+  // modelo carregado na abertura da página.
+  useEffect(() => {
+    const aoAtualizar = (evento: Event) => {
+      const alvo = (evento as CustomEvent<{ condoId?: string }>).detail?.condoId;
+      if (!alvo || alvo === condoId) fetchTemplates();
+    };
+
+    window.addEventListener('templates:updated', aoAtualizar);
+    return () => window.removeEventListener('templates:updated', aoAtualizar);
+  }, [condoId, fetchTemplates]);
+
   // Função para pegar a mensagem formatada
   const getFormattedMessage = useCallback(async (category: MessageCategory, variables: Record<string, string>) => {
     // 1. Tenta achar o template personalizado do condomínio
@@ -110,21 +123,39 @@ export function useTemplates(condoId: string) {
     return replaceVariables(content, variables);
   }, [templates]);
 
-  // Função para salvar/atualizar template
+  // Função para salvar/atualizar template.
+  // A tabela não tem chave única em (condo_id, category), então o upsert com
+  // onConflict era recusado pelo banco e nada era gravado: aqui a linha é
+  // procurada antes para decidir entre update e insert.
   const saveTemplate = async (template: MessageTemplate) => {
-    if (!condoId) return;
-    
-    const { error } = await supabase
-      .from('message_templates')
-      .upsert({
-        condo_id: condoId,
-        category: template.category,
-        title: template.title || null,
-        content: template.content,
-        is_active: template.isActive !== false,
-      }, { onConflict: 'condo_id,category' });
+    if (!condoId) throw new Error('Condomínio não identificado.');
 
-    if (error) console.error('Erro ao salvar template:', error);
+    const registro = {
+      condo_id: condoId,
+      category: template.category,
+      title: template.title || null,
+      content: template.content,
+      is_active: template.isActive !== false,
+    };
+
+    const { data: existente, error: buscaErr } = await supabase
+      .from('message_templates')
+      .select('id')
+      .eq('condo_id', condoId)
+      .eq('category', template.category)
+      .limit(1);
+
+    if (buscaErr) throw buscaErr;
+
+    const { error } = existente && existente.length
+      ? await supabase.from('message_templates').update(registro).eq('id', existente[0].id)
+      : await supabase.from('message_templates').insert(registro);
+
+    if (error) throw error;
+
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent('templates:updated', { detail: { condoId } }));
+    }
   };
 
   const refresh = async () => {

@@ -23,8 +23,7 @@ import ModalRetiradaProfissional from "@/components/ModalRetiradaProfissional";
 import withAuth from "@/components/withAuth";
 import Navbar from "@/components/Navbar";
 import BotaoVoltar from "@/components/BotaoVoltar";
-import { Browser } from "@capacitor/browser";
-import { getApiUrl } from "@/utils/platform";
+import { abrirLink, getApiUrl } from "@/utils/platform";
 
 
 // Importações para Exportação
@@ -33,19 +32,9 @@ import autoTable from "jspdf-autotable";
 import * as XLSX from "xlsx";
 
 // --- FUNÇÃO AUXILIAR PARA ABRIR LINKS (HÍBRIDO WEB/APP) ---
-const abrirLinkExterno = async (url?: string | null) => {
-  if (!url) return;
-
-  const isNative =
-    globalThis.window !== undefined &&
-    !!(globalThis.window as any).Capacitor?.isNativePlatform?.();
-
-  if (isNative) {
-    await Browser.open({ url });
-  } else {
-    window.open(url, "_blank", "noopener,noreferrer");
-  }
-};
+// Usa o helper compartilhado, que cai para a mesma aba quando o navegador
+// embutido ou o bloqueador de pop-up impede a nova aba.
+const abrirLinkExterno = (url?: string | null) => abrirLink(url);
 
 // ============================================================================
 // 1. DEFINIÇÕES DE TIPOS

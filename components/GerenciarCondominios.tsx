@@ -4,6 +4,7 @@ import { supabase } from "@/app/lib/supabase";
 import { buildAuthenticatedJsonHeaders } from "@/app/lib/client-auth";
 import ModalProximoPasso from "@/components/ModalProximoPasso";
 import type { PassoId } from "@/app/lib/onboarding";
+import { formatarCnpj, limparCnpj, cnpjValido, MSG_CNPJ_INVALIDO } from "@/utils/cnpj";
 import {
   Building2,
   Plus,
@@ -22,6 +23,7 @@ import {
 interface Condominio {
   id: string;
   nome: string;
+  cnpj?: string;
   endereco: string;
   logoUrl?: string;
   status: "ativo" | "inativo";
@@ -49,6 +51,7 @@ export default function GerenciarCondominios() {
 
   // Estados do formulário
   const [nome, setNome] = useState("");
+  const [cnpj, setCnpj] = useState("");
   const [endereco, setEndereco] = useState("");
   const [logoUrl, setLogoUrl] = useState("");
   const [emailLogin, setEmailLogin] = useState("");
@@ -93,6 +96,7 @@ export default function GerenciarCondominios() {
       const lista: Condominio[] = (data || []).map((d: any) => ({
         id: d.id,
         nome: d.nome || "",
+        cnpj: d.cnpj || "",
         endereco: d.endereco || "",
         logoUrl: d.logo_url || "",
         status: d.status || "ativo",
@@ -113,36 +117,51 @@ export default function GerenciarCondominios() {
 
   const salvarCondominio = async () => {
     if (!nome.trim()) return alert("Nome é obrigatório");
+    if (!cnpjValido(cnpj)) return alert(MSG_CNPJ_INVALIDO);
     if (!endereco.trim()) return alert("Endereço é obrigatório");
+
+    // O morador se cadastra pelo CNPJ: dois condomínios com o mesmo número
+    // deixariam a busca ambígua.
+    const cnpjDigitos = limparCnpj(cnpj);
+    const duplicado = condominios.find(
+      (c) => limparCnpj(c.cnpj || "") === cnpjDigitos && c.id !== condominioEditando?.id
+    );
+    if (duplicado) return alert(`Este CNPJ já está cadastrado em "${duplicado.nome}".`);
+
+    const cnpjFormatado = formatarCnpj(cnpj);
 
     try {
       setLoading(true);
       if (condominioEditando) {
-        await supabase.from("condominios").update({
+        const { error } = await supabase.from("condominios").update({
           nome,
+          cnpj: cnpjFormatado,
           endereco,
           logo_url: logoUrl || "",
           email_login: emailLogin.trim() || "",
           atualizado_em: new Date().toISOString(),
         }).eq("id", condominioEditando.id);
+        if (error) throw error;
         alert("Atualizado com sucesso!");
       } else {
-        await supabase.from("condominios").insert({
+        const { error } = await supabase.from("condominios").insert({
           nome,
+          cnpj: cnpjFormatado,
           endereco,
           logo_url: logoUrl || "",
           email_login: emailLogin.trim() || "",
           status: "ativo",
           criado_em: new Date().toISOString(),
         });
+        if (error) throw error;
         setPassoConcluido("condominio");
       }
       setModalAberto(false);
       limparFormulario();
       await carregarCondominios();
-    } catch (err) {
+    } catch (err: any) {
       console.error("Erro ao salvar:", err);
-      alert("Erro ao salvar condomínio");
+      alert(`Erro ao salvar condomínio: ${err?.message || "tente novamente"}`);
     } finally {
       setLoading(false);
     }
@@ -194,6 +213,7 @@ export default function GerenciarCondominios() {
   const editarCondominio = (c: Condominio) => {
     setCondominioEditando(c);
     setNome(c.nome);
+    setCnpj(formatarCnpj(c.cnpj || ""));
     setEndereco(c.endereco);
     setLogoUrl(c.logoUrl || "");
     setEmailLogin(c.emailLogin || "");
@@ -236,6 +256,7 @@ export default function GerenciarCondominios() {
 
   const limparFormulario = () => {
     setNome("");
+    setCnpj("");
     setEndereco("");
     setLogoUrl("");
     setEmailLogin("");
@@ -245,7 +266,8 @@ export default function GerenciarCondominios() {
   const condominiosFiltrados = condominios.filter((c) => {
     const matchBusca =
       c.nome.toLowerCase().includes(busca.toLowerCase()) ||
-      c.endereco.toLowerCase().includes(busca.toLowerCase());
+      c.endereco.toLowerCase().includes(busca.toLowerCase()) ||
+      (!!limparCnpj(busca) && limparCnpj(c.cnpj || "").includes(limparCnpj(busca)));
     const matchStatus = filtroStatus === "todos" || c.status === filtroStatus;
     return matchBusca && matchStatus;
   });
@@ -339,7 +361,20 @@ export default function GerenciarCondominios() {
                             <Building2 size={20} />
                           </div>
                         )}
-                        <span className="font-bold text-gray-900">{c.nome}</span>
+                        <div>
+                          <span className="font-bold text-gray-900">{c.nome}</span>
+                          {c.cnpj ? (
+                            <div className="text-xs text-gray-500">{c.cnpj}</div>
+                          ) : (
+                            <button
+                              onClick={() => editarCondominio(c)}
+                              className="text-xs font-bold text-orange-600 hover:underline"
+                              title="Sem CNPJ o morador não consegue se cadastrar"
+                            >
+                              CNPJ pendente
+                            </button>
+                          )}
+                        </div>
                       </div>
                     </td>
                     <td className="px-6 py-4 text-gray-600">
@@ -434,6 +469,22 @@ export default function GerenciarCondominios() {
                     placeholder="Ex: Edifício Solar"
                   />
                 </div>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">CNPJ *</label>
+                <input
+                  type="tel"
+                  inputMode="numeric"
+                  value={cnpj}
+                  onChange={(e) => setCnpj(formatarCnpj(e.target.value))}
+                  maxLength={18}
+                  className="w-full p-2.5 border rounded-lg focus:ring-2 focus:ring-[#057321]"
+                  placeholder="00.000.000/0000-00"
+                />
+                <p className="text-xs text-gray-500 mt-1">
+                  É por este CNPJ que o morador encontra o condomínio ao se cadastrar.
+                </p>
               </div>
 
               <div>

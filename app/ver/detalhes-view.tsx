@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { supabase } from "@/app/lib/supabase";
-import { getApiUrl } from "@/utils/platform";
+import { abrirLink, getApiUrl } from "@/utils/platform";
 import {
   Loader2,
   FileX,
@@ -271,11 +271,14 @@ export default function DetalhesView({ id, documentType }: DetalhesViewProps) {
 
   const handleAbrirArquivo = (e: React.MouseEvent) => {
     if (!dados?.urlFinal) return;
-    const isCapacitor = globalThis.window !== undefined && (globalThis.window as any).Capacitor;
-    if (isCapacitor) {
-        e.preventDefault();
-        globalThis.window.open(dados.urlFinal, "_system");
-    }
+
+    // Ctrl/Cmd/Shift + clique é o usuário pedindo nova aba: deixa o navegador.
+    if (e.ctrlKey || e.metaKey || e.shiftKey) return;
+
+    // O link do recibo costuma ser aberto dentro do WhatsApp, onde o
+    // target="_blank" é ignorado e o botão parecia não funcionar.
+    e.preventDefault();
+    abrirLink(dados.urlFinal);
   };
 
   const handleCompartilhar = async () => {
@@ -307,7 +310,10 @@ export default function DetalhesView({ id, documentType }: DetalhesViewProps) {
 
     const janelaImpressao = globalThis.window.open(dados.urlFinal, "_blank");
     if (!janelaImpressao) {
-      mostrarStatusAcao("Libere pop-ups para imprimir o documento.");
+      // Navegador embutido ou pop-up bloqueado: abre o arquivo mesmo assim
+      // para que a impressão possa ser feita na tela do documento.
+      mostrarStatusAcao("Abrindo o documento para impressao.");
+      abrirLink(dados.urlFinal);
       return;
     }
 

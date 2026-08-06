@@ -108,13 +108,15 @@ function Hero() {
               Acessar Plataforma
               <svg className="ml-2 h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 8l4 4m0 0l-4 4m4-4H3" /></svg>
             </Link>
-            <button
+            <a
+              href="/tutorial"
+              target="_blank"
+              rel="noopener noreferrer"
               className="inline-flex items-center justify-center bg-white/10 border border-white/20 text-white hover:bg-white/20 h-12 sm:h-14 text-base sm:text-lg w-full sm:w-auto gap-2 px-5 sm:px-6 rounded-lg transition-colors"
-              onClick={() => document.getElementById('demonstracao')?.scrollIntoView({ behavior: 'smooth' })}
             >
               <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" /></svg>
-              Conheça o Sistema
-            </button>
+              Tutorial
+            </a>
           </div>
 
           <div className="pt-4 sm:pt-8 flex flex-wrap items-center justify-center lg:justify-start gap-4 sm:gap-6 text-white/80 text-xs sm:text-sm">
@@ -508,8 +510,8 @@ function Pricing() {
           {/* Plano Padrão */}
           <div className="w-full border border-gray-200 shadow-lg hover:shadow-xl transition-all duration-300 bg-white rounded-2xl flex flex-col h-full">
             <div className="text-center pt-10 pb-8 border-b border-gray-100">
-              <h3 className="text-2xl font-bold text-gray-900 mb-2">Unidades Ilimitadas</h3>
-              <p className="text-gray-500 text-sm">Para condomínios pequeno e médio porte</p>
+              <h3 className="text-2xl font-bold text-gray-900 mb-2">Condomínios até 500 unidades</h3>
+              <p className="text-gray-500 text-sm">Uso ilimitado para condomínios até 500 unidades</p>
               <div className="mt-6 flex items-baseline justify-center gap-1">
                 <span className="text-sm text-gray-500 font-medium">R$</span>
                 <span className="text-5xl font-extrabold text-[#057321]">199</span>
@@ -519,7 +521,7 @@ function Pricing() {
             </div>
             <div className="p-8 flex-grow">
               <ul className="space-y-4">
-                {['Unidades Ilimitadas', 'Envios Ilimitados de Notificações', 'Moradores Ilimitados', 'Porteiros Ilimitados', 'Armazenamento de Fotos Ilimitado', 'Suporte Prioritário via WhatsApp', 'Backup Automático Diário', 'Sem Taxa de Instalação'].map((feature, idx) => (
+                {['Até 500 Unidades', 'Mensagens Ilimitadas no WhatsApp e E-mail', 'Moradores Ilimitados', 'Portarias e Porteiros Ilimitados', 'Registro e Leitura por QR Code', 'Armazenamento de Fotos Ilimitado', 'Suporte Prioritário via WhatsApp', 'Backup Automático Diário', 'Sem Taxa de Instalação'].map((feature, idx) => (
                   <li key={idx} className="flex items-start gap-3">
                     <div className="w-6 h-6 rounded-full bg-green-100 flex items-center justify-center shrink-0 mt-0.5">
                       <svg className="w-4 h-4 text-[#057321]" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" /></svg>
@@ -539,7 +541,8 @@ function Pricing() {
           {/* Plano Grande Porte */}
           <div className="w-full border border-gray-200 shadow-lg hover:shadow-xl transition-all duration-300 bg-white rounded-2xl flex flex-col h-full">
             <div className="text-center pt-10 pb-8 border-b border-gray-100">
-              <h3 className="text-2xl font-bold text-gray-900 mb-2">Condomínios Ilimitados</h3>
+              <h3 className="text-2xl font-bold text-gray-900 mb-2">Acima de 500 unidades</h3>
+              <p className="text-gray-500 text-sm">Administradoras, empresas de facility e terceirização</p>
               <div className="mt-6 flex items-baseline justify-center gap-1">
                 <span className="text-sm text-gray-500 font-medium">R$</span>
                 <span className="text-5xl font-extrabold text-[#057321]">350</span>
@@ -549,7 +552,7 @@ function Pricing() {
             </div>
             <div className="p-8 flex-grow">
               <ul className="space-y-4">
-                {['Condomínios Ilimitados', 'Envios Ilimitados de Notificações', 'Moradores Ilimitados', 'Porteiros Ilimitados', 'Armazenamento de Fotos Ilimitado', 'Suporte Prioritário via WhatsApp', 'Backup Automático Diário', 'Sem Taxa de Instalação'].map((feature, idx) => (
+                {['Acima de 500 Unidades', 'Para Administradoras, Facility e Terceirização', 'Mensagens Ilimitadas no WhatsApp e E-mail', 'Moradores Ilimitados', 'Portarias e Porteiros Ilimitados', 'Registro e Leitura por QR Code', 'Armazenamento de Fotos Ilimitado', 'Suporte Prioritário via WhatsApp', 'Backup Automático Diário', 'Sem Taxa de Instalação'].map((feature, idx) => (
                   <li key={idx} className="flex items-start gap-3">
                     <div className="w-6 h-6 rounded-full bg-green-100 flex items-center justify-center shrink-0 mt-0.5">
                       <svg className="w-4 h-4 text-[#057321]" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" /></svg>
@@ -558,6 +561,7 @@ function Pricing() {
                   </li>
                 ))}
               </ul>
+              <p className="mt-6 text-[11px] text-gray-400">Uso ilimitado em até 20 condomínios.</p>
             </div>
             <div className="p-8 bg-gray-50 border-t border-gray-100 mt-auto">
               <button onClick={() => window.open('https://wa.me/5511933284364?text=Ol%C3%A1!%20Gostaria%20de%20contratar%20o%20plano%20de%20R$%20350,00%20para%20grandes%20condom%C3%ADnios.', '_blank')} className="w-full h-12 text-lg font-bold shadow-md hover:shadow-lg transition-all bg-[#057321] hover:bg-[#045a1a] text-white rounded-lg">
@@ -586,9 +590,9 @@ function Features() {
     { icon: '👥', title: 'Para Moradores', description: 'Receba notificações no WhatsApp com foto do pacote. Autorize vizinhos e acompanhe seu histórico de recebimentos.' }
   ]
   const differentials = [
-    { icon: '📱', title: 'Notificações Multicanal', description: 'Avisos automáticos via WhatsApp, E-mail e App.' },
-    { icon: '✍️', title: 'Registro de Retirada', description: 'Com foto, recibo e assinatura digital. Segurança jurídica.' },
-    { icon: '🔒', title: 'Registro com Foto', description: 'O morador vê a foto do pacote antes de descer para buscar.' }
+    { icon: '📱', title: 'WhatsApp e E-mail', description: 'Cada aviso sai pelos dois canais ao mesmo tempo, com foto e protocolo.' },
+    { icon: '🏷️', title: 'Registro e Leitura por QR Code', description: 'A etiqueta leva um QR Code: na retirada, a portaria lê o código e acha o registro na hora.' },
+    { icon: '🚪', title: 'Portarias e Perfis Ilimitados', description: 'Portarias e porteiros ilimitados, com perfil próprio para a sala de correspondência.' }
   ]
 
   return (

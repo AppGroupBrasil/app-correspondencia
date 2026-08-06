@@ -14,10 +14,24 @@ export const abrirLink = async (url?: string | null) => {
   if (isNative) {
     // No celular, abre no navegador do sistema (Chrome/Safari) para não fechar o App
     await Browser.open({ url });
-  } else {
-    // Na web, abre em nova aba
-    globalThis.window?.open(url, "_blank", "noopener,noreferrer");
+    return;
   }
+
+  // Navegadores embutidos (WhatsApp, Instagram, WebView) e bloqueadores de
+  // pop-up devolvem null aqui e o clique não faz nada: nesse caso a mesma aba
+  // resolve. O "noopener" fica fora das features porque ele mesmo zera o
+  // retorno e impediria a detecção — a referência é anulada logo abaixo.
+  const novaAba = globalThis.window?.open(url, "_blank");
+  if (novaAba) {
+    try {
+      novaAba.opener = null;
+    } catch {
+      /* alguns navegadores não deixam sobrescrever */
+    }
+    return;
+  }
+
+  globalThis.window?.location.assign(url);
 };
 
 /**

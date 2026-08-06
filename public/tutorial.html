@@ -1,0 +1,921 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Tutorial — App Correspondência</title>
+<meta name="description" content="Guia passo a passo do App Correspondência: do primeiro acesso ao recibo de retirada assinado." />
+<link rel="icon" href="/logo-app-correspondencia.png" />
+<meta property="og:title" content="Tutorial — App Correspondência" />
+<meta property="og:description" content="Guia passo a passo do App Correspondência: do primeiro acesso ao recibo de retirada assinado." />
+<meta property="og:type" content="website" />
+<meta property="og:url" content="https://appcorrespondencia.com.br/tutorial" />
+<meta property="og:image" content="https://appcorrespondencia.com.br/tutorial/img/logo.png" />
+<style>*{box-sizing:border-box}body{margin:0}</style>
+</head>
+<body>
+<title>Guia do App Correspondência</title>
+
+<style>
+  :root {
+    --verde: #057321;
+    --verde-escuro: #045a1a;
+    --verde-claro: #e9f4ec;
+    --zap: #25d366;
+
+    --fundo: #f4f7f4;
+    --superficie: #ffffff;
+    --tinta: #14201a;
+    --tinta-suave: #55665c;
+    --borda: #dce7de;
+    --moldura: #cfdcd2;
+    --sombra: 0 10px 30px rgba(4, 45, 20, 0.08);
+  }
+
+  /* Identidade fixa em branco e verde, como o sistema: a página não muda
+     com o tema escuro do celular para o tutorial sair sempre igual. */
+  body {
+    color-scheme: light;
+    margin: 0;
+    background: var(--fundo);
+    color: var(--tinta);
+    font-family: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+    font-size: 17px;
+    line-height: 1.6;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  .topo {
+    background: var(--verde);
+    color: #fff;
+    padding: 18px 24px;
+  }
+
+  .topo-interno {
+    max-width: 1120px;
+    margin: 0 auto;
+    display: flex;
+    align-items: center;
+    gap: 14px;
+  }
+
+  .topo img {
+    width: 52px;
+    height: 52px;
+    border-radius: 12px;
+    flex-shrink: 0;
+  }
+
+  .topo h1 {
+    margin: 0;
+    font-size: clamp(2rem, 6vw, 3rem);
+    font-weight: 900;
+    line-height: 1.05;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+  }
+
+  .marca-nome {
+    margin: 0 0 2px;
+    font-size: 0.85rem;
+    font-weight: 600;
+    letter-spacing: 0.04em;
+    color: rgba(255, 255, 255, 0.85);
+  }
+
+  main {
+    max-width: 1120px;
+    margin: 0 auto;
+    padding: 32px 24px 56px;
+    display: flex;
+    flex-direction: column;
+    gap: 32px;
+  }
+
+  .passo {
+    background: var(--superficie);
+    border: 1px solid var(--borda);
+    border-radius: 20px;
+    box-shadow: var(--sombra);
+    padding: 32px;
+    display: grid;
+    grid-template-columns: 300px 1fr;
+    gap: 40px;
+    align-items: center;
+  }
+
+  /* As seções alternam: fundo verde com texto branco, depois fundo branco com
+     texto verde — o mesmo par de cores do sistema. */
+  .passo--verde {
+    background: var(--verde);
+    border-color: var(--verde);
+    color: #fff;
+  }
+
+  .passo--verde .etiqueta {
+    background: rgba(255, 255, 255, 0.18);
+    color: #fff;
+  }
+
+  .passo--verde .resumo,
+  .passo--verde .opcoes span {
+    color: rgba(255, 255, 255, 0.88);
+  }
+
+  .passo--verde .marca {
+    background: #fff;
+    border-color: #fff;
+    color: #000;
+  }
+
+  .passo--branco .marca {
+    background: #e9f4ec;
+    border-color: #057321;
+    color: #000;
+  }
+
+  .passo--verde .tela img {
+    border-color: rgba(255, 255, 255, 0.35);
+    background: rgba(255, 255, 255, 0.35);
+  }
+
+  .passo--branco h2,
+  .passo--branco .opcoes strong {
+    color: var(--verde);
+  }
+
+  .tela {
+    display: flex;
+    justify-content: center;
+    flex-wrap: wrap;
+    gap: 16px;
+  }
+
+  .passo--largo {
+    grid-template-columns: 440px 1fr;
+  }
+
+  /* Print do lado direito: alterna o lado a cada seção para a leitura não
+     cair sempre na mesma coluna. */
+  .passo--espelho {
+    grid-template-columns: 1fr 300px;
+  }
+
+  .tela figure {
+    margin: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .tela figcaption {
+    font-size: 0.7rem;
+    font-weight: 800;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: var(--verde);
+  }
+
+  /* Fluxos de várias telas: cada print leva a explicação da sua própria tela,
+     lado a lado, em vez de uma lista única ao lado das imagens. */
+  .passo--fluxo {
+    display: block;
+  }
+
+  .cabecalho {
+    margin-bottom: 26px;
+  }
+
+  .telas {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(230px, 1fr));
+    gap: 30px;
+    align-items: start;
+  }
+
+  .tela-card {
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+  }
+
+  .tela-card img {
+    width: 100%;
+    max-width: 230px;
+    height: auto;
+    display: block;
+    margin: 0 auto;
+    border-radius: 20px;
+    border: 8px solid var(--moldura);
+    background: var(--moldura);
+  }
+
+  .passo--verde .tela-card img {
+    border-color: rgba(255, 255, 255, 0.35);
+    background: rgba(255, 255, 255, 0.35);
+  }
+
+  /* Os documentos gerados pelo sistema são folhas, não telas de celular:
+     ficam maiores e com moldura discreta. */
+  .passo--docs .telas {
+    grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+    max-width: 880px;
+    margin: 0 auto;
+    gap: 40px;
+  }
+
+  .passo--docs .tela-card img {
+    max-width: 330px;
+    border-radius: 10px;
+    border-width: 6px;
+  }
+
+  .tela-card h3 {
+    margin: 0;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    font-size: 1.05rem;
+    font-weight: 800;
+  }
+
+  .passo--branco .tela-card h3 {
+    color: var(--verde);
+  }
+
+  .tela-card p {
+    margin: -4px 0 0;
+    font-size: 0.95rem;
+    color: var(--tinta-suave);
+  }
+
+  .passo--verde .tela-card p {
+    color: rgba(255, 255, 255, 0.88);
+  }
+
+  .passo--verde .tela figcaption {
+    color: rgba(255, 255, 255, 0.9);
+  }
+
+  .passo--verde .nota {
+    background: rgba(255, 255, 255, 0.14);
+    border-left-color: #fff;
+    color: #fff;
+  }
+
+  .passo--verde .nota strong {
+    color: #fff;
+  }
+
+  .nota {
+    margin: 22px 0 0;
+    padding: 14px 16px;
+    border-radius: 12px;
+    background: #e9f4ec;
+    border-left: 4px solid var(--verde);
+    color: #14201a;
+    font-size: 0.95rem;
+  }
+
+  .nota strong {
+    color: var(--verde);
+  }
+
+  .tela img {
+    width: 100%;
+    max-width: 280px;
+    height: auto;
+    display: block;
+    border-radius: 22px;
+    border: 8px solid var(--moldura);
+    background: var(--moldura);
+  }
+
+  .etiqueta {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 0.72rem;
+    font-weight: 800;
+    text-transform: uppercase;
+    letter-spacing: 0.09em;
+    color: var(--verde);
+    background: var(--verde-claro);
+    padding: 6px 12px;
+    border-radius: 999px;
+  }
+
+  .passo h2 {
+    margin: 14px 0 8px;
+    font-size: 1.75rem;
+    font-weight: 800;
+    letter-spacing: -0.02em;
+    text-wrap: balance;
+  }
+
+  .resumo {
+    margin: 0 0 22px;
+    color: var(--tinta-suave);
+    max-width: 60ch;
+  }
+
+  .opcoes {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+  }
+
+  .opcoes li {
+    display: grid;
+    grid-template-columns: 30px 1fr;
+    gap: 12px;
+    align-items: start;
+  }
+
+  .marca {
+    width: 30px;
+    height: 30px;
+    border-radius: 9px;
+    background: #fff;
+    border: 2px solid rgba(0, 0, 0, 0.15);
+    color: #000;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 0.9rem;
+    font-weight: 800;
+  }
+
+  .opcoes strong {
+    display: block;
+    font-weight: 700;
+  }
+
+  .opcoes span {
+    color: var(--tinta-suave);
+    font-size: 0.95rem;
+  }
+
+  /* O menu de cadastros tem muitos botões: em duas colunas a lista acompanha
+     a altura do print em vez de esticar a seção. */
+  .opcoes--duplas {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(230px, 1fr));
+    gap: 16px 28px;
+  }
+
+  /* Abertura de capítulo: separa o que é feito antes de entrar no sistema
+     do que é feito dentro dele. */
+  .divisor {
+    background: var(--verde-escuro);
+    color: #fff;
+    border-radius: 20px;
+    padding: 32px;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+  }
+
+  .divisor .etiqueta {
+    align-self: flex-start;
+    background: rgba(255, 255, 255, 0.18);
+    color: #fff;
+  }
+
+  .divisor-itens {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-top: 6px;
+  }
+
+  .divisor-itens span {
+    background: rgba(255, 255, 255, 0.14);
+    border: 1px solid rgba(255, 255, 255, 0.3);
+    border-radius: 999px;
+    padding: 6px 14px;
+    font-size: 0.88rem;
+    font-weight: 700;
+  }
+
+  .divisor h2 {
+    margin: 0 0 4px;
+    font-size: clamp(1.5rem, 4vw, 2.1rem);
+    font-weight: 900;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+  }
+
+  .divisor p {
+    margin: 0;
+    color: rgba(255, 255, 255, 0.85);
+    font-size: 0.98rem;
+    max-width: 70ch;
+  }
+
+  .proximos {
+    border-top: 1px dashed var(--borda);
+    padding-top: 20px;
+    color: var(--tinta-suave);
+    font-size: 0.9rem;
+  }
+
+  .proximos strong {
+    color: var(--tinta);
+  }
+
+  .diferenciais {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+    gap: 22px;
+  }
+
+  .dif {
+    border-left: 4px solid var(--verde);
+    padding: 4px 0 4px 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+  }
+
+  .dif h3 {
+    margin: 0;
+    font-size: 1.02rem;
+    color: var(--verde);
+  }
+
+  .dif p {
+    margin: 0;
+    font-size: 0.95rem;
+    color: var(--tinta-suave);
+  }
+
+  .planos {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+    gap: 24px;
+  }
+
+  .plano {
+    border: 2px solid var(--borda);
+    border-radius: 18px;
+    padding: 26px 24px;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+  }
+
+  .plano h3 {
+    margin: 0;
+    font-size: 1.15rem;
+    color: var(--verde);
+  }
+
+  .plano .valor {
+    font-size: 2.4rem;
+    font-weight: 800;
+    color: var(--tinta);
+    line-height: 1;
+  }
+
+  .plano .valor span {
+    font-size: 0.95rem;
+    font-weight: 600;
+    color: var(--tinta-suave);
+  }
+
+  .plano p {
+    margin: 0;
+    font-size: 0.95rem;
+    color: var(--tinta-suave);
+  }
+
+  .plano .destaque {
+    font-weight: 700;
+    color: var(--verde);
+  }
+
+  .passo--verde .plano {
+    background: #fff;
+    border-color: rgba(255, 255, 255, 0.45);
+  }
+
+  .plano .miudo {
+    margin-top: auto;
+    padding-top: 10px;
+    font-size: 0.68rem;
+    color: #9aa3a8;
+  }
+
+  .fecho {
+    text-align: center;
+    border-top: 1px dashed var(--borda);
+    padding-top: 26px;
+    color: var(--tinta-suave);
+    font-size: 0.95rem;
+  }
+
+  .fecho strong {
+    display: block;
+    font-size: 1.15rem;
+    color: var(--verde);
+    margin-bottom: 6px;
+  }
+
+  @media (max-width: 860px) {
+    body { font-size: 16px; }
+    .passo {
+      grid-template-columns: 1fr;
+      gap: 26px;
+      padding: 24px;
+    }
+    .passo h2 { font-size: 1.45rem; }
+    main { padding: 22px 16px 40px; gap: 22px; }
+  }
+</style>
+
+<header class="topo">
+  <div class="topo-interno">
+    <img src="/tutorial/img/logo.png" alt="Logo do App Correspondência" />
+    <div>
+      <p class="marca-nome">App Correspondência</p>
+      <h1>TUTORIAL</h1>
+    </div>
+  </div>
+</header>
+
+<main>
+  <section class="passo passo--verde">
+    <div class="tela">
+      <img src="/tutorial/img/tela-inicial.jpg" alt="Tela inicial do App Correspondência com os campos de e-mail e senha e os botões Cadastrar Condomínio e Cadastro do Morador" />
+    </div>
+
+    <div>
+      <span class="etiqueta">Passo 1</span>
+      <h2>Tela inicial</h2>
+      <p class="resumo">É por aqui que tudo começa. Quem já tem cadastro entra com e-mail e senha; quem ainda não tem, escolhe um dos dois botões verdes.</p>
+
+      <ul class="opcoes">
+        <li>
+          <span class="marca">1</span>
+          <div>
+            <strong>Entrar</strong>
+            <span>Digite seu e-mail e senha. Marque "Lembrar login e senha" para não precisar digitar toda vez.</span>
+          </div>
+        </li>
+        <li>
+          <span class="marca">2</span>
+          <div>
+            <strong>Esqueci a senha</strong>
+            <span>Esqueceu? Toque aqui e receba o link de recuperação no seu e-mail.</span>
+          </div>
+        </li>
+        <li>
+          <span class="marca">3</span>
+          <div>
+            <strong>Cadastrar Condomínio</strong>
+            <span>Para o síndico ou a administradora criar o condomínio no sistema.</span>
+          </div>
+        </li>
+        <li>
+          <span class="marca">4</span>
+          <div>
+            <strong>Cadastro do Morador</strong>
+            <span>Para o morador se cadastrar sozinho, usando o CNPJ do condomínio.</span>
+          </div>
+        </li>
+      </ul>
+    </div>
+  </section>
+
+  <section class="passo passo--branco passo--fluxo">
+    <div class="cabecalho">
+      <span class="etiqueta">Passo 2</span>
+      <h2>Cadastrar condomínio</h2>
+      <p class="resumo">Para o síndico ou a administradora. São duas telas: os dados do condomínio e os dados de quem vai administrar.</p>
+    </div>
+
+    <div class="telas">
+      <article class="tela-card">
+        <img src="/tutorial/img/cad-cond-1.jpg" alt="Primeira etapa do cadastro do condomínio, com os campos CNPJ, nome e endereço" />
+        <h3><span class="marca">1</span> Dados do condomínio</h3>
+        <p>Digite o CNPJ: o nome e o endereço aparecem preenchidos automaticamente. Confira e toque em "Próximo".</p>
+      </article>
+
+      <article class="tela-card">
+        <img src="/tutorial/img/cad-cond-2.jpg" alt="Segunda etapa do cadastro do condomínio, com os dados do responsável" />
+        <h3><span class="marca">2</span> Dados do responsável</h3>
+        <p>Nome, e-mail, senha e WhatsApp de quem vai administrar. Toque em "Finalizar" — é com esse e-mail e senha que você entra no sistema.</p>
+      </article>
+    </div>
+
+    <p class="nota"><strong>Importante:</strong> é por esse CNPJ que os moradores encontram o condomínio na hora de se cadastrar.</p>
+  </section>
+
+  <section class="passo passo--verde passo--fluxo">
+    <div class="cabecalho">
+      <span class="etiqueta">Passo 3</span>
+      <h2>Cadastro do morador</h2>
+      <p class="resumo">O próprio morador faz o cadastro pelo celular, em três telas. Basta ter em mãos o CNPJ do condomínio.</p>
+    </div>
+
+    <div class="telas">
+      <article class="tela-card">
+        <img src="/tutorial/img/cad-mor-1.jpg" alt="Primeiro passo do cadastro do morador, com o campo CNPJ do condomínio" />
+        <h3><span class="marca">1</span> CNPJ do condomínio</h3>
+        <p>Digite o CNPJ e toque em "Continuar".</p>
+      </article>
+
+      <article class="tela-card">
+        <img src="/tutorial/img/cad-mor-2.jpg" alt="Segundo passo do cadastro do morador, com nome, e-mail, WhatsApp, bloco e unidade" />
+        <h3><span class="marca">2</span> Seus dados e sua unidade</h3>
+        <p>Confira o nome do condomínio no alto. Preencha nome, e-mail e WhatsApp com DDD — é por ele que chega o aviso de correspondência — e escolha proprietário ou inquilino, o bloco/setor e o número da unidade.</p>
+      </article>
+
+      <article class="tela-card">
+        <img src="/tutorial/img/cad-mor-3.jpg" alt="Terceiro passo do cadastro do morador, com a criação da senha" />
+        <h3><span class="marca">3</span> Crie a sua senha</h3>
+        <p>No mínimo 6 caracteres, digitada duas vezes, e toque em "Finalizar".</p>
+      </article>
+    </div>
+
+    <p class="nota"><strong>Depois de finalizar:</strong> o cadastro fica aguardando a aprovação do síndico ou do responsável. Aprovado, é só entrar com o e-mail e a senha que você criou.</p>
+  </section>
+
+  <section class="divisor">
+    <span class="etiqueta">Parte 2 do guia</span>
+    <h2>Cadastros</h2>
+    <p>Com o condomínio criado, o síndico, o responsável ou a administradora entra no sistema e monta a estrutura do prédio. É essa base que faz o registro das correspondências funcionar.</p>
+    <div class="divisor-itens">
+      <span>Blocos</span>
+      <span>Moradores</span>
+      <span>Porteiros</span>
+      <span>Responsáveis</span>
+    </div>
+  </section>
+
+  <section class="passo passo--branco">
+    <div class="tela">
+      <img src="/tutorial/img/cadastros.jpg" alt="Painel do responsável com o bloco Gestão de cadastros e configurações" />
+    </div>
+
+    <div>
+      <span class="etiqueta">Passo 4</span>
+      <h2>Onde ficam os cadastros</h2>
+      <p class="resumo">Ao entrar, o síndico ou o responsável cai no painel do condomínio. O bloco verde <strong>Gestão de cadastros e configurações</strong> reúne todos os cadastros do sistema.</p>
+
+      <ul class="opcoes opcoes--duplas">
+        <li><span class="marca">1</span><div><strong>Blocos</strong><span>Blocos, torres ou setores do condomínio. Cadastre antes dos moradores: cada unidade fica ligada a um bloco.</span></div></li>
+        <li><span class="marca">2</span><div><strong>Moradores</strong><span>Lista completa dos moradores, para cadastrar na mão, buscar e editar.</span></div></li>
+        <li><span class="marca">3</span><div><strong>Porteiros</strong><span>Cria o acesso do porteiro, quem registra e entrega as correspondências.</span></div></li>
+        <li><span class="marca">4</span><div><strong>Aprovar</strong><span>Libera os moradores que se cadastraram sozinhos. É a fila do contador "Pendentes".</span></div></li>
+        <li><span class="marca">5</span><div><strong>Mensagens</strong><span>Ajusta o texto que o morador recebe quando chega correspondência.</span></div></li>
+        <li><span class="marca">6</span><div><strong>Link Cadastro</strong><span>Gera o link e o QR Code do condomínio para os moradores se cadastrarem sozinhos.</span></div></li>
+        <li><span class="marca">7</span><div><strong>Impressão</strong><span>Monta a lista de moradores pronta para imprimir.</span></div></li>
+      </ul>
+
+      <p class="nota"><strong>No alto da tela:</strong> os números do condomínio — blocos, moradores e cadastros pendentes — e os botões WEB, COLUNA e CELULAR, que só mudam o jeito de mostrar as listas.</p>
+    </div>
+  </section>
+
+  <section class="passo passo--verde passo--espelho">
+    <div>
+      <span class="etiqueta">Passo 5</span>
+      <h2>Funções do dia a dia</h2>
+      <p class="resumo">Logo abaixo dos cadastros ficam os quatro botões usados todos os dias na portaria.</p>
+
+      <ul class="opcoes opcoes--duplas">
+        <li><span class="marca">1</span><div><strong>Novo Aviso</strong><span>O aviso de correspondência completo. Gera QR Code e número de protocolo e guarda quem enviou, para qual morador, data e hora, a foto e a descrição da correspondência.</span></div></li>
+        <li><span class="marca">2</span><div><strong>Avisos Rápidos</strong><span>O caminho mais curto para avisar o morador pelo WhatsApp: foto, número de protocolo e descrição, com quem enviou, data e hora.</span></div></li>
+        <li><span class="marca">3</span><div><strong>Registrar Retirada</strong><span>Use na hora da entrega: nome de quem está retirando, unidade, assinatura do porteiro e do morador e, se quiser, foto da entrega. Fica tudo salvo e o recibo vai para o WhatsApp e o e-mail do morador.</span></div></li>
+        <li><span class="marca">4</span><div><strong>Avisos Enviados</strong><span>O histórico completo: cada aviso e cada retirada com foto, protocolo, data, assinatura e quem retirou. É aqui que se tira dúvida e se puxa relatório.</span></div></li>
+      </ul>
+
+      <p class="nota"><strong>Envio inteligente:</strong> o sistema procura o WhatsApp do morador e manda sozinho o link, o PDF, o QR Code e o e-mail.</p>
+    </div>
+
+    <div class="tela">
+      <img src="/tutorial/img/funcoes.jpg" alt="Painel com os botões Novo Aviso, Avisos Rápidos, Registrar Retirada e Avisos Enviados" />
+    </div>
+  </section>
+
+  <section class="divisor">
+    <span class="etiqueta">Parte 3 do guia</span>
+    <h2>Novo aviso</h2>
+    <p>O registro completo da correspondência que chegou na portaria. São duas telas: quem vai receber e os detalhes da encomenda.</p>
+    <div class="divisor-itens">
+      <span>Destinatário</span>
+      <span>Local de retirada</span>
+      <span>Descrição</span>
+      <span>Foto</span>
+    </div>
+  </section>
+
+  <section class="passo passo--branco passo--fluxo">
+    <div class="cabecalho">
+      <span class="etiqueta">Passo 6</span>
+      <h2>Registrar uma encomenda</h2>
+      <p class="resumo">No botão <strong>Novo Aviso</strong> abre a tela Nova Encomenda. Preencha de cima para baixo e toque em Registrar Entrada.</p>
+    </div>
+
+    <div class="telas">
+      <article class="tela-card">
+        <img src="/tutorial/img/aviso-1.jpg" alt="Tela Nova Encomenda com os campos de condomínio, bloco, morador e local de retirada" />
+        <h3><span class="marca">1</span> Para quem é a encomenda</h3>
+        <p>Escolha o condomínio, o bloco e o morador — a lista de blocos e moradores é a que foi cadastrada antes. Em <strong>Local de Retirada</strong> fica onde a correspondência vai ficar guardada, normalmente a portaria. No alto, o botão <strong>Mensagem WhatsApp</strong> abre o texto que o morador vai receber, caso queira mudar.</p>
+      </article>
+
+      <article class="tela-card">
+        <img src="/tutorial/img/aviso-2.jpg" alt="Parte final da tela Nova Encomenda, com observação, foto da encomenda e o botão Registrar Entrada" />
+        <h3><span class="marca">2</span> Detalhes, foto e envio</h3>
+        <p>Em <strong>Detalhes / Observação</strong> descreva o que chegou (caixa grande, envelope do banco). A <strong>foto é opcional</strong> e o sistema já reduz o tamanho sozinho. Para terminar, toque em <strong>Registrar Entrada</strong>.</p>
+      </article>
+    </div>
+
+    <p class="nota"><strong>O que acontece depois:</strong> o sistema cria o número de protocolo e o QR Code e manda o aviso para o morador no WhatsApp e no e-mail, com a foto, o link e o PDF da etiqueta.</p>
+  </section>
+
+  <section class="divisor">
+    <span class="etiqueta">Parte 4 do guia</span>
+    <h2>Avisos rápidos</h2>
+    <p>Quando a portaria está cheia e a correspondência é simples, este é o caminho curto: encontrar o morador e tocar em Avisar.</p>
+    <div class="divisor-itens">
+      <span>Buscar morador</span>
+      <span>Escolher o bloco</span>
+      <span>Avisar</span>
+    </div>
+  </section>
+
+  <section class="passo passo--verde passo--fluxo">
+    <div class="cabecalho">
+      <span class="etiqueta">Passo 7</span>
+      <h2>Avisar em poucos toques</h2>
+      <p class="resumo">O aviso rápido usa a mesma lista de moradores dos cadastros. São três telas até a mensagem sair.</p>
+    </div>
+
+    <div class="telas">
+      <article class="tela-card">
+        <img src="/tutorial/img/rapido-1.jpg" alt="Tela Avisos Rápidos com os botões Histórico e Configurar Mensagem WhatsApp" />
+        <h3><span class="marca">1</span> A tela de avisos rápidos</h3>
+        <p>Em <strong>Histórico</strong> ficam os avisos já enviados por aqui. Em <strong>Configurar Msg WhatsApp</strong> você escreve o texto que o morador vai receber — vale para todos os próximos avisos.</p>
+      </article>
+
+      <article class="tela-card">
+        <img src="/tutorial/img/rapido-2.jpg" alt="Busca por nome e lista de blocos do condomínio" />
+        <h3><span class="marca">2</span> Achar o morador</h3>
+        <p>Digite o nome em <strong>Buscar Morador</strong> ou desça e escolha o <strong>bloco</strong>. Os blocos que aparecem são os que foram cadastrados na Parte 2.</p>
+      </article>
+
+      <article class="tela-card">
+        <img src="/tutorial/img/rapido-3.jpg" alt="Lista de moradores do bloco com o botão Avisar em cada apartamento" />
+        <h3><span class="marca">3</span> Tocar em Avisar</h3>
+        <p>A lista mostra apartamento, nome e telefone. Toque em <strong>Avisar</strong> e a mensagem sai para o WhatsApp do morador com foto, protocolo e descrição, além de quem enviou, data e hora.</p>
+      </article>
+    </div>
+
+    <p class="nota"><strong>Diferença para o Novo Aviso:</strong> o aviso rápido é para o dia a dia corrido. Quando a correspondência precisar de QR Code, etiqueta em PDF e registro completo, use o Novo Aviso.</p>
+  </section>
+
+  <section class="divisor">
+    <span class="etiqueta">Parte 5 do guia</span>
+    <h2>Registrar retirada</h2>
+    <p>Quando o morador vem buscar a correspondência, a retirada é dada como baixa em quatro telas — da busca até as assinaturas.</p>
+    <div class="divisor-itens">
+      <span>Encontrar a encomenda</span>
+      <span>Quem retirou</span>
+      <span>Assinaturas</span>
+    </div>
+  </section>
+
+  <section class="passo passo--branco passo--fluxo">
+    <div class="cabecalho">
+      <span class="etiqueta">Passo 8</span>
+      <h2>Dar baixa na entrega</h2>
+      <p class="resumo">Tudo o que foi registrado fica em <strong>Pendentes</strong> até alguém retirar. A baixa guarda quem retirou, a foto e as duas assinaturas.</p>
+    </div>
+
+    <div class="telas">
+      <article class="tela-card">
+        <img src="/tutorial/img/retirada-1.jpg" alt="Tela Registrar Retirada com as abas Pendentes e Histórico, leitor de QR Code e busca" />
+        <h3><span class="marca">1</span> Achar a correspondência</h3>
+        <p>Em <strong>Pendentes</strong> ficam as que ainda não foram retiradas; em <strong>Histórico</strong>, as já entregues. Use <strong>Ler QR Code</strong> na etiqueta ou busque por nome, protocolo ou apartamento.</p>
+      </article>
+
+      <article class="tela-card">
+        <img src="/tutorial/img/retirada-2.jpg" alt="Lista de correspondências pendentes com protocolo, morador e apartamento" />
+        <h3><span class="marca">2</span> Abrir o registro</h3>
+        <p>Cada cartão mostra o <strong>protocolo</strong>, o morador, o apartamento e quantos avisos já foram enviados. Toque em <strong>Clique para registrar saída</strong>.</p>
+      </article>
+
+      <article class="tela-card">
+        <img src="/tutorial/img/retirada-3.jpg" alt="Formulário com nome de quem retirou, CPF, telefone, foto e observações" />
+        <h3><span class="marca">3</span> Quem está retirando</h3>
+        <p>O <strong>nome</strong> é obrigatório; CPF, telefone, foto e observações são opcionais — úteis quando quem busca não é o morador. Depois, <strong>Próximo: Assinaturas</strong>.</p>
+      </article>
+
+      <article class="tela-card">
+        <img src="/tutorial/img/retirada-4.jpg" alt="Tela de assinaturas digitais do morador e do porteiro" />
+        <h3><span class="marca">4</span> Assinar e concluir</h3>
+        <p>A <strong>assinatura de quem retirou</strong> é feita na própria tela e é obrigatória; a do <strong>porteiro</strong> completa o comprovante. Salve e a correspondência sai dos pendentes.</p>
+      </article>
+    </div>
+
+    <p class="nota"><strong>Fica registrado:</strong> data, hora, nome, foto e assinaturas ficam guardados no histórico — é o comprovante da entrega se alguém questionar depois.</p>
+  </section>
+
+  <section class="divisor">
+    <span class="etiqueta">Parte 6 do guia</span>
+    <h2>Avisos enviados</h2>
+    <p>Cada movimento gera um documento com a identidade do condomínio: um quando a correspondência chega e outro quando ela é retirada.</p>
+    <div class="divisor-itens">
+      <span>Aviso de chegada</span>
+      <span>Recibo de retirada</span>
+    </div>
+  </section>
+
+  <section class="passo passo--verde passo--fluxo passo--docs">
+    <div class="cabecalho">
+      <span class="etiqueta">Passo 9</span>
+      <h2>O que o morador recebe</h2>
+      <p class="resumo">Os dois documentos chegam pelo WhatsApp e pelo e-mail, e ficam guardados no sistema para consulta a qualquer momento.</p>
+    </div>
+
+    <div class="telas">
+      <article class="tela-card">
+        <img src="/tutorial/img/doc-aviso.jpg" alt="Documento Aviso de Chegada com destinatário, protocolo, local de retirada, foto e QR Code" />
+        <h3><span class="marca">1</span> Aviso de chegada</h3>
+        <p>Sai assim que a correspondência é registrada. Traz o <strong>morador</strong>, a unidade, o <strong>protocolo</strong>, o local de retirada, a foto do pacote e o <strong>QR Code</strong> que o morador apresenta na portaria.</p>
+      </article>
+
+      <article class="tela-card">
+        <img src="/tutorial/img/doc-recibo.jpg" alt="Documento Recibo de Retirada com dados da entrega, assinaturas e código de validação" />
+        <h3><span class="marca">2</span> Recibo de retirada</h3>
+        <p>Sai depois da baixa. Mostra <strong>quem retirou</strong>, data e hora, o porteiro responsável, as <strong>assinaturas</strong>, a foto e um código de <strong>validação digital</strong>.</p>
+      </article>
+    </div>
+
+    <p class="nota"><strong>Por que isso importa:</strong> os dois documentos são a prova de que o condomínio avisou e de que a entrega foi feita — com data, hora e assinatura. É o que resolve a discussão de "não me avisaram" ou "nunca recebi".</p>
+  </section>
+
+  <section class="passo passo--branco passo--fluxo">
+    <div class="cabecalho">
+      <span class="etiqueta">Diferenciais</span>
+      <h2>Principais diferenciais</h2>
+      <p class="resumo">O que o App Correspondência faz e a planilha, o caderno da portaria e os grupos de WhatsApp não fazem.</p>
+    </div>
+
+    <div class="diferenciais">
+      <div class="dif">
+        <h3>WhatsApp e e-mail</h3>
+        <p>Cada aviso sai pelos dois canais ao mesmo tempo, com foto, protocolo e link — o morador recebe onde ele já olha.</p>
+      </div>
+
+      <div class="dif">
+        <h3>Registro e leitura por QR Code</h3>
+        <p>Cada correspondência ganha um QR Code na etiqueta. Na retirada, a portaria lê o código e acha o registro na hora.</p>
+      </div>
+
+      <div class="dif">
+        <h3>Portarias e porteiros ilimitados</h3>
+        <p>Cadastre quantas portarias o condomínio tiver e quantos porteiros forem necessários, sem cobrança por usuário.</p>
+      </div>
+
+      <div class="dif">
+        <h3>Perfil de portaria e de sala de correspondência</h3>
+        <p>A sala de correspondência tem cadastro e perfil próprios, separados da portaria — cada equipe entra na sua tela.</p>
+      </div>
+    </div>
+  </section>
+
+  <section class="passo passo--verde passo--fluxo">
+    <div class="cabecalho">
+      <span class="etiqueta">Planos</span>
+      <h2>Quanto custa</h2>
+      <p class="resumo">Mensalidade fixa, sem taxa de instalação. Moradores, porteiros, avisos e fotos são ilimitados nos dois planos.</p>
+    </div>
+
+    <div class="planos">
+      <article class="plano">
+        <h3>Condomínios até 500 unidades</h3>
+        <p class="valor">R$ 199,00 <span>/mês</span></p>
+        <p>Uso ilimitado para condomínios até 500 unidades, com <span class="destaque">mensagens ilimitadas</span> e <span class="destaque">moradores ilimitados</span>.</p>
+      </article>
+
+      <article class="plano">
+        <h3>Acima de 500 unidades</h3>
+        <p class="valor">R$ 350,00 <span>/mês</span></p>
+        <p>Também para <span class="destaque">administradoras</span>, empresas de <span class="destaque">facility</span> e <span class="destaque">terceirização</span>, com uso ilimitado.</p>
+        <p class="miudo">Uso ilimitado em até 20 condomínios.</p>
+      </article>
+    </div>
+  </section>
+
+  <p class="fecho"><strong>Fim do guia</strong>Da chegada da correspondência ao recibo assinado, todo o caminho fica registrado no App Correspondência.</p>
+</main>
+
+</body>
+</html>

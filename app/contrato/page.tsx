@@ -49,8 +49,8 @@ export default function ContratoPage() {
     setEnviado(true)
 
     const planoTexto = formData.planoEscolhido === 'padrao'
-      ? 'Plano Padrão (até 299 unidades) - R$ 199,00/mês'
-      : 'Plano Grande Porte (acima de 300 unidades) - R$ 299,00/mês'
+      ? 'Plano Padrão (até 500 unidades) - R$ 199,00/mês'
+      : 'Plano Grande Porte (acima de 500 unidades) - R$ 350,00/mês'
 
     const mensagem = encodeURIComponent(
       `Olá! Gostaria de formalizar a contratação do App Correspondência.\n\n` +
@@ -70,11 +70,11 @@ export default function ContratoPage() {
     window.open(`https://wa.me/5511933284364?text=${mensagem}`, '_blank')
   }
 
-  const planoValor = formData.planoEscolhido === 'padrao' ? 'R$ 199,00' : formData.planoEscolhido === 'grande' ? 'R$ 299,00' : '___________'
+  const planoValor = formData.planoEscolhido === 'padrao' ? 'R$ 199,00' : formData.planoEscolhido === 'grande' ? 'R$ 350,00' : '___________'
   const planoDescricao = formData.planoEscolhido === 'padrao'
-    ? 'Condomínios até 299 Unidades – R$ 199,00/mês'
+    ? 'Condomínios até 500 Unidades – R$ 199,00/mês'
     : formData.planoEscolhido === 'grande'
-      ? 'Condomínios acima de 300 Unidades – R$ 299,00/mês'
+      ? 'Condomínios acima de 500 Unidades – R$ 350,00/mês'
       : '___________'
 
   return (
@@ -143,7 +143,7 @@ export default function ContratoPage() {
                 </div>
               )}
               <span className="text-lg font-bold text-gray-900 mb-1">Plano Padrão</span>
-              <span className="text-sm text-gray-500 mb-3">Até 299 Unidades</span>
+              <span className="text-sm text-gray-500 mb-3">Até 500 Unidades</span>
               <div className="flex items-baseline gap-1">
                 <span className="text-sm text-gray-400">R$</span>
                 <span className="text-3xl font-extrabold text-[#057321]">199</span>
@@ -178,10 +178,10 @@ export default function ContratoPage() {
                 </div>
               )}
               <span className="text-lg font-bold text-gray-900 mb-1">Plano Grande Porte</span>
-              <span className="text-sm text-gray-500 mb-3">Acima de 300 Unidades</span>
+              <span className="text-sm text-gray-500 mb-3">Acima de 500 Unidades</span>
               <div className="flex items-baseline gap-1">
                 <span className="text-sm text-gray-400">R$</span>
-                <span className="text-3xl font-extrabold text-[#057321]">299</span>
+                <span className="text-3xl font-extrabold text-[#057321]">350</span>
                 <span className="text-gray-400">,00/mês</span>
               </div>
               <ul className="mt-4 space-y-1 text-sm text-gray-600">

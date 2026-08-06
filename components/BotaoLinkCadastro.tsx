@@ -44,7 +44,7 @@ export default function BotaoLinkCadastro() {
     
     // Remove barra no final para evitar duplicidade (ex: .com//cadastro)
     const cleanBase = baseUrl.replace(/\/$/, "");
-    const link = `${cleanBase}/cadastro-morador?cnpj=${cnpjCondominio}`;
+    const link = `${cleanBase}/cadastro-morador?cnpj=${encodeURIComponent(cnpjCondominio)}`;
 
     // Tenta usar o compartilhamento nativo do celular (Melhor UX)
     if (navigator.share) {

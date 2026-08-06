@@ -4,6 +4,7 @@ import { useRouter } from "next/navigation";
 import { supabase } from "@/app/lib/supabase";
 import { gerarAmbienteTeste } from "@/utils/gerarAmbienteTeste";
 import { formatarTelefone, limparTelefone, telefoneValido, MSG_TELEFONE_INVALIDO } from "@/utils/telefone";
+import { formatarCnpj, cnpjValido, MSG_CNPJ_INVALIDO } from "@/utils/cnpj";
 
 export default function CadastroCondominioPage() {
   const router = useRouter();
@@ -28,16 +29,6 @@ export default function CadastroCondominioPage() {
   const [whatsapp, setWhatsapp] = useState("");
   const [mostrarSenha, setMostrarSenha] = useState(false);
   const [mostrarConfirmarSenha, setMostrarConfirmarSenha] = useState(false);
-
-  // Máscara de CNPJ
-  const formatarCnpj = (valor: string) => {
-    let v = valor.replaceAll(/\D/g, "").substring(0, 14);
-    if (v.length > 12) return v.replace(/^(\d{2})(\d{3})(\d{3})(\d{4})(\d{0,2})/, "$1.$2.$3/$4-$5");
-    if (v.length > 8) return v.replace(/^(\d{2})(\d{3})(\d{3})(\d{0,4})/, "$1.$2.$3/$4");
-    if (v.length > 5) return v.replace(/^(\d{2})(\d{3})(\d{0,3})/, "$1.$2.$3");
-    if (v.length > 2) return v.replace(/^(\d{2})(\d{0,3})/, "$1.$2");
-    return v;
-  };
 
   // Consulta CNPJ na BrasilAPI
   const consultarCnpj = useCallback(async (cnpjFormatado: string) => {
@@ -98,6 +89,7 @@ export default function CadastroCondominioPage() {
   const validarEtapa1 = () => {
     if (!nomeCondominio.trim()) return alert("Nome do condomínio é obrigatório");
     if (!cnpj.trim()) return alert("CNPJ é obrigatório");
+    if (!cnpjValido(cnpj)) return alert(MSG_CNPJ_INVALIDO);
     if (!endereco.trim()) return alert("Endereço é obrigatório");
     return true;
   };

@@ -402,13 +402,13 @@ function NovaCorrespondenciaResponsavelPage() {
       <main className="max-w-4xl mx-auto px-4 pb-12" style={{ paddingTop: 'calc(6rem + env(safe-area-inset-top))' }}>
         <BotaoVoltar url={backRoute} />
 
-        <div className="mb-8 flex items-center justify-between">
-          <div className="flex items-center gap-4">
-            <div className="w-16 h-16 rounded-2xl flex items-center justify-center shadow-lg bg-gradient-to-br from-[#057321] to-[#046119]">
+        <div className="mb-8 flex items-center justify-between gap-3">
+          <div className="flex items-center gap-3 sm:gap-4 min-w-0">
+            <div className="w-14 h-14 sm:w-16 sm:h-16 shrink-0 rounded-2xl flex items-center justify-center shadow-lg bg-gradient-to-br from-[#057321] to-[#046119]">
               <Building2 className="text-white" size={32} />
             </div>
-            <div>
-              <h1 className="text-3xl font-bold text-gray-900">Nova Encomenda</h1>
+            <div className="min-w-0">
+              <h1 className="text-2xl sm:text-3xl font-bold text-gray-900">Nova Encomenda</h1>
               <p className="text-gray-600">Gestão de Entrada</p>
             </div>
           </div>

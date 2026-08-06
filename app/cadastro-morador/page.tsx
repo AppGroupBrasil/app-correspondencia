@@ -1,11 +1,12 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { supabase } from "@/app/lib/supabase";
 // 🔥 AJUSTE: Uso de alias '@/' para evitar erros de caminho relativo
 import { enviarConfirmacaoCadastro } from '@/app/lib/email-helper';
 import { formatarTelefone, limparTelefone, telefoneValido, MSG_TELEFONE_INVALIDO } from '@/utils/telefone';
+import { formatarCnpj, cnpjValido, MSG_CNPJ_INVALIDO } from '@/utils/cnpj';
 
 export default function CadastroMoradorPage() {
   const router = useRouter();
@@ -40,9 +41,48 @@ export default function CadastroMoradorPage() {
     { value: "outro", label: "Outro" },
   ];
 
+  const buscarPorId = async (condominioId: string) => {
+    setLoading(true);
+    try {
+      const response = await fetch('/api/public/condominio', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ condominioId }),
+      });
+
+      const result = await response.json();
+      if (!response.ok || !result.success) return;
+
+      setCondominioEncontrado(result.condominio);
+      setBlocos(result.blocos || []);
+      setEtapa(2);
+    } catch (err) {
+      console.warn("Não foi possível abrir o condomínio pelo link:", err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Link de convite (?cnpj=) e QR Code do folder (?condominio=<id>).
+  // Se a busca automática falhar, o morador segue digitando o CNPJ na mão.
+  useEffect(() => {
+    const params = new URLSearchParams(globalThis.window.location.search);
+
+    const cnpjDaUrl = params.get("cnpj");
+    if (cnpjDaUrl) setCnpj(formatarCnpj(cnpjDaUrl));
+
+    const idDaUrl = params.get("condominio");
+    if (idDaUrl) buscarPorId(idDaUrl);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   const buscarCondominio = async () => {
     if (!cnpj.trim()) {
       setErro("Digite o CNPJ do condomínio");
+      return;
+    }
+    if (!cnpjValido(cnpj)) {
+      setErro(MSG_CNPJ_INVALIDO);
       return;
     }
 
@@ -198,8 +238,11 @@ export default function CadastroMoradorPage() {
               <label htmlFor="cadastro-morador-cnpj" className="block text-sm font-medium text-gray-700 mb-1">CNPJ do Condomínio</label>
               <input 
                 id="cadastro-morador-cnpj"
-                value={cnpj} 
-                onChange={e => setCnpj(e.target.value)} 
+                type="tel"
+                inputMode="numeric"
+                value={cnpj}
+                onChange={e => setCnpj(formatarCnpj(e.target.value))}
+                maxLength={18}
                 className="w-full border border-gray-300 rounded-lg px-4 py-3 text-base focus:ring-2 focus:ring-[#057321] focus:border-transparent"
                 placeholder="00.000.000/0000-00"
               />

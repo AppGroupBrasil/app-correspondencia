@@ -53,7 +53,7 @@ Recibo digital:
 Obrigado!`;
 
 export default function MessageConfigModal({ isOpen, onClose, condoId, category }: MessageConfigModalProps) {
-  const { templates, saveTemplate, refresh } = useTemplates(condoId);
+  const { templates, saveTemplate } = useTemplates(condoId);
   const [localTemplate, setLocalTemplate] = useState<Partial<MessageTemplate>>({});
   const [isSaving, setIsSaving] = useState(false);
 
@@ -96,11 +96,10 @@ export default function MessageConfigModal({ isOpen, onClose, condoId, category 
 
     try {
       await saveTemplate(localTemplate as MessageTemplate);
-      await refresh();
       onClose();
-    } catch (error) {
+    } catch (error: any) {
       console.error(error);
-      alert('Erro ao salvar configuração.');
+      alert(`Erro ao salvar configuração.${error?.message ? `\n\n${error.message}` : ''}`);
     } finally {
       setIsSaving(false);
     }

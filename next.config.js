@@ -53,6 +53,11 @@ const nextConfig = {
         source: '/google41280a339a8af673.html',
         destination: '/api/google-verification',
       },
+      // Guia de uso servido como HTML estático, fora do layout do app
+      {
+        source: '/tutorial',
+        destination: '/tutorial.html',
+      },
     ];
   },
 
