@@ -200,7 +200,7 @@ function RegistrarRetiradaPorteiroPage() {
       const { data, error: err } = await supabase
         .from("correspondencias")
         .select(
-          "id,protocolo,morador_nome,bloco_nome,bloco,apartamento,unidade,condominio_id,condominio_nome,morador_id,status,data_chegada,criado_em,tipo_correspondencia,morador_telefone,morador_email,imagem_url,retirado_em"
+          "id,protocolo,morador_nome,bloco_nome,apartamento,condominio_id,morador_id,status,criado_em,morador_telefone,morador_email,imagem_url,retirado_em"
         )
         .eq("condominio_id", user?.condominioId)
         .eq("status", "pendente")
