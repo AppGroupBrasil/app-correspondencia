@@ -5,7 +5,9 @@ import { ensureSameCondominio, RequestAuthError, requireRequestAuth } from '@/ap
 export const dynamic = 'force-dynamic';
 
 const EMAIL_RATE_LIMIT_WINDOW_MS = 60_000;
-const EMAIL_RATE_LIMIT_MAX_REQUESTS = 10;
+// A portaria inteira sai por um único IP: 10/min derrubava comprovantes
+// legítimos em horário de pico (avisos + recibos de retirada).
+const EMAIL_RATE_LIMIT_MAX_REQUESTS = 30;
 const emailRateLimit = new Map<string, { count: number; resetAt: number }>();
 
 // Templates
@@ -80,6 +82,16 @@ function isRateLimited(clientIp: string): boolean {
   current.count += 1;
   emailRateLimit.set(clientIp, current);
   return false;
+}
+
+// O gateway do Supabase self-hosted exige `apikey` até em objeto público.
+// Sem isso o Resend recebe 401 ao baixar o anexo. A anon key já é pública.
+function withStorageApiKey(url: string): string {
+  const anonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '';
+  if (!anonKey || !url.includes('/storage/v1/object/') || url.includes('apikey=')) {
+    return url;
+  }
+  return `${url}${url.includes('?') ? '&' : '?'}apikey=${anonKey}`;
 }
 
 function isAllowedAttachmentUrl(url: string): boolean {
@@ -184,10 +196,23 @@ export async function POST(request: NextRequest) {
         htmlContent = emailNovaCorrespondencia(dados);
         break;
 
-      case 'recibo-retirada':
-        subject = '📋 Comprovante de retirada';
-        htmlContent = emailReciboRetirada(dados);
+      case 'recibo-retirada': {
+        const reciboDados = dados;
+        subject = reciboDados.protocolo
+          ? `📋 Comprovante de retirada - Protocolo ${reciboDados.protocolo}`
+          : '📋 Comprovante de retirada';
+        htmlContent = emailReciboRetirada(reciboDados);
+
+        if (reciboDados.reciboUrl && isAllowedAttachmentUrl(reciboDados.reciboUrl)) {
+          attachments = [
+            {
+              filename: `recibo-${reciboDados.protocolo || 'retirada'}.pdf`,
+              path: withStorageApiKey(reciboDados.reciboUrl),
+            },
+          ];
+        }
         break;
+      }
 
       case 'aviso-rapido': {
         const avisoDados = dados;
@@ -215,13 +240,33 @@ export async function POST(request: NextRequest) {
 
     let resendAttachments: { filename: string; content: string }[] | undefined;
     if (attachments.length > 0) {
-      resendAttachments = await Promise.all(
+      // Anexo é acessório: se falhar (401, 404, storage lento), o e-mail sai
+      // mesmo assim. Sem checar res.ok o corpo do erro virava um PDF inválido.
+      const baixados = await Promise.all(
         attachments.map(async (a) => {
-          const res = await fetch(a.path);
-          const buf = Buffer.from(await res.arrayBuffer());
-          return { filename: a.filename, content: buf.toString('base64') };
+          try {
+            const res = await fetch(a.path, { signal: AbortSignal.timeout(15_000) });
+            if (!res.ok) {
+              console.error(`[Email API] Anexo ignorado (HTTP ${res.status}): ${a.filename}`);
+              return null;
+            }
+            const buf = Buffer.from(await res.arrayBuffer());
+            if (buf.length === 0 || buf.length > 8 * 1024 * 1024) {
+              console.error(`[Email API] Anexo ignorado por tamanho (${buf.length}): ${a.filename}`);
+              return null;
+            }
+            return { filename: a.filename, content: buf.toString('base64') };
+          } catch (attachErr) {
+            console.error(`[Email API] Falha ao baixar anexo ${a.filename}:`, attachErr);
+            return null;
+          }
         })
       );
+
+      const validos = baixados.filter(
+        (a): a is { filename: string; content: string } => a !== null
+      );
+      resendAttachments = validos.length > 0 ? validos : undefined;
     }
 
     const { data, error } = await resend.emails.send({

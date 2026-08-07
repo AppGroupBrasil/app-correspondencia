@@ -3,7 +3,7 @@
 import { useState, useEffect, useRef, useMemo, useCallback } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import withAuth from "@/components/withAuth";
-import ModalRetiradaProfissional from "@/components/ModalRetiradaProfissional";
+import ModalRetiradaProfissional, { prefetchPreferenciasRetirada } from "@/components/ModalRetiradaProfissional";
 import { supabase } from "@/app/lib/supabase";
 import {
   Package,
@@ -105,9 +105,12 @@ function RegistrarRetiradaResponsavelPage() {
   useEffect(() => {
     if (user?.condominioId) {
       carregarDadosIniciais();
+      // Adianta config de retirada e assinatura padrão enquanto a
+      // correspondência é procurada: o modal abre sem esperar a rede.
+      void prefetchPreferenciasRetirada(user.condominioId, user.uid);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [user?.condominioId]);
+  }, [user?.condominioId, user?.uid]);
 
   const carregarDadosIniciais = async () => {
     setLoading(true);

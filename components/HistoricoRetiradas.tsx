@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { supabase } from "@/app/lib/supabase";
 import { 
   Search, Download, MessageCircle, Mail, FileText, ArrowLeft, 
-  Calendar, Eye, Share2, Printer, X
+  Calendar, Eye, Share2, Printer, X, Zap
 } from "lucide-react";
 import Navbar from "@/components/Navbar"; 
 import { useAuth } from "@/hooks/useAuth";
@@ -25,6 +25,8 @@ interface Recibo {
   emailMorador?: string; 
   quemRetirouNome?: string;
   quemRetirouDoc?: string;
+  modoRegistro?: "rapido" | "completo";
+  reciboEnviadoPara?: string;
 }
 
 interface Props {
@@ -265,6 +267,8 @@ export default function HistoricoRetiradas({ voltarUrl, tituloPerfil }: Props) {
           item.phone ||
           "";
 
+        const dadosRetirada = item.dados_retirada || {};
+
         return {
           id: item.id,
           protocolo: item.protocolo,
@@ -277,7 +281,11 @@ export default function HistoricoRetiradas({ voltarUrl, tituloPerfil }: Props) {
           // Garante que seja string para evitar erros
           telefoneMorador: String(telefoneEncontrado), 
           emailMorador: item.morador_email || "",
-          quemRetirouNome: item.retirado_por_nome || item.morador_nome,
+          quemRetirouNome:
+            dadosRetirada.nomeQuemRetirou || item.retirado_por_nome || item.morador_nome,
+          quemRetirouDoc: dadosRetirada.cpfQuemRetirou || "",
+          modoRegistro: dadosRetirada.modoRegistro || "completo",
+          reciboEnviadoPara: dadosRetirada.reciboEnviadoPara || "",
         } as Recibo;
       });
 
@@ -381,6 +389,7 @@ export default function HistoricoRetiradas({ voltarUrl, tituloPerfil }: Props) {
                       <th className="px-6 py-4 font-bold tracking-wide">Protocolo</th>
                       <th className="px-6 py-4 font-bold tracking-wide">Morador / Unidade</th>
                       <th className="px-6 py-4 font-bold tracking-wide">Retirado Por</th>
+                      <th className="px-6 py-4 font-bold tracking-wide">Registro</th>
                       <th className="px-6 py-4 text-center font-bold tracking-wide">Ações</th>
                     </tr>
                   </thead>
@@ -410,7 +419,27 @@ export default function HistoricoRetiradas({ voltarUrl, tituloPerfil }: Props) {
                           <td className="px-6 py-4 text-gray-600">
                             {item.quemRetirouNome}
                           </td>
-                          
+
+                          <td className="px-6 py-4">
+                            {item.modoRegistro === "rapido" ? (
+                              <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-green-100 text-[#057321] text-xs font-bold border border-green-200">
+                                <Zap size={12} /> Rápido
+                              </span>
+                            ) : (
+                              <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-gray-100 text-gray-600 text-xs font-bold border border-gray-200">
+                                Completo
+                              </span>
+                            )}
+                            {item.reciboEnviadoPara && (
+                              <span
+                                className="mt-1 flex items-center gap-1 text-[11px] text-gray-400"
+                                title={`Recibo enviado para ${item.reciboEnviadoPara}`}
+                              >
+                                <Mail size={11} /> enviado
+                              </span>
+                            )}
+                          </td>
+
                           <td className="px-6 py-4">
                             <div className="flex justify-center items-center gap-3">
                               <button
@@ -465,6 +494,23 @@ export default function HistoricoRetiradas({ voltarUrl, tituloPerfil }: Props) {
                       <div className="mb-4">
                         <p className="text-xs text-gray-400 uppercase font-bold tracking-wider">Retirado por</p>
                         <p className="text-sm text-gray-700">{item.quemRetirouNome}</p>
+                      </div>
+
+                      <div className="mb-4 flex flex-wrap items-center gap-2">
+                        {item.modoRegistro === "rapido" ? (
+                          <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-green-100 text-[#057321] text-xs font-bold border border-green-200">
+                            <Zap size={12} /> Registro Rápido
+                          </span>
+                        ) : (
+                          <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-gray-100 text-gray-600 text-xs font-bold border border-gray-200">
+                            Registro Completo
+                          </span>
+                        )}
+                        {item.reciboEnviadoPara && (
+                          <span className="inline-flex items-center gap-1 text-xs text-gray-400">
+                            <Mail size={12} /> Recibo enviado
+                          </span>
+                        )}
                       </div>
 
                       <div className="grid grid-cols-2 gap-2">

@@ -9,6 +9,9 @@ export interface ReciboRetiradaData {
   responsavelEntrega: string;
   condominioNome: string;
   assinaturaUrl?: string; // A URL da imagem ou do painel
+  protocolo?: string;
+  unidade?: string;
+  reciboUrl?: string; // PDF do recibo (vai anexado no e-mail)
 }
 
 export const emailReciboRetirada = (
@@ -30,12 +33,20 @@ export const emailReciboRetirada = (
 
     ${infoBoxGreen(`
       <strong>Detalhes da Retirada:</strong><br><br>
+      ${data.protocolo ? `🔖 <strong>Protocolo:</strong> ${data.protocolo}<br>` : ''}
       📦 <strong>Item:</strong> ${data.tipoCorrespondencia}<br>
+      ${data.unidade ? `🏢 <strong>Unidade:</strong> ${data.unidade}<br>` : ''}
       📅 <strong>Data:</strong> ${data.dataRetirada}<br>
       🕐 <strong>Hora:</strong> ${data.horaRetirada}<br>
       👤 <strong>Retirado por:</strong> ${data.quemRetirou}<br>
       👮 <strong>Entregue por:</strong> ${data.responsavelEntrega}
     `)}
+
+    ${data.reciboUrl ? `
+      <p style="margin: 0 0 16px 0; color: #374151; font-size: 15px; line-height: 1.6;">
+        O recibo assinado segue em anexo (PDF).
+      </p>
+    ` : ''}
 
     ${/* Aqui entra o botão se houver URL */''}
     ${data.assinaturaUrl ? `

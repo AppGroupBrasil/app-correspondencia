@@ -131,7 +131,7 @@ function PorteiroPage() {
                   Registrar Retirada
                 </h2>
                 <p className="text-green-100 mt-2 font-medium">
-                  Buscar por Nome, Apto ou QR Code
+                  Registro Rápido por protocolo, Nome, Apto ou QR Code
                 </p>
               </div>
             </div>
@@ -185,7 +185,7 @@ function PorteiroPage() {
             element: '#btn-registrar-retirada', 
             popover: { 
               title: 'Registrar Retirada', 
-              description: 'Registre a retirada com os dados e assinatura de quem recebeu. O sistema gera um comprovante físico ou digital.' 
+              description: 'Use o Registro Rápido: digite o protocolo, confira os dados que o sistema traz e colha só a assinatura. O recibo é gerado e enviado por e-mail ao morador.'
             } 
           },
         ]}

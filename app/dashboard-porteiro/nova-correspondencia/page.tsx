@@ -60,6 +60,9 @@ function NovaCorrespondenciaPorteiroPage() {
   const [mensagemFormatada, setMensagemFormatada] = useState("");
   
   const backgroundTaskRef = useRef<Promise<void> | null>(null);
+  // Identifica o registro exibido no modal: impede que a etiqueta de um
+  // registro anterior apareça no sucesso do seguinte.
+  const submissaoAtualRef = useRef<string>("");
 
   const backRoute = '/dashboard-porteiro';
   const efetivoCondominioId = condominioId || "";
@@ -253,113 +256,153 @@ ${novoLinkPublico}
 Aguardamos a sua retirada`;
 
       setMensagemFormatada(templateMensagem);
-      setProgress(70);
-
-      // PASSO 4: Gerar PDF (usando imagem já comprimida)
-      setMessage("Gerando etiqueta...");
-      const pdfBlob = await gerarEtiquetaPDF({
-        protocolo: novoProtocolo,
-        condominioNome: nomes.condominioNome,
-        moradorNome: nomes.moradorNome,
-        bloco: nomes.blocoNome,
-        apartamento: nomes.apartamento, 
-        dataChegada: dataAtual.toISOString(),
-        recebidoPor: responsavelRegistro,
-        observacao,
-        localRetirada: localArmazenamento,
-        fotoUrl: imagemBase64, // Já está em base64 e comprimida!
-        logoUrl: "/logo-app-correspondencia.png",
-        linkPublico: novoLinkPublico
-      });
-      
-      const localPdfUrl = URL.createObjectURL(pdfBlob);
-      setPdfUrl(localPdfUrl);
       setProgress(100);
 
-      // PASSO 5: Mostrar modal de sucesso IMEDIATAMENTE
+      // PASSO 4: Liberar a portaria IMEDIATAMENTE.
+      // Etiqueta, uploads e e-mail não precisam ser esperados aqui — a
+      // mensagem de WhatsApp, que é o que o porteiro usa em seguida, já está
+      // pronta. O botão "Ver PDF" mostra um spinner até a etiqueta ficar pronta.
+      setPdfUrl("");
+      submissaoAtualRef.current = docId;
       setLoading(false);
       setShowSuccessModal(true);
 
-      // PASSO 6: Upload em background (não bloqueia o usuário)
+      // PASSO 5: Gravação e anexos em background (não bloqueiam o usuário)
       backgroundTaskRef.current = (async () => {
         try {
-          // Upload do PDF
+          // A correspondência é gravada primeiro e sem depender de PDF/foto:
+          // se a tela for fechada em seguida, o registro já existe. As URLs
+          // entram num update logo depois.
+          const gravacao = (async () => {
+            const { error: insertErr } = await supabase.from("correspondencias").insert({
+              id: docId,
+              condominio_id: efetivoCondominioId,
+              bloco_id: selectedBloco,
+              bloco_nome: nomes.blocoNome,
+              morador_id: selectedMorador,
+              morador_nome: nomes.moradorNome,
+              apartamento: nomes.apartamento,
+              protocolo: novoProtocolo,
+              observacao,
+              local_armazenamento: localArmazenamento,
+              status: "pendente",
+              criado_em: new Date().toISOString(),
+              criado_por: user?.email || "porteiro",
+              criado_por_nome: nomeUser,
+              criado_por_cargo: "Porteiro",
+              imagem_url: "",
+              pdf_url: "",
+              morador_telefone: telefoneMorador,
+              morador_email: emailMorador
+            });
+            if (insertErr) throw insertErr;
+          })();
+          // Handler imediato: sem ele, uma falha de rede aqui viraria
+          // "unhandled rejection" enquanto o fluxo ainda está gerando o PDF.
+          // O porteiro precisa saber que a encomenda NÃO ficou registrada —
+          // antes a falha era silenciosa e a etiqueta já saía impressa.
+          gravacao.catch((gravacaoErr) => {
+            console.error("❌ [Background] Falha ao gravar a correspondência:", gravacaoErr);
+            alert(
+              `Falha ao salvar a correspondência (protocolo ${novoProtocolo}).\n` +
+              `Verifique a conexão e registre novamente.`
+            );
+          });
+
+          // Foto sobe em paralelo com a geração da etiqueta e, assim que chega,
+          // é gravada no registro — o link do e-mail depende dela.
+          const publicacaoFoto = (async () => {
+            if (!imagemFile) return "";
+            let url = "";
+            try {
+              const fotoPath = `correspondencias/foto_${novoProtocolo}_${Date.now()}.jpg`;
+              const { error: fotoUpErr } = await supabase.storage
+                .from("correspondencias")
+                .upload(fotoPath, imagemFile);
+              if (fotoUpErr) throw fotoUpErr;
+              url = supabase.storage.from("correspondencias").getPublicUrl(fotoPath).data.publicUrl;
+
+              await gravacao;
+              await supabase.from("correspondencias").update({ imagem_url: url }).eq("id", docId);
+            } catch (fotoErr) {
+              console.error("⚠️ [Background] Falha ao publicar a foto:", fotoErr);
+            }
+            return url;
+          })();
+
+          // O aviso ao morador não espera a etiqueta: só o registro gravado e a
+          // foto publicada, que é o que ele vê ao abrir o link.
+          const envioEmail = emailMorador
+            ? (async () => {
+                try {
+                  await gravacao;
+                  await publicacaoFoto;
+                  const now = new Date();
+                  await EmailService.enviarNovaCorrespondencia(emailMorador, {
+                    nomeMorador: nomes.moradorNome,
+                    tipoCorrespondencia: observacao || "Encomenda",
+                    dataChegada: now.toLocaleDateString('pt-BR'),
+                    horaChegada: now.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }),
+                    condominioNome: nomes.condominioNome || "Condomínio",
+                    blocoNome: nomes.blocoNome,
+                    numeroUnidade: nomes.apartamento,
+                    localRetirada: localArmazenamento,
+                    dashboardUrl: novoLinkPublico
+                  });
+                } catch (emailErr) {
+                  console.error("⚠️ [Background] Erro ao enviar e-mail:", emailErr);
+                }
+              })()
+            : null;
+
+          // jsPDF trava a thread da interface: cede um quadro para o modal de
+          // sucesso ser pintado antes de gerar a etiqueta.
+          await new Promise((r) => setTimeout(r, 50));
+          const pdfBlob = await gerarEtiquetaPDF({
+            protocolo: novoProtocolo,
+            condominioNome: nomes.condominioNome,
+            moradorNome: nomes.moradorNome,
+            bloco: nomes.blocoNome,
+            apartamento: nomes.apartamento,
+            dataChegada: dataAtual.toISOString(),
+            recebidoPor: responsavelRegistro,
+            observacao,
+            localRetirada: localArmazenamento,
+            fotoUrl: imagemBase64, // Já está em base64 e comprimida!
+            logoUrl: "/logo-app-correspondencia.png",
+            linkPublico: novoLinkPublico
+          });
+
+          // Só publica a etiqueta se este ainda for o registro na tela.
+          if (submissaoAtualRef.current === docId) {
+            setPdfUrl(URL.createObjectURL(pdfBlob));
+          }
+
           const pdfPath = `correspondencias/entrada_${novoProtocolo}_${Date.now()}.pdf`;
           const { error: pdfUpErr } = await supabase.storage
             .from("correspondencias")
             .upload(pdfPath, pdfBlob);
-          if (pdfUpErr) throw pdfUpErr;
-          const { data: pdfUrlData } = supabase.storage
-            .from("correspondencias")
-            .getPublicUrl(pdfPath);
-          const publicPdfUrl = pdfUrlData.publicUrl;
-          
-          // Upload da foto (já comprimida)
-          let publicFotoUrl = "";
-          if (imagemFile) {
-            const fotoPath = `correspondencias/foto_${novoProtocolo}_${Date.now()}.jpg`;
-            const { error: fotoUpErr } = await supabase.storage
+
+          await gravacao;
+
+          if (!pdfUpErr) {
+            const publicPdfUrl = supabase.storage
               .from("correspondencias")
-              .upload(fotoPath, imagemFile);
-            if (fotoUpErr) throw fotoUpErr;
-            const { data: fotoUrlData } = supabase.storage
+              .getPublicUrl(pdfPath).data.publicUrl;
+            await supabase
               .from("correspondencias")
-              .getPublicUrl(fotoPath);
-            publicFotoUrl = fotoUrlData.publicUrl;
+              .update({ pdf_url: publicPdfUrl })
+              .eq("id", docId);
+          } else {
+            console.error("⚠️ [Background] Falha ao subir a etiqueta:", pdfUpErr);
           }
 
-          // Salvar no Supabase
-          const { error: insertErr } = await supabase.from("correspondencias").insert({
-            id: docId,
-            condominio_id: efetivoCondominioId,
-            bloco_id: selectedBloco,
-            bloco_nome: nomes.blocoNome,
-            morador_id: selectedMorador,
-            morador_nome: nomes.moradorNome,
-            apartamento: nomes.apartamento,
-            protocolo: novoProtocolo,
-            observacao,
-            local_armazenamento: localArmazenamento,
-            status: "pendente", 
-            criado_em: new Date().toISOString(),
-            criado_por: user?.email || "porteiro",
-            criado_por_nome: nomeUser, 
-            criado_por_cargo: "Porteiro",
-            imagem_url: publicFotoUrl,
-            pdf_url: publicPdfUrl,
-            morador_telefone: telefoneMorador,
-            morador_email: emailMorador
-          });
-
-          if (insertErr) throw insertErr;
           console.log("✅ [Background] Correspondência salva com sucesso! ID:", docId);
-
-          // Envio de E-mail em background (não bloqueia)
-          if (emailMorador) {
-            try {
-              const now = new Date();
-              const dataHoje = now.toLocaleDateString('pt-BR');
-              const horaAgora = now.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
-
-              await EmailService.enviarNovaCorrespondencia(emailMorador, {
-                nomeMorador: nomes.moradorNome,
-                tipoCorrespondencia: observacao || "Encomenda",
-                dataChegada: dataHoje,
-                horaChegada: horaAgora,
-                condominioNome: nomes.condominioNome || "Condomínio",
-                blocoNome: nomes.blocoNome,
-                numeroUnidade: nomes.apartamento,
-                localRetirada: localArmazenamento,
-                dashboardUrl: novoLinkPublico
-              });
-              console.log("📧 [Background] E-mail enviado com sucesso.");
-            } catch (emailErr) {
-              console.error("⚠️ [Background] Erro ao enviar e-mail:", emailErr);
-            }
-          }
-
+          await publicacaoFoto;
+          if (envioEmail) await envioEmail;
         } catch (err) {
-          console.error("❌ [Background] Erro ao salvar:", err);
+          // Falha da gravação já foi avisada acima; aqui sobram PDF e uploads.
+          console.error("❌ [Background] Erro ao concluir anexos:", err);
         }
       })();
 
@@ -370,9 +413,18 @@ Aguardamos a sua retirada`;
     }
   };
 
-  const handleCloseSuccess = async () => {
-    if (backgroundTaskRef.current) await backgroundTaskRef.current;
-    
+  const handleCloseSuccess = () => {
+    // O background segue sozinho (já tem os dados em memória): esperar por ele
+    // aqui travava o porteiro por segundos entre um registro e o próximo.
+    submissaoAtualRef.current = "";
+
+    // Libera o blob da etiqueta anterior. Com atraso porque o porteiro pode ter
+    // acabado de abrir o PDF em outra aba, que ainda pode estar carregando.
+    if (pdfUrl.startsWith("blob:")) {
+      const paraLiberar = pdfUrl;
+      setTimeout(() => URL.revokeObjectURL(paraLiberar), 60_000);
+    }
+
     setObservacao("");
     setImagemFile(null);
     setImagemBase64("");
@@ -384,6 +436,10 @@ Aguardamos a sua retirada`;
   };
 
   const handleImprimir = () => {
+    if (!pdfUrl) {
+      alert("A etiqueta está sendo gerada. Tente novamente em instantes.");
+      return;
+    }
     if (pdfUrl) {
       const target = typeof window !== 'undefined' && (window as any).Capacitor ? "_system" : "_blank";
       window.open(pdfUrl, target);

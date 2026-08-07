@@ -3,13 +3,14 @@
 import { useState, useEffect } from "react";
 import { useAuth } from "@/hooks/useAuth";
 import { supabase } from "@/app/lib/supabase";
-import { X, Save, AlertCircle, ArrowRight, ArrowLeft } from "lucide-react";
+import { X, Save, AlertCircle, ArrowRight, ArrowLeft, Package, Zap, Mail } from "lucide-react";
 import AssinaturaDigitalPro from "./AssinaturaDigitalPro";
 import UploadImagem from "./UploadImagem";
 import { gerarReciboPDF } from "@/utils/gerarReciboPDF";
 import { LoadingOverlay } from "@/components/LoadingOverlay";
 import ModalSucessoRetirada from "./ModalSucessoRetirada";
 import { formatarTelefone } from "@/utils/telefone";
+import { EmailService } from "@/services/emailService";
 
 // --- DEFINIÇÃO DE TIPOS INLINE ---
 interface ConfiguracoesRetirada {
@@ -42,6 +43,8 @@ interface DadosRetirada {
   observacoes?: string;
   codigoVerificacao: string;
   fotoComprovanteUrl?: string;
+  modoRegistro?: "rapido" | "completo";
+  reciboEnviadoPara?: string;
 }
 
 interface Props {
@@ -50,6 +53,7 @@ interface Props {
   onSuccess: () => void;
   embedded?: boolean;
   mensagemFormatada?: string;
+  modoRapido?: boolean;
 }
 
 const fileToBase64 = (file: File): Promise<string> => {
@@ -61,17 +65,91 @@ const fileToBase64 = (file: File): Promise<string> => {
   });
 };
 
+// Configuração e assinatura padrão mudam raramente, mas eram buscadas a cada
+// abertura do modal — duas idas à rede antes de o porteiro poder assinar.
+// O cache (com prefetch feito pela tela da lista) deixa o modal abrir pronto.
+const TTL_PREFERENCIAS_MS = 5 * 60_000;
+const cacheConfig = new Map<string, { at: number; valor: Partial<ConfiguracoesRetirada> }>();
+const cacheAssinatura = new Map<string, { at: number; valor: string }>();
+
+const COLUNAS_CONFIG: [keyof ConfiguracoesRetirada, string][] = [
+  ["assinaturaMoradorObrigatoria", "assinatura_morador_obrigatoria"],
+  ["assinaturaPorteiroObrigatoria", "assinatura_porteiro_obrigatoria"],
+  ["fotoDocumentoObrigatoria", "foto_obrigatoria"],
+  ["permitirRetiradaTerceiro", "permitir_retirada_terceiro"],
+  ["permitirRetiradaParcial", "permitir_retirada_parcial"],
+];
+
+// A tabela usa snake_case: atribuir a linha crua zerava todas as flags camelCase.
+function mapearConfig(data: any): Partial<ConfiguracoesRetirada> {
+  const parcial: Partial<ConfiguracoesRetirada> = {};
+  for (const [camel, snake] of COLUNAS_CONFIG) {
+    if (typeof data?.[snake] === "boolean") parcial[camel] = data[snake];
+  }
+  return parcial;
+}
+
+function noPrazo(entrada?: { at: number }): boolean {
+  return !!entrada && Date.now() - entrada.at < TTL_PREFERENCIAS_MS;
+}
+
+// Chamado pela tela de retirada assim que a lista carrega: quando o porteiro
+// abre o modal, config e assinatura já estão em memória.
+export async function prefetchPreferenciasRetirada(condominioId?: string, uid?: string) {
+  const tarefas: Promise<void>[] = [];
+
+  if (condominioId && !noPrazo(cacheConfig.get(condominioId))) {
+    tarefas.push(
+      (async () => {
+        try {
+          const { data, error } = await supabase
+            .from("configuracoes_retirada")
+            .select("*")
+            .eq("condominio_id", condominioId)
+            .maybeSingle();
+          // Sem linha também é resposta: cachear evita repetir a consulta a
+          // cada retirada em condomínio que nunca configurou nada.
+          if (!error) cacheConfig.set(condominioId, { at: Date.now(), valor: mapearConfig(data) });
+        } catch {}
+      })()
+    );
+  }
+
+  if (uid && !noPrazo(cacheAssinatura.get(uid))) {
+    tarefas.push(
+      (async () => {
+        try {
+          const { data, error } = await supabase
+            .from("users")
+            .select("assinatura_padrao")
+            .eq("id", uid)
+            .maybeSingle();
+          // Só cacheia resposta boa: erro de rede cacheado como "sem
+          // assinatura" faria o porteiro assinar de novo pelos 5 minutos.
+          if (!error) cacheAssinatura.set(uid, { at: Date.now(), valor: data?.assinatura_padrao || "" });
+        } catch {}
+      })()
+    );
+  }
+
+  await Promise.all(tarefas);
+}
+
 export default function ModalRetiradaProfissional({
   correspondencia,
   onClose,
   onSuccess,
   embedded = false,
   mensagemFormatada: mensagemFormatadaProp,
+  modoRapido = false,
 }: Props) {
   const { user } = useAuth();
-  
+
   // ESTADO PARA CONTROLAR A ETAPA ATUAL
-  const [etapaAtual, setEtapaAtual] = useState<'observacoes' | 'assinaturas'>('observacoes');
+  // No registro rápido já entra na assinatura: os dados vêm do protocolo.
+  const [etapaAtual, setEtapaAtual] = useState<'observacoes' | 'assinaturas'>(
+    modoRapido ? 'assinaturas' : 'observacoes'
+  );
   
   const [loading, setLoading] = useState(false);
   const [progress, setProgress] = useState(0);
@@ -108,7 +186,9 @@ export default function ModalRetiradaProfissional({
     exigirAvaliacaoServico: false,
   });
 
-  const [nomeQuemRetirou, setNomeQuemRetirou] = useState("");
+  const [nomeQuemRetirou, setNomeQuemRetirou] = useState(
+    modoRapido ? String(correspondencia?.moradorNome || "") : ""
+  );
   const [cpfQuemRetirou, setCpfQuemRetirou] = useState("");
   const [telefoneQuemRetirou, setTelefoneQuemRetirou] = useState("");
   const [observacoes, setObservacoes] = useState("");
@@ -123,7 +203,7 @@ export default function ModalRetiradaProfissional({
     if (user?.condominioId) carregarConfiguracoes();
     if (user?.uid) carregarAssinaturaPorteiro();
 
-    if (!moradorPhone && correspondencia?.moradorId) {
+    if ((!moradorPhone || !moradorEmail) && correspondencia?.moradorId) {
       carregarDadosMorador();
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -148,27 +228,44 @@ export default function ModalRetiradaProfissional({
   }
 
   async function carregarConfiguracoes() {
-    if (!user?.condominioId) return;
+    const condominioId = user?.condominioId;
+    if (!condominioId) return;
+
+    const emCache = cacheConfig.get(condominioId);
+    if (emCache) setConfig((prev) => ({ ...prev, ...emCache.valor }));
+    if (noPrazo(emCache)) return;
+
     try {
-      const { data } = await supabase
+      const { data, error } = await supabase
         .from("configuracoes_retirada")
         .select("*")
-        .eq("condominio_id", user.condominioId)
-        .single();
-      if (data) setConfig(data as ConfiguracoesRetirada);
+        .eq("condominio_id", condominioId)
+        .maybeSingle();
+      if (!error) {
+        const parcial = mapearConfig(data);
+        cacheConfig.set(condominioId, { at: Date.now(), valor: parcial });
+        setConfig((prev) => ({ ...prev, ...parcial }));
+      }
     } catch (error) {
       console.error(error);
     }
   }
 
   async function carregarAssinaturaPorteiro() {
-    if (!user?.uid) return;
+    const uid = user?.uid;
+    if (!uid) return;
+
+    const emCache = cacheAssinatura.get(uid);
+    if (emCache?.valor) setAssinaturaPorteiro(emCache.valor);
+    if (noPrazo(emCache)) return;
+
     try {
       const { data } = await supabase
         .from("users")
         .select("assinatura_padrao")
-        .eq("id", user.uid)
+        .eq("id", uid)
         .single();
+      cacheAssinatura.set(uid, { at: Date.now(), valor: data?.assinatura_padrao || "" });
       if (data?.assinatura_padrao) {
         setAssinaturaPorteiro(data.assinatura_padrao);
       }
@@ -194,6 +291,9 @@ export default function ModalRetiradaProfissional({
     return resultado;
   }
 
+  // No registro rápido a assinatura é o único ato do fluxo: sempre exigida.
+  const exigeAssinaturaMorador = modoRapido || config.assinaturaMoradorObrigatoria;
+
   // FUNÇÃO PARA AVANÇAR PARA AS ASSINATURAS
   const avancarParaAssinaturas = () => {
     if (!nomeQuemRetirou.trim()) {
@@ -213,8 +313,14 @@ export default function ModalRetiradaProfissional({
 
   // MODIFICAR A FUNÇÃO handleConfirmar para ser chamada apenas na etapa de assinaturas
   async function handleConfirmarRetirada() {
-    if (config.assinaturaMoradorObrigatoria && !assinaturaMorador) {
+    if (!nomeQuemRetirou.trim()) {
+      setError("Informe o nome de quem está retirando");
+      if (modoRapido) setEtapaAtual('assinaturas');
+      return;
+    }
+    if (exigeAssinaturaMorador && !assinaturaMorador) {
       setError("Assinatura do morador é obrigatória");
+      if (modoRapido) setEtapaAtual("assinaturas");
       return;
     }
     if (!user?.uid || !user?.nome || !user?.condominioId) {
@@ -229,6 +335,7 @@ export default function ModalRetiradaProfissional({
 
     try {
       if (salvarPadrao && assinaturaPorteiro && user.uid) {
+        cacheAssinatura.set(user.uid, { at: Date.now(), valor: assinaturaPorteiro });
         supabase.from("users").update({
           assinatura_padrao: assinaturaPorteiro,
         }).eq("id", user.uid).then(({ error }) => {
@@ -265,6 +372,7 @@ export default function ModalRetiradaProfissional({
         assinaturaPorteiro: assinaturaPorteiro || undefined,
         observacoes: observacoes.trim() || undefined,
         codigoVerificacao: gerarCodigoVerificacao(),
+        modoRegistro: modoRapido ? "rapido" : "completo",
       };
 
       const baseUrl = typeof window !== "undefined" ? window.location.origin : "";
@@ -283,10 +391,31 @@ export default function ModalRetiradaProfissional({
           dados_retirada: removerUndefined(dadosRetiradaBruto),
         })
         .eq("id", correspondencia.id)
+        .eq("status", "pendente")
         .select("id");
 
       if (updError) throw updError;
       if (!updRows || updRows.length === 0) {
+        // Filtro por status pendente evita sobrescrever uma baixa feita em
+        // outro terminal enquanto este modal estava aberto.
+        const { data: atual } = await supabase
+          .from("correspondencias")
+          .select("status, retirado_em")
+          .eq("id", correspondencia.id)
+          .maybeSingle();
+
+        if (atual?.status === "retirada") {
+          const quando = atual.retirado_em
+            ? new Date(atual.retirado_em).toLocaleString("pt-BR", {
+                dateStyle: "short",
+                timeStyle: "short",
+              })
+            : "";
+          throw new Error(
+            `Esta correspondência já foi retirada${quando ? ` em ${quando}` : ""}.`
+          );
+        }
+
         throw new Error(
           "Não foi possível registrar a baixa: sem permissão ou correspondência não encontrada."
         );
@@ -327,10 +456,9 @@ Obrigado!
       // BACKGROUND: recibo em PDF, uploads e anexos — não bloqueiam a confirmação.
       void (async () => {
         try {
-          const fotoUrl = await fotoUploadPromise;
-
           // Base64 local só para renderizar a foto no PDF (evita ida à rede);
-          // no banco fica a URL do storage.
+          // no banco fica a URL do storage. Ler o arquivo local não depende do
+          // upload: o PDF é gerado enquanto a foto ainda sobe.
           let fotoParaPdf = "";
           if (imagemFile) {
             try { fotoParaPdf = await fileToBase64(imagemFile); } catch {}
@@ -338,7 +466,7 @@ Obrigado!
 
           const pdfBlob = await gerarReciboPDF({
             correspondencia,
-            dadosRetirada: { ...dadosRetiradaBruto, fotoComprovanteUrl: fotoParaPdf || fotoUrl },
+            dadosRetirada: { ...dadosRetiradaBruto, fotoComprovanteUrl: fotoParaPdf },
             nomeCondominio: correspondencia.condominioNome || "Condomínio",
             logoUrl: "/logo-app-correspondencia.png",
             linkPublicoRecibo: linkRecibo,
@@ -357,20 +485,68 @@ Obrigado!
             setFinalPdfUrl(publicPdfUrl);
           }
 
+          // O comprovante depende só do PDF: dispara agora e segue em paralelo
+          // com as gravações abaixo, em vez de esperar a fila inteira.
+          const destinatario = (moradorEmail || "").trim();
+          const emailValido = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(destinatario);
+          const envioEmail =
+            destinatario && emailValido
+              ? (async () => {
+                  const quando = new Date(dadosRetiradaBruto.dataHoraRetirada);
+                  const payloadEmail = {
+                    nomeMorador: correspondencia.moradorNome || "Morador",
+                    tipoCorrespondencia: correspondencia.tipoCorrespondencia || "Correspondência",
+                    dataRetirada: quando.toLocaleDateString("pt-BR"),
+                    horaRetirada: quando.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" }),
+                    quemRetirou: dadosRetiradaBruto.nomeQuemRetirou,
+                    responsavelEntrega: dadosRetiradaBruto.nomePorteiro,
+                    condominioNome: correspondencia.condominioNome || "Condomínio",
+                    protocolo: String(correspondencia.protocolo || ""),
+                    unidade: [correspondencia.blocoNome, correspondencia.apartamento]
+                      .filter(Boolean)
+                      .join(" - "),
+                    assinaturaUrl: linkRecibo,
+                    reciboUrl: publicPdfUrl || undefined,
+                  };
+
+                  // Uma retentativa cobre queda momentânea de rede da portaria.
+                  let enviado = await EmailService.enviarReciboRetirada(destinatario, payloadEmail);
+                  if (!enviado) {
+                    await new Promise((r) => setTimeout(r, 5000));
+                    enviado = await EmailService.enviarReciboRetirada(destinatario, payloadEmail);
+                  }
+                  return enviado;
+                })().catch((emailErr) => {
+                  console.error("Erro ao enviar o comprovante por e-mail:", emailErr);
+                  return false;
+                })
+              : null;
+
+          const fotoUrl = await fotoUploadPromise;
+
           // Anexa recibo e URL da foto (storage) à baixa já registrada.
           // Mantém base64 como fallback só se o upload da foto falhou.
           dadosRetiradaBruto.fotoComprovanteUrl = fotoUrl || fotoParaPdf || undefined;
-          await supabase
-            .from("correspondencias")
-            .update(
-              removerUndefined({
-                recibo_url: publicPdfUrl || undefined,
-                dados_retirada: removerUndefined(dadosRetiradaBruto),
-              })
-            )
-            .eq("id", correspondencia.id);
+          const gravacaoComplementar = (async () => {
+            await supabase
+              .from("correspondencias")
+              .update(
+                removerUndefined({
+                  recibo_url: publicPdfUrl || undefined,
+                  dados_retirada: removerUndefined(dadosRetiradaBruto),
+                })
+              )
+              .eq("id", correspondencia.id);
+          })().catch((gravacaoErr) => {
+            // Handler imediato: o `await` desta promise só acontece depois do
+            // e-mail (que pode levar segundos com a retentativa), e sem ele a
+            // falha vira "unhandled rejection" nesse intervalo.
+            console.error("Erro ao anexar recibo e foto à retirada:", gravacaoErr);
+          });
 
           // Histórico em `retiradas` é secundário — best-effort.
+          // Colunas em snake_case: o objeto interno é camelCase e o insert
+          // rejeitaria as chaves desconhecidas.
           supabase
             .from("retiradas")
             .insert(
@@ -378,7 +554,16 @@ Obrigado!
                 correspondencia_id: correspondencia.id,
                 protocolo: correspondencia.protocolo,
                 condominio_id: user?.condominioId || "",
-                ...removerUndefined(dadosRetiradaBruto),
+                nome_quem_retirou: dadosRetiradaBruto.nomeQuemRetirou,
+                cpf_quem_retirou: dadosRetiradaBruto.cpfQuemRetirou,
+                telefone_quem_retirou: dadosRetiradaBruto.telefoneQuemRetirou,
+                nome_porteiro: dadosRetiradaBruto.nomePorteiro,
+                data_hora_retirada: dadosRetiradaBruto.dataHoraRetirada,
+                assinatura_morador: dadosRetiradaBruto.assinaturaMorador,
+                assinatura_porteiro: dadosRetiradaBruto.assinaturaPorteiro,
+                foto_comprovante_url: dadosRetiradaBruto.fotoComprovanteUrl,
+                observacoes: dadosRetiradaBruto.observacoes,
+                codigo_verificacao: dadosRetiradaBruto.codigoVerificacao,
                 recibo_url: publicPdfUrl || undefined,
                 status: "concluida",
                 criado_em: new Date().toISOString(),
@@ -387,6 +572,19 @@ Obrigado!
             .then(({ error: histError }) => {
               if (histError) console.error("Erro ao registrar histórico de retirada:", histError);
             });
+
+          // Registra no comprovante para quem o recibo foi enviado. O segundo
+          // update precisa vir depois do primeiro para não sobrescrevê-lo.
+          const enviado = envioEmail ? await envioEmail : false;
+          await gravacaoComplementar;
+
+          if (enviado) {
+            dadosRetiradaBruto.reciboEnviadoPara = destinatario;
+            await supabase
+              .from("correspondencias")
+              .update({ dados_retirada: removerUndefined(dadosRetiradaBruto) })
+              .eq("id", correspondencia.id);
+          }
         } catch (bgErr) {
           console.error("Erro no processamento em background da retirada:", bgErr);
         }
@@ -443,18 +641,24 @@ Obrigado!
           <div className="bg-[#057321] text-white p-6 rounded-t-lg flex items-center justify-between">
             <div className="flex items-center gap-3">
               {/* Indicador de etapa */}
-              <div className="flex items-center gap-2">
-                <span className={`text-sm ${etapaAtual === 'observacoes' ? 'font-bold text-white' : 'text-green-100'}`}>
-                  1. Observações
-                </span>
-                <ArrowRight size={16} className="text-green-200" />
-                <span className={`text-sm ${etapaAtual === 'assinaturas' ? 'font-bold text-white' : 'text-green-100'}`}>
-                  2. Assinaturas
-                </span>
-              </div>
-              
+              {modoRapido ? (
+                <div className="bg-white/20 rounded-full p-2">
+                  <Zap size={20} />
+                </div>
+              ) : (
+                <div className="flex items-center gap-2">
+                  <span className={`text-sm ${etapaAtual === 'observacoes' ? 'font-bold text-white' : 'text-green-100'}`}>
+                    1. Observações
+                  </span>
+                  <ArrowRight size={16} className="text-green-200" />
+                  <span className={`text-sm ${etapaAtual === 'assinaturas' ? 'font-bold text-white' : 'text-green-100'}`}>
+                    2. Assinaturas
+                  </span>
+                </div>
+              )}
+
               <div>
-                <h2 className="text-2xl font-bold">Registrar Retirada</h2>
+                <h2 className="text-2xl font-bold">{modoRapido ? "Registro Rápido" : "Registrar Retirada"}</h2>
                 <p className="text-green-100 text-sm mt-1">
                   Protocolo: {correspondencia.protocolo}
                 </p>
@@ -602,24 +806,83 @@ Obrigado!
             /* ETAPA 2: ASSINATURAS */
             <>
               <div className="space-y-4">
+                {/* REGISTRO RÁPIDO: dados puxados pelo protocolo, só falta assinar */}
+                {modoRapido && (
+                  <div className="bg-green-50 border border-green-200 rounded-xl p-4">
+                    <div className="flex gap-4">
+                      {correspondencia.imagemUrl ? (
+                        <img
+                          src={correspondencia.imagemUrl}
+                          alt="Foto da correspondência"
+                          className="w-24 h-24 object-cover rounded-lg border border-green-200 bg-white flex-shrink-0"
+                        />
+                      ) : (
+                        <div className="w-24 h-24 rounded-lg border border-dashed border-green-300 bg-white flex items-center justify-center text-green-300 flex-shrink-0">
+                          <Package size={28} />
+                        </div>
+                      )}
+                      <div className="text-sm space-y-1 min-w-0">
+                        <p className="font-bold text-gray-900 text-base truncate">
+                          {correspondencia.moradorNome}
+                        </p>
+                        <p className="text-gray-600">
+                          {correspondencia.blocoNome} - {correspondencia.apartamento}
+                        </p>
+                        <p className="text-gray-600">
+                          {correspondencia.tipoCorrespondencia || "Correspondência"} · Protocolo #{correspondencia.protocolo}
+                        </p>
+                        {moradorEmail && (
+                          <p className="text-xs text-[#057321] flex items-center gap-1">
+                            <Mail size={12} /> Recibo será enviado para {moradorEmail}
+                          </p>
+                        )}
+                      </div>
+                    </div>
+
+                    <div className="mt-4">
+                      <label className="block text-sm font-medium text-gray-700 mb-1">
+                        Retirado por *
+                      </label>
+                      <input
+                        type="text"
+                        value={nomeQuemRetirou}
+                        onChange={(e) => setNomeQuemRetirou(e.target.value)}
+                        className="w-full px-4 py-2 border border-gray-300 rounded-lg bg-white focus:ring-[#057321] focus:border-[#057321]"
+                        placeholder="Nome de quem está retirando"
+                        disabled={loading}
+                      />
+                      <p className="text-xs text-gray-500 mt-1">
+                        Preenchido com o morador. Altere se outra pessoa estiver retirando.
+                      </p>
+                    </div>
+                  </div>
+                )}
+
                 <div className="flex items-center justify-between mb-4">
-                  <h3 className="font-semibold text-gray-900 text-lg">Assinaturas Digitais</h3>
+                  <h3 className="font-semibold text-gray-900 text-lg">
+                    {modoRapido ? "Assinatura de quem retirou" : "Assinaturas Digitais"}
+                  </h3>
                   <button
                     onClick={voltarParaObservacoes}
                     className="flex items-center gap-1 text-sm text-gray-600 hover:text-[#057321]"
                     type="button"
                   >
-                    <ArrowLeft size={16} /> Voltar para Observações
+                    <ArrowLeft size={16} />
+                    {modoRapido ? "Mais dados (CPF, foto, obs.)" : "Voltar para Observações"}
                   </button>
                 </div>
 
-                {config.assinaturaMoradorObrigatoria && (
-                  <AssinaturaDigitalPro
-                    onSave={setAssinaturaMorador}
-                    label="Assinatura do Morador *"
-                    obrigatorio={true}
-                  />
-                )}
+                {/* Sempre disponível: escondê-la quando não é obrigatória
+                    impedia colher a assinatura de quem retirou. */}
+                <AssinaturaDigitalPro
+                  onSave={setAssinaturaMorador}
+                  label={
+                    exigeAssinaturaMorador
+                      ? "Assinatura de quem retirou *"
+                      : "Assinatura de quem retirou"
+                  }
+                  obrigatorio={exigeAssinaturaMorador}
+                />
 
                 <div className="space-y-2">
                   <AssinaturaDigitalPro onSave={setAssinaturaPorteiro} label="Assinatura do Porteiro" />
@@ -642,7 +905,7 @@ Obrigado!
                 </div>
 
                 {/* Resumo dos dados da etapa anterior */}
-                <div className="bg-blue-50 border border-blue-100 rounded-lg p-4 mt-6">
+                <div className={`bg-blue-50 border border-blue-100 rounded-lg p-4 mt-6 ${modoRapido && !cpfQuemRetirou && !observacoes ? "hidden" : ""}`}>
                   <h4 className="font-medium text-blue-900 mb-2">Resumo da Retirada</h4>
                   <div className="grid grid-cols-2 gap-2 text-sm">
                     <div>
@@ -673,7 +936,7 @@ Obrigado!
                   disabled={loading}
                   type="button"
                 >
-                  <ArrowLeft size={20} /> Voltar
+                  <ArrowLeft size={20} /> {modoRapido ? "Mais dados" : "Voltar"}
                 </button>
                 <button
                   onClick={handleConfirmarRetirada}

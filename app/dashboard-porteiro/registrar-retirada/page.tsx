@@ -4,10 +4,11 @@ import { useState, useEffect, useRef, useMemo, useCallback } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Html5Qrcode } from "html5-qrcode";
 import withAuth from "@/components/withAuth";
-import ModalRetiradaProfissional from "@/components/ModalRetiradaProfissional";
-import { supabase } from "@/app/lib/supabase";
+import ModalRetiradaProfissional, { prefetchPreferenciasRetirada } from "@/components/ModalRetiradaProfissional";
+import { supabase, comApiKeyStorage } from "@/app/lib/supabase";
 import {
   Package,
+  Zap,
   Search,
   AlertCircle,
   User,
@@ -50,6 +51,32 @@ interface CorrespondenciaDocument {
   criadoEm?: any;
   tipoCorrespondencia?: string;
   moradorTelefone?: string;
+  moradorEmail?: string;
+  imagemUrl?: string;
+  retiradoEm?: string;
+}
+
+function mapCorrespondencia(d: any): CorrespondenciaDocument {
+  return {
+    id: d.id,
+    protocolo: d.protocolo,
+    moradorNome: d.morador_nome,
+    blocoNome: d.bloco_nome,
+    bloco: d.bloco,
+    apartamento: d.apartamento,
+    unidade: d.unidade,
+    condominioId: d.condominio_id,
+    condominioNome: d.condominio_nome,
+    moradorId: d.morador_id,
+    status: d.status,
+    dataChegada: d.data_chegada,
+    criadoEm: d.criado_em,
+    tipoCorrespondencia: d.tipo_correspondencia,
+    moradorTelefone: d.morador_telefone,
+    moradorEmail: d.morador_email,
+    imagemUrl: comApiKeyStorage(d.imagem_url),
+    retiradoEm: d.retirado_em,
+  };
 }
 
 const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -117,6 +144,14 @@ function RegistrarRetiradaPorteiroPage() {
   const [mostrarFiltrosPendentes, setMostrarFiltrosPendentes] = useState(false);
   const [selectedIdsPendentes, setSelectedIdsPendentes] = useState<string[]>([]);
 
+  // --- REGISTRO RÁPIDO (protocolo -> dados -> assinatura) ---
+  const [protocoloRapido, setProtocoloRapido] = useState("");
+  const [erroRapido, setErroRapido] = useState("");
+  const [buscandoRapido, setBuscandoRapido] = useState(false);
+  const [modoRapido, setModoRapido] = useState(false);
+  const rapidoInputRef = useRef<HTMLInputElement>(null);
+  const scanParaRapidoRef = useRef(false);
+
   // --- SCANNER ---
   const [showScanner, setShowScanner] = useState<boolean>(false);
   const [cameras, setCameras] = useState<any[]>([]);
@@ -131,9 +166,12 @@ function RegistrarRetiradaPorteiroPage() {
   useEffect(() => {
     if (user?.condominioId) {
       carregarPendencias();
+      // Adianta config de retirada e assinatura padrão enquanto o porteiro
+      // procura a correspondência: o modal abre sem esperar a rede.
+      void prefetchPreferenciasRetirada(user.condominioId, user.uid);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [user?.condominioId]);
+  }, [user?.condominioId, user?.uid]);
 
   useEffect(() => {
     return () => {
@@ -155,23 +193,7 @@ function RegistrarRetiradaPorteiroPage() {
 
       if (err) throw err;
 
-      const dados: CorrespondenciaDocument[] = (data || []).map((d: any) => ({
-        id: d.id,
-        protocolo: d.protocolo,
-        moradorNome: d.morador_nome,
-        blocoNome: d.bloco_nome,
-        bloco: d.bloco,
-        apartamento: d.apartamento,
-        unidade: d.unidade,
-        condominioId: d.condominio_id,
-        condominioNome: d.condominio_nome,
-        moradorId: d.morador_id,
-        status: d.status,
-        dataChegada: d.data_chegada,
-        criadoEm: d.criado_em,
-        tipoCorrespondencia: d.tipo_correspondencia,
-        moradorTelefone: d.morador_telefone,
-      }));
+      const dados: CorrespondenciaDocument[] = (data || []).map(mapCorrespondencia);
       
       dados.sort((a, b) => {
          const dA = a.dataChegada || a.criadoEm || "";
@@ -344,8 +366,10 @@ function RegistrarRetiradaPorteiroPage() {
     }
   };
 
-  const iniciarScanner = () => {
+  const iniciarScanner = (paraRapido = false) => {
+    scanParaRapidoRef.current = paraRapido;
     setError("");
+    setErroRapido("");
     if (typeof window !== "undefined" && !window.isSecureContext) {
       setError("A leitura de QR Code exige HTTPS. Abra o sistema em uma URL segura (https://) ou via localhost.");
       return;
@@ -377,6 +401,18 @@ function RegistrarRetiradaPorteiroPage() {
   };
 
   const startHtml5Scanner = (cameraId: string) => {
+    // Quem abriu o scanner define o destino do código lido:
+    // painel de Registro Rápido ou campo de busca.
+    const finalizarScan = (protocolo: string) => {
+      if (scanParaRapidoRef.current) {
+        scanParaRapidoRef.current = false;
+        setProtocoloRapido(protocolo);
+        registroRapidoRef.current(protocolo);
+      } else {
+        setBusca(protocolo);
+      }
+    };
+
     if(scannerRef.current) scannerRef.current.clear();
     const scanner = new Html5Qrcode("qr-reader-modal-porteiro");
     scannerRef.current = scanner;
@@ -399,7 +435,7 @@ function RegistrarRetiradaPorteiroPage() {
           const candidato = extrairCandidato(decodedText);
           const local = todosPendentes.find((p) => p.id === candidato);
           if (local) {
-            setBusca(String(local.protocolo));
+            finalizarScan(String(local.protocolo));
             return;
           }
           if (UUID_REGEX.test(candidato) && user?.condominioId) {
@@ -412,12 +448,12 @@ function RegistrarRetiradaPorteiroPage() {
                 .maybeSingle();
               if (data?.protocolo) {
                 await carregarPendencias();
-                setBusca(String(data.protocolo));
+                finalizarScan(String(data.protocolo));
                 return;
               }
             } catch (e) { console.warn("Falha ao buscar por id do QR:", e); }
           }
-          setBusca(candidato);
+          finalizarScan(candidato);
         }).catch(console.error);
       },
       () => {} 
@@ -425,6 +461,7 @@ function RegistrarRetiradaPorteiroPage() {
   };
 
   const pararScanner = () => {
+    scanParaRapidoRef.current = false;
     if (scannerRef.current) {
       scannerRef.current.stop().then(() => {
         scannerRef.current?.clear();
@@ -462,11 +499,102 @@ function RegistrarRetiradaPorteiroPage() {
       }
     }, [getFormattedMessage, user?.nome]);
 
-  const handleSelecionarItem = async (item: CorrespondenciaDocument) => {
+  const abrirRetirada = useCallback(
+    async (item: CorrespondenciaDocument, rapido: boolean) => {
+      setModoRapido(rapido);
       setCorrespondenciaSelecionada(item);
       await prepararMensagemRetirada(item);
       setShowModal(true);
+    },
+    [prepararMensagemRetirada]
+  );
+
+  const handleSelecionarItem = async (item: CorrespondenciaDocument) => {
+      await abrirRetirada(item, false);
   };
+
+  // Busca pelo protocolo e já abre a retirada com tudo preenchido:
+  // o porteiro só colhe a assinatura.
+  const iniciarRegistroRapido = useCallback(
+    async (codigo: string) => {
+      // Leitor de QR e digitação podem trazer "#", espaços ou URL colada.
+      const termo = String(codigo || "")
+        .trim()
+        .replace(/^#+/, "")
+        .trim();
+      if (!termo) return;
+
+      if (!user?.condominioId) {
+        setErroRapido("Sessão sem condomínio vinculado. Entre novamente.");
+        return;
+      }
+      // Evita disparo duplo (Enter repetido / clique durante a busca).
+      if (buscandoRapido || showModal) return;
+
+      setErroRapido("");
+      setBuscandoRapido(true);
+      try {
+        const local = todosPendentes.find(
+          (p) => String(p.protocolo).trim().toLowerCase() === termo.toLowerCase()
+        );
+        if (local) {
+          await abrirRetirada(local, true);
+          return;
+        }
+
+        // ilike sem curinga = igualdade sem diferenciar maiúsculas.
+        // Se o texto tiver % ou _, cai no eq para não virar busca por padrão.
+        const base = supabase
+          .from("correspondencias")
+          .select("*")
+          .eq("condominio_id", user.condominioId);
+
+        const { data, error: err } = await (/[%_]/.test(termo)
+          ? base.eq("protocolo", termo)
+          : base.ilike("protocolo", termo)
+        )
+          .order("criado_em", { ascending: false })
+          .limit(5);
+
+        if (err) throw err;
+
+        // Protocolo repetido: a pendente tem prioridade sobre uma baixa antiga.
+        const encontrada =
+          data?.find((c) => c.status === "pendente") || data?.[0];
+        if (!encontrada) {
+          setErroRapido(`Protocolo #${termo} não encontrado neste condomínio.`);
+          return;
+        }
+        if (encontrada.status === "retirada") {
+          const quando = encontrada.retirado_em
+            ? new Date(encontrada.retirado_em).toLocaleString("pt-BR", {
+                dateStyle: "short",
+                timeStyle: "short",
+              })
+            : "";
+          setErroRapido(
+            `Protocolo #${termo} já consta como RETIRADO${quando ? ` em ${quando}` : ""}.`
+          );
+          return;
+        }
+
+        await abrirRetirada(mapCorrespondencia(encontrada), true);
+      } catch (e) {
+        console.error(e);
+        setErroRapido("Falha ao buscar o protocolo. Tente novamente.");
+      } finally {
+        setBuscandoRapido(false);
+      }
+    },
+    [todosPendentes, user?.condominioId, abrirRetirada, buscandoRapido, showModal]
+  );
+
+  // O callback do scanner é criado uma vez e não enxerga o estado novo;
+  // o ref mantém a versão atual da função.
+  const registroRapidoRef = useRef(iniciarRegistroRapido);
+  useEffect(() => {
+    registroRapidoRef.current = iniciarRegistroRapido;
+  }, [iniciarRegistroRapido]);
 
   useEffect(() => {
     const termo = busca.trim();
@@ -483,12 +611,25 @@ function RegistrarRetiradaPorteiroPage() {
     setCorrespondenciaSelecionada(null);
     setMensagemRetirada("");
     setBusca("");
+    const estavaNaLista = correspondenciaSelecionada
+      ? todosPendentes.some((i) => i.id === correspondenciaSelecionada.id)
+      : false;
     if (correspondenciaSelecionada) {
       setTodosPendentes((prev) => prev.filter((i) => i.id !== correspondenciaSelecionada.id));
     }
+    // Item achado pela busca remota (cadastrado em outro terminal):
+    // recarrega para o contador de pendentes não ficar defasado.
+    if (!estavaNaLista) void carregarPendencias();
     setError("");
     setSelectedIdsPendentes([]);
-    setTimeout(() => inputRef.current?.focus(), 100);
+    const eraRapido = modoRapido;
+    setModoRapido(false);
+    setProtocoloRapido("");
+    setErroRapido("");
+    setTimeout(() => {
+      if (eraRapido) rapidoInputRef.current?.focus();
+      else inputRef.current?.focus();
+    }, 100);
   };
 
   return (
@@ -519,8 +660,69 @@ function RegistrarRetiradaPorteiroPage() {
             </div>
           </div>
 
+          {/* REGISTRO RÁPIDO: protocolo -> assinatura */}
+          <div className="bg-[#057321] rounded-xl shadow-md p-5 mb-6 text-white">
+            <div className="flex items-center gap-3 mb-1">
+              <div className="bg-white/20 rounded-full p-2">
+                <Zap size={22} />
+              </div>
+              <div>
+                <h2 className="text-xl font-bold leading-tight">Registro Rápido</h2>
+                <p className="text-green-100 text-sm">
+                  Digite o protocolo e colha só a assinatura
+                </p>
+              </div>
+            </div>
+
+            <div className="flex flex-col sm:flex-row gap-3 mt-4">
+              <input
+                ref={rapidoInputRef}
+                type="text"
+                inputMode="numeric"
+                value={protocoloRapido}
+                onChange={(e) => {
+                  setProtocoloRapido(e.target.value);
+                  setErroRapido("");
+                }}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") iniciarRegistroRapido(protocoloRapido);
+                }}
+                placeholder="Nº do protocolo"
+                className="flex-1 px-4 py-4 rounded-lg text-gray-900 text-xl font-bold tracking-wide text-center sm:text-left outline-none focus:ring-4 focus:ring-white/40 placeholder:font-normal placeholder:text-base placeholder:text-gray-400"
+              />
+              <button
+                onClick={() => iniciarRegistroRapido(protocoloRapido)}
+                disabled={buscandoRapido || !protocoloRapido.trim()}
+                className="px-6 py-4 bg-white text-[#057321] rounded-lg font-bold hover:bg-green-50 disabled:opacity-60 transition-all flex items-center justify-center gap-2 whitespace-nowrap"
+              >
+                {buscandoRapido ? (
+                  <>
+                    <Loader2 size={20} className="animate-spin" /> Buscando...
+                  </>
+                ) : (
+                  <>
+                    <Zap size={20} /> Retirar
+                  </>
+                )}
+              </button>
+              <button
+                onClick={() => iniciarScanner(true)}
+                className="px-6 py-4 bg-white/15 border border-white/40 text-white rounded-lg font-medium hover:bg-white/25 transition-all flex items-center justify-center gap-2 whitespace-nowrap"
+              >
+                <QrCode size={20} /> Ler QR
+              </button>
+            </div>
+
+            {erroRapido && (
+              <div className="mt-3 bg-white/15 border border-white/40 rounded-lg px-4 py-3 text-sm flex items-start gap-2">
+                <AlertCircle size={18} className="shrink-0 mt-0.5" />
+                <span>{erroRapido}</span>
+              </div>
+            )}
+          </div>
+
           <div className="bg-white rounded-xl shadow-md p-6 border border-gray-100 mb-6 animate-in fade-in slide-in-from-bottom-2">
-            
+
             {/* BUSCA E QR CODE */}
             <div className="flex flex-col sm:flex-row gap-3 mb-4">
               <div className="relative flex-1">
@@ -544,7 +746,7 @@ function RegistrarRetiradaPorteiroPage() {
                 )}
               </div>
 
-              <button onClick={iniciarScanner} className="px-6 py-3 bg-gray-800 text-white rounded-lg hover:bg-gray-900 transition-all flex items-center justify-center gap-2 font-medium shadow-sm whitespace-nowrap">
+              <button onClick={() => iniciarScanner(false)} className="px-6 py-3 bg-gray-800 text-white rounded-lg hover:bg-gray-900 transition-all flex items-center justify-center gap-2 font-medium shadow-sm whitespace-nowrap">
                 <QrCode size={20} className="text-green-400" /> Ler QR
               </button>
               <button onClick={() => verificarSeJaFoiRetirada()} disabled={loading || !busca.trim()} className="px-6 py-3 bg-[#057321] text-white rounded-lg hover:bg-[#046019] disabled:opacity-50 transition-all font-medium shadow-sm">
@@ -665,11 +867,17 @@ function RegistrarRetiradaPorteiroPage() {
             <ModalRetiradaProfissional
               correspondencia={correspondenciaSelecionada as any} 
               mensagemFormatada={mensagemRetirada}
+              modoRapido={modoRapido}
               onClose={() => {
                 setShowModal(false);
                 setCorrespondenciaSelecionada(null);
                 setMensagemRetirada("");
-                setTimeout(() => inputRef.current?.focus(), 100);
+                const eraRapido = modoRapido;
+                setModoRapido(false);
+                setTimeout(() => {
+                  if (eraRapido) rapidoInputRef.current?.focus();
+                  else inputRef.current?.focus();
+                }, 100);
               }}
               onSuccess={handleRetiradaSuccess}
             />
