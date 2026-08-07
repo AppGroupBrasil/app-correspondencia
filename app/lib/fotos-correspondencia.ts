@@ -35,7 +35,11 @@ export function derivarFotos(imagemUrl?: string | null): string[] {
   const partes = caminho.match(PADRAO_LOTE);
   if (!partes) return [url];
 
-  const total = Math.min(Number(partes[2]) || 1, MAX_FOTOS);
+  // Total fora da faixa que este app grava: não inventa nome de arquivo, trata
+  // como foto única (é o que existe de verdade no storage).
+  const total = Number(partes[2]) || 0;
+  if (total < 2 || total > MAX_FOTOS) return [url];
+
   const extensao = partes[3];
 
   return Array.from(
@@ -52,5 +56,6 @@ export function totalVolumes(imagemUrl?: string | null): number {
   const partes = separarConsulta(url).caminho.match(PADRAO_LOTE);
   if (!partes) return 1;
 
-  return Math.min(Number(partes[2]) || 1, MAX_FOTOS);
+  const total = Number(partes[2]) || 0;
+  return total >= 2 && total <= MAX_FOTOS ? total : 1;
 }

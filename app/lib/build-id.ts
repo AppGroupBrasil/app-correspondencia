@@ -1,2 +1,2 @@
 // Gerado por scripts/gerar-build-id.mjs a cada build — nao editar a mao.
-export const BUILD_ID = "20260807184938-xt8f63";
+export const BUILD_ID = "20260807190756-7pf48o";

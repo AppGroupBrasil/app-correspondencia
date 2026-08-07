@@ -1,6 +1,7 @@
 import { jsPDF } from "jspdf";
 import QRCode from "qrcode";
 import type { DadosRetirada } from "@/types/retirada.types";
+import { totalVolumes } from "@/app/lib/fotos-correspondencia";
 
 interface GerarReciboPDFParams {
   correspondencia: any;
@@ -230,8 +231,15 @@ export async function gerarReciboPDF({
   const dataEntrada = correspondencia.dataChegada || correspondencia.criadoEm || correspondencia.dataHora || new Date();
   const dataEntradaFmt = formatarData(dataEntrada);
 
+  // Registro que agrupa várias correspondências: o recibo é a prova de entrega,
+  // então precisa dizer quantas peças saíram com aquela assinatura.
+  const volumesEntregues = totalVolumes(correspondencia.imagemUrl);
+
   const infoCorrespondencia = [
     ["Protocolo:", correspondencia.protocolo || "N/A"],
+    ...(volumesEntregues > 1
+      ? [["Volumes:", `${volumesEntregues} correspondências`]]
+      : []),
     ["Remetente:", correspondencia.remetente || "Portaria"],
     ["Destinatário:", correspondencia.moradorNome || "Morador"],
     ["Bloco/Apto:", `${correspondencia.blocoNome || ""} - ${correspondencia.apartamento || ""}`],
