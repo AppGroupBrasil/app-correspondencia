@@ -721,10 +721,21 @@ function RegistrarRetiradaPorteiroPage() {
             )}
           </div>
 
-          <div className="bg-white rounded-xl shadow-md p-6 border border-gray-100 mb-6 animate-in fade-in slide-in-from-bottom-2">
+          {/* REGISTRO COMPLETO: busca -> conferência -> retirada */}
+          <div className="bg-[#057321] rounded-xl shadow-md p-5 mb-6 text-white">
+            <div className="flex items-center gap-3 mb-1">
+              <div className="bg-white/20 rounded-full p-2">
+                <Search size={22} />
+              </div>
+              <div>
+                <h2 className="text-xl font-bold leading-tight">Registro Completo</h2>
+                <p className="text-green-100 text-sm">
+                  Busque por nome, protocolo ou apartamento e confira os dados
+                </p>
+              </div>
+            </div>
 
-            {/* BUSCA E QR CODE */}
-            <div className="flex flex-col sm:flex-row gap-3 mb-4">
+            <div className="flex flex-col sm:flex-row gap-3 mt-4">
               <div className="relative flex-1">
                 <input
                   ref={inputRef}
@@ -736,23 +747,40 @@ function RegistrarRetiradaPorteiroPage() {
                   }}
                   onKeyDown={(e) => e.key === "Enter" && verificarSeJaFoiRetirada()}
                   placeholder="Buscar Nome, Protocolo ou Apto..."
-                  className="w-full px-4 py-3 pl-10 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#057321] focus:border-[#057321] outline-none transition-all"
+                  className="w-full px-4 py-4 pl-11 rounded-lg text-gray-900 outline-none focus:ring-4 focus:ring-white/40 placeholder:text-gray-400"
                 />
-                <Search className="absolute left-3 top-3.5 text-gray-400" size={20} />
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={20} />
                 {loading && (
-                  <div className="absolute right-3 top-3.5">
+                  <div className="absolute right-3 top-1/2 -translate-y-1/2">
                     <Loader2 size={20} className="text-[#057321] animate-spin" />
                   </div>
                 )}
               </div>
 
-              <button onClick={() => iniciarScanner(false)} className="px-6 py-3 bg-gray-800 text-white rounded-lg hover:bg-gray-900 transition-all flex items-center justify-center gap-2 font-medium shadow-sm whitespace-nowrap">
-                <QrCode size={20} className="text-green-400" /> Ler QR
+              <button
+                onClick={() => verificarSeJaFoiRetirada()}
+                disabled={loading || !busca.trim()}
+                className="px-6 py-4 bg-white text-[#057321] rounded-lg font-bold hover:bg-green-50 disabled:opacity-60 transition-all flex items-center justify-center gap-2 whitespace-nowrap"
+              >
+                <Search size={20} /> Buscar
               </button>
-              <button onClick={() => verificarSeJaFoiRetirada()} disabled={loading || !busca.trim()} className="px-6 py-3 bg-[#057321] text-white rounded-lg hover:bg-[#046019] disabled:opacity-50 transition-all font-medium shadow-sm">
-                  Buscar
+              <button
+                onClick={() => iniciarScanner(false)}
+                className="px-6 py-4 bg-white/15 border border-white/40 text-white rounded-lg font-medium hover:bg-white/25 transition-all flex items-center justify-center gap-2 whitespace-nowrap"
+              >
+                <QrCode size={20} /> Ler QR
               </button>
             </div>
+
+            {error && (
+              <div className="mt-3 bg-white/15 border border-white/40 rounded-lg px-4 py-3 text-sm flex items-start gap-2">
+                <AlertCircle size={18} className="shrink-0 mt-0.5" />
+                <span>{error}</span>
+              </div>
+            )}
+          </div>
+
+          <div className="bg-white rounded-xl shadow-md p-6 border border-gray-100 mb-6 animate-in fade-in slide-in-from-bottom-2">
 
             {/* BOTÃO TOGGLE FILTROS */}
             <button onClick={() => setMostrarFiltrosPendentes(!mostrarFiltrosPendentes)} className="flex items-center gap-2 text-sm font-semibold text-gray-500 hover:text-green-700 mb-2" type="button">
@@ -784,12 +812,6 @@ function RegistrarRetiradaPorteiroPage() {
                 </div>
             )}
 
-            {error && (
-              <div className="mt-4 p-4 bg-red-50 border border-red-100 rounded-lg flex items-start gap-3 text-red-700 animate-fade-in">
-                <AlertCircle size={20} className="mt-0.5 flex-shrink-0" />
-                <span className="text-sm font-medium">{error}</span>
-              </div>
-            )}
           </div>
 
           {/* LISTAGEM */}
