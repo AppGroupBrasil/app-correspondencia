@@ -126,6 +126,9 @@ function RegistrarRetiradaPorteiroPage() {
   const [correspondenciaSelecionada, setCorrespondenciaSelecionada] = useState<CorrespondenciaDocument | null>(null);
   
   const [loading, setLoading] = useState<boolean>(true);
+  // Separado de `loading`: o indicador dentro do campo de busca só pode
+  // acender numa busca de verdade, não durante a carga da lista.
+  const [buscandoRemoto, setBuscandoRemoto] = useState<boolean>(false);
   const [error, setError] = useState<string>("");
   const [showModal, setShowModal] = useState<boolean>(false);
   
@@ -169,6 +172,11 @@ function RegistrarRetiradaPorteiroPage() {
       // Adianta config de retirada e assinatura padrão enquanto o porteiro
       // procura a correspondência: o modal abre sem esperar a rede.
       void prefetchPreferenciasRetirada(user.condominioId, user.uid);
+    } else if (user) {
+      // Usuário já autenticado mas sem condomínio: sem isso a tela ficava
+      // com o indicador de carregamento girando para sempre.
+      setLoading(false);
+      setError("Usuário sem condomínio vinculado. Fale com a administração.");
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user?.condominioId, user?.uid]);
@@ -184,12 +192,19 @@ function RegistrarRetiradaPorteiroPage() {
 
   const carregarPendencias = async () => {
     setLoading(true);
+    setError("");
     try {
+      // Colunas explícitas: `select("*")` trazia campos pesados que a lista não
+      // usa (assinaturas em base64 de dados_retirada, observações longas).
+      // O timeout evita que uma resposta que nunca chega deixe a tela girando.
       const { data, error: err } = await supabase
         .from("correspondencias")
-        .select("*")
+        .select(
+          "id,protocolo,morador_nome,bloco_nome,bloco,apartamento,unidade,condominio_id,condominio_nome,morador_id,status,data_chegada,criado_em,tipo_correspondencia,morador_telefone,morador_email,imagem_url,retirado_em"
+        )
         .eq("condominio_id", user?.condominioId)
-        .eq("status", "pendente");
+        .eq("status", "pendente")
+        .abortSignal(AbortSignal.timeout(20_000));
 
       if (err) throw err;
 
@@ -340,7 +355,7 @@ function RegistrarRetiradaPorteiroPage() {
 
   const verificarSeJaFoiRetirada = async () => {
     if (pendentesFiltrados.length > 0) return;
-    setLoading(true);
+    setBuscandoRemoto(true);
     try {
       const termoNumero = busca.trim();
       if (termoNumero) {
@@ -349,7 +364,8 @@ function RegistrarRetiradaPorteiroPage() {
           .select("id")
           .eq("condominio_id", user?.condominioId)
           .eq("protocolo", termoNumero)
-          .eq("status", "retirada");
+          .eq("status", "retirada")
+          .abortSignal(AbortSignal.timeout(20_000));
 
         if (err) throw err;
 
@@ -361,8 +377,9 @@ function RegistrarRetiradaPorteiroPage() {
       }
     } catch (err) {
       console.error(err);
+      setError("Falha ao consultar o protocolo. Verifique a conexão.");
     } finally {
-      setLoading(false);
+      setBuscandoRemoto(false);
     }
   };
 
@@ -750,7 +767,7 @@ function RegistrarRetiradaPorteiroPage() {
                   className="w-full px-4 py-4 pl-11 rounded-lg text-gray-900 outline-none focus:ring-4 focus:ring-white/40 placeholder:text-gray-400"
                 />
                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={20} />
-                {loading && (
+                {buscandoRemoto && (
                   <div className="absolute right-3 top-1/2 -translate-y-1/2">
                     <Loader2 size={20} className="text-[#057321] animate-spin" />
                   </div>
@@ -759,7 +776,7 @@ function RegistrarRetiradaPorteiroPage() {
 
               <button
                 onClick={() => verificarSeJaFoiRetirada()}
-                disabled={loading || !busca.trim()}
+                disabled={buscandoRemoto || !busca.trim()}
                 className="px-6 py-4 bg-white text-[#057321] rounded-lg font-bold hover:bg-green-50 disabled:opacity-60 transition-all flex items-center justify-center gap-2 whitespace-nowrap"
               >
                 <Search size={20} /> Buscar
@@ -867,8 +884,13 @@ function RegistrarRetiradaPorteiroPage() {
                   })}
                 </div>
               </div>
+          ) : loading ? (
+              <div className="text-center py-12 text-gray-400 bg-white rounded-xl border border-dashed border-gray-300 flex flex-col items-center gap-2">
+                <Loader2 size={32} className="text-[#057321] animate-spin" />
+                <p>Carregando pendências...</p>
+              </div>
           ) : (
-              !loading && !error && (
+              !error && (
                  <div className="text-center py-12 text-gray-400 bg-white rounded-xl border border-dashed border-gray-300">
                     <Package size={48} className="mx-auto text-gray-200 mb-2" />
                     <p>Nenhuma correspondência encontrada com esses filtros.</p>
