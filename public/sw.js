@@ -1,5 +1,5 @@
 // Service Worker — App Correspondência PWA
-const CACHE_NAME = 'app-corresp-v1';
+const CACHE_NAME = 'app-corresp-v2';
 
 // Assets estáticos para cache (app shell)
 const PRECACHE_URLS = [

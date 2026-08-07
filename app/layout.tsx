@@ -2,6 +2,7 @@ import "./globals.css";
 import type { Metadata, Viewport } from "next";
 import Script from "next/script";
 import { AuthProvider } from "@/contexts/AuthContext";
+import AtualizacaoAutomatica from "@/components/AtualizacaoAutomatica";
 
 const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || 'https://www.appcorrespondencia.com.br';
 
@@ -190,7 +191,7 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
         <Script id="sw-register" strategy="afterInteractive">
           {`
             if ('serviceWorker' in navigator) {
-              navigator.serviceWorker.register('/sw.js').catch(function() {});
+              navigator.serviceWorker.register('/sw.js', { updateViaCache: 'none' }).catch(function() {});
             }
           `}
         </Script>
@@ -200,6 +201,7 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
             {children}
           </main>
         </AuthProvider>
+        <AtualizacaoAutomatica />
         <Script
           src="https://appgroupbrasil.com.br/embed/app-group-banner.js"
           strategy="afterInteractive"
