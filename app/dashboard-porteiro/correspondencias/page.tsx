@@ -20,6 +20,7 @@ import { useAuth } from "@/hooks/useAuth";
 import { useCorrespondencias } from "@/hooks/useCorrespondencias";
 import { supabase } from "@/app/lib/supabase";
 import { buscarContatosMoradores } from "@/app/lib/contatos-moradores";
+import { totalVolumes } from "@/app/lib/fotos-correspondencia";
 import ModalRetiradaProfissional from "@/components/ModalRetiradaProfissional";
 import withAuth from "@/components/withAuth";
 import Navbar from "@/components/Navbar";
@@ -417,6 +418,11 @@ const TabelaInterna = ({
                 </div>
                 <div className="flex items-center gap-2">
                   <span className="font-bold text-gray-900 text-base truncate">#{l.protocolo}</span>
+                  {totalVolumes(l.imagemUrl) > 1 && (
+                    <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold bg-blue-50 text-blue-700 border border-blue-100 shrink-0">
+                      {totalVolumes(l.imagemUrl)} correspondências
+                    </span>
+                  )}
                 </div>
                 <p className="text-gray-900 font-semibold text-sm truncate mt-1">{l.moradorNome}</p>
                 <p className="text-gray-500 text-xs font-medium mt-0.5">

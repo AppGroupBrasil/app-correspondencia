@@ -11,6 +11,7 @@ import { LoadingOverlay } from "@/components/LoadingOverlay";
 import ModalSucessoRetirada from "./ModalSucessoRetirada";
 import { formatarTelefone } from "@/utils/telefone";
 import { EmailService } from "@/services/emailService";
+import { totalVolumes } from "@/app/lib/fotos-correspondencia";
 
 // --- DEFINIÇÃO DE TIPOS INLINE ---
 interface ConfiguracoesRetirada {
@@ -144,6 +145,10 @@ export default function ModalRetiradaProfissional({
   modoRapido = false,
 }: Props) {
   const { user } = useAuth();
+
+  // Registro que agrupa várias correspondências: uma assinatura dá baixa em
+  // todas, mas o porteiro precisa ver quantos volumes entregar.
+  const volumes = totalVolumes(correspondencia?.imagemUrl);
 
   // ESTADO PARA CONTROLAR A ETAPA ATUAL
   // No registro rápido já entra na assinatura: os dados vêm do protocolo.
@@ -437,7 +442,7 @@ export default function ModalRetiradaProfissional({
 Olá, *${correspondencia.moradorNome}*!
 Unidade: ${correspondencia.apartamento} (${correspondencia.blocoNome})
 
-Sua encomenda foi retirada com sucesso.
+${volumes > 1 ? `Suas ${volumes} correspondências foram retiradas com sucesso.` : "Sua encomenda foi retirada com sucesso."}
 Obrigado!
 
 ━━━━━━━━━━━━━━━━
@@ -661,6 +666,11 @@ Obrigado!
                 <h2 className="text-2xl font-bold">{modoRapido ? "Registro Rápido" : "Registrar Retirada"}</h2>
                 <p className="text-green-100 text-sm mt-1">
                   Protocolo: {correspondencia.protocolo}
+                  {volumes > 1 && (
+                    <span className="ml-2 rounded-full bg-white/20 px-2 py-0.5 text-xs font-bold text-white">
+                      {volumes} correspondências
+                    </span>
+                  )}
                 </p>
               </div>
             </div>
@@ -831,6 +841,11 @@ Obrigado!
                         <p className="text-gray-600">
                           {correspondencia.tipoCorrespondencia || "Correspondência"} · Protocolo #{correspondencia.protocolo}
                         </p>
+                        {volumes > 1 && (
+                          <p className="inline-flex items-center gap-1 rounded-md bg-[#057321] px-2 py-0.5 text-xs font-bold text-white">
+                            <Package size={12} /> Entregar {volumes} correspondências
+                          </p>
+                        )}
                         {moradorEmail && (
                           <p className="text-xs text-[#057321] flex items-center gap-1">
                             <Mail size={12} /> Recibo será enviado para {moradorEmail}

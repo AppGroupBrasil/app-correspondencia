@@ -6,6 +6,7 @@ import { Html5Qrcode } from "html5-qrcode";
 import withAuth from "@/components/withAuth";
 import ModalRetiradaProfissional, { prefetchPreferenciasRetirada } from "@/components/ModalRetiradaProfissional";
 import { supabase, comApiKeyStorage } from "@/app/lib/supabase";
+import { totalVolumes } from "@/app/lib/fotos-correspondencia";
 import {
   Package,
   Zap,
@@ -862,6 +863,11 @@ function RegistrarRetiradaPorteiroPage() {
                                 <p className="font-bold text-gray-800 text-lg flex items-center gap-2">
                                   {item.tipoCorrespondencia || "Correspondência"}
                                   <span className="text-xs bg-gray-100 text-gray-600 px-2 py-0.5 rounded-full border">#{item.protocolo}</span>
+                                  {totalVolumes(item.imagemUrl) > 1 && (
+                                    <span className="text-xs font-bold bg-blue-50 text-blue-700 px-2 py-0.5 rounded-full border border-blue-100">
+                                      {totalVolumes(item.imagemUrl)} correspondências
+                                    </span>
+                                  )}
                                 </p>
                                 <div className="flex flex-col gap-1 mt-2 text-sm text-gray-600">
                                   <span className="flex items-center gap-1"><User size={14} /> {item.moradorNome}</span>

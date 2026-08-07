@@ -5,6 +5,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import withAuth from "@/components/withAuth";
 import ModalRetiradaProfissional, { prefetchPreferenciasRetirada } from "@/components/ModalRetiradaProfissional";
 import { supabase } from "@/app/lib/supabase";
+import { totalVolumes } from "@/app/lib/fotos-correspondencia";
 import {
   Package,
   Search,
@@ -51,6 +52,7 @@ interface CorrespondenciaDocument {
   tipoCorrespondencia?: string;
   moradorTelefone?: string;
   moradorEmail?: string;
+  imagemUrl?: string;
 
   compartilhadoVia?: string[];
   compartilhadoEm?: any;
@@ -142,6 +144,7 @@ function RegistrarRetiradaResponsavelPage() {
         tipoCorrespondencia: d.tipo_correspondencia,
         moradorTelefone: d.morador_telefone,
         moradorEmail: d.morador_email,
+        imagemUrl: d.imagem_url,
         compartilhadoVia: d.compartilhado_via,
         compartilhadoEm: d.compartilhado_em,
         criadoEm: d.criado_em,
@@ -757,6 +760,12 @@ function RegistrarRetiradaResponsavelPage() {
                               <span className="text-[11px] font-bold bg-yellow-50 text-yellow-700 px-2 py-0.5 rounded-full border border-yellow-100 uppercase">
                                 Pendente
                               </span>
+
+                              {totalVolumes(item.imagemUrl) > 1 && (
+                                <span className="text-[11px] font-bold bg-blue-50 text-blue-700 px-2 py-0.5 rounded-full border border-blue-100 uppercase">
+                                  {totalVolumes(item.imagemUrl)} correspondências
+                                </span>
+                              )}
                             </div>
 
                             <div className="mt-2 grid grid-cols-1 sm:grid-cols-2 gap-2 text-sm text-gray-700">

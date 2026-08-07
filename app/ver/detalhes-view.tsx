@@ -1,8 +1,9 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { supabase } from "@/app/lib/supabase";
+import { supabase, comApiKeyStorage } from "@/app/lib/supabase";
 import { abrirLink, getApiUrl } from "@/utils/platform";
+import { derivarFotos } from "@/app/lib/fotos-correspondencia";
 import {
   Loader2,
   FileX,
@@ -357,6 +358,12 @@ export default function DetalhesView({ id, documentType }: DetalhesViewProps) {
     return "Recibo Digital";
   };
 
+  // Registro com várias correspondências: as demais fotos saem do próprio nome
+  // do arquivo, sem consulta extra ao banco.
+  const fotosDoLote = derivarFotos(dados?.imagemUrl || dados?.fotoUrl).map((u) =>
+    comApiKeyStorage(u)
+  );
+
   return (
     <div className="min-h-screen bg-gray-100 flex flex-col">
       <header className="bg-[#057321] text-white py-4 px-5 sm:px-6 shadow-md flex items-center gap-3">
@@ -461,6 +468,39 @@ export default function DetalhesView({ id, documentType }: DetalhesViewProps) {
               </div>
             )}
           </div>
+
+          {fotosDoLote.length > 1 && (
+            <div className="border-t border-gray-200 bg-white px-4 py-4">
+              <p className="mb-3 text-sm font-bold text-gray-800">
+                {fotosDoLote.length} correspondências neste aviso
+              </p>
+              <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+                {fotosDoLote.map((urlFoto, indice) => (
+                  <a
+                    key={urlFoto}
+                    href={urlFoto}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="relative block aspect-square overflow-hidden rounded-lg border border-gray-200 bg-gray-100"
+                  >
+                    <img
+                      src={urlFoto}
+                      alt={`Correspondência ${indice + 1}`}
+                      loading="lazy"
+                      decoding="async"
+                      className="h-full w-full object-cover"
+                      // Se uma das fotos não tiver subido, some com o quadro em
+                      // vez de mostrar imagem quebrada.
+                      onError={(e) => e.currentTarget.parentElement?.classList.add("hidden")}
+                    />
+                    <span className="absolute bottom-1 left-1 rounded-md bg-black/60 px-1.5 py-0.5 text-[10px] font-bold text-white">
+                      {indice + 1}
+                    </span>
+                  </a>
+                ))}
+              </div>
+            </div>
+          )}
         </div>
 
         <p className="mt-4 text-xs text-gray-400">

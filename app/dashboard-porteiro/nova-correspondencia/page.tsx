@@ -2,7 +2,8 @@
 
 import { useState, useEffect, useRef, useCallback } from "react";
 import { useRouter } from "next/navigation";
-import UploadImagem from "@/components/UploadImagem";
+import UploadImagens, { FotoSelecionada } from "@/components/UploadImagens";
+import { nomeArquivoFoto } from "@/app/lib/fotos-correspondencia";
 import SelectCondominioBlocoMorador from "@/components/SelectCondominioBlocoMorador";
 import { LoadingOverlay } from "@/components/LoadingOverlay"; 
 import ModalSucessoEntrada from "@/components/ModalSucessoEntrada";
@@ -45,9 +46,9 @@ function NovaCorrespondenciaPorteiroPage() {
   const [observacao, setObservacao] = useState("");
   const [localArmazenamento, setLocalArmazenamento] = useState("Portaria");
 
-  // Imagem já comprimida pelo componente UploadImagem
-  const [imagemFile, setImagemFile] = useState<File | null>(null);
-  const [imagemBase64, setImagemBase64] = useState<string>("");
+  // Fotos já comprimidas pelo componente UploadImagens. Mais de uma foto = um
+  // único registro com várias correspondências do mesmo morador.
+  const [fotos, setFotos] = useState<FotoSelecionada[]>([]);
 
   const [showSuccessModal, setShowSuccessModal] = useState(false);
   const [protocolo, setProtocolo] = useState("");
@@ -66,12 +67,6 @@ function NovaCorrespondenciaPorteiroPage() {
 
   const backRoute = '/dashboard-porteiro';
   const efetivoCondominioId = condominioId || "";
-
-  // Handler otimizado que recebe arquivo já comprimido e base64
-  const handleUpload = useCallback((file: File | null, base64?: string) => {
-    setImagemFile(file);
-    setImagemBase64(base64 || "");
-  }, []);
 
   const limparTelefone = (telefone: string) => telefone.replace(/\D/g, "");
 
@@ -236,13 +231,19 @@ function NovaCorrespondenciaPorteiroPage() {
       const dataFormatada = dataAtual.toLocaleDateString('pt-BR');
       const horaFormatada = dataAtual.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
 
+      // Um registro pode agrupar várias correspondências (uma foto para cada).
+      const totalFotos = fotos.length;
+      const volumes = Math.max(totalFotos, 1);
+      const descricaoVolumes =
+        volumes > 1 ? `${volumes} correspondências` : "uma correspondência";
+
       // PASSO 3: Gerar mensagem formatada IMEDIATAMENTE
       const templateMensagem = `AVISO DE CORRESPONDÊNCIA
 
 Olá, *${nomes.moradorNome}*!
 Unidade: ${nomes.apartamento} (${nomes.blocoNome})
 
-Você recebeu uma correspondência
+Você recebeu ${descricaoVolumes}
 ━━━━━━━━━━━━━━━━
 │ PROTOCOLO: ${novoProtocolo}
 │ Local: ${localArmazenamento}
@@ -309,23 +310,42 @@ Aguardamos a sua retirada`;
             );
           });
 
-          // Foto sobe em paralelo com a geração da etiqueta e, assim que chega,
-          // é gravada no registro — o link do e-mail depende dela.
+          // As fotos sobem em paralelo entre si e com a geração da etiqueta.
+          // Grava-se apenas a primeira em imagem_url: o nome do arquivo carrega
+          // "1de5", e as demais são derivadas dele sem consulta nenhuma.
           const publicacaoFoto = (async () => {
-            if (!imagemFile) return "";
+            if (totalFotos === 0) return "";
+            const carimbo = Date.now();
             let url = "";
             try {
-              const fotoPath = `correspondencias/foto_${novoProtocolo}_${Date.now()}.jpg`;
-              const { error: fotoUpErr } = await supabase.storage
-                .from("correspondencias")
-                .upload(fotoPath, imagemFile);
-              if (fotoUpErr) throw fotoUpErr;
-              url = supabase.storage.from("correspondencias").getPublicUrl(fotoPath).data.publicUrl;
+              const enviadas = await Promise.all(
+                fotos.map(async (foto, indice) => {
+                  const fotoPath = `correspondencias/${nomeArquivoFoto(
+                    novoProtocolo,
+                    carimbo,
+                    indice + 1,
+                    totalFotos
+                  )}`;
+                  const { error: fotoUpErr } = await supabase.storage
+                    .from("correspondencias")
+                    .upload(fotoPath, foto.file);
+                  if (fotoUpErr) {
+                    console.error(`⚠️ [Background] Falha na foto ${indice + 1}:`, fotoUpErr);
+                    return "";
+                  }
+                  return supabase.storage.from("correspondencias").getPublicUrl(fotoPath).data
+                    .publicUrl;
+                })
+              );
+
+              // Se a primeira falhar, qualquer outra serve de âncora do lote.
+              url = enviadas.find(Boolean) || "";
+              if (!url) return "";
 
               await gravacao;
               await supabase.from("correspondencias").update({ imagem_url: url }).eq("id", docId);
             } catch (fotoErr) {
-              console.error("⚠️ [Background] Falha ao publicar a foto:", fotoErr);
+              console.error("⚠️ [Background] Falha ao publicar as fotos:", fotoErr);
             }
             return url;
           })();
@@ -340,7 +360,10 @@ Aguardamos a sua retirada`;
                   const now = new Date();
                   await EmailService.enviarNovaCorrespondencia(emailMorador, {
                     nomeMorador: nomes.moradorNome,
-                    tipoCorrespondencia: observacao || "Encomenda",
+                    tipoCorrespondencia:
+                      volumes > 1
+                        ? `${volumes} correspondências${observacao ? ` — ${observacao}` : ""}`
+                        : observacao || "Encomenda",
                     dataChegada: now.toLocaleDateString('pt-BR'),
                     horaChegada: now.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }),
                     condominioNome: nomes.condominioNome || "Condomínio",
@@ -366,9 +389,14 @@ Aguardamos a sua retirada`;
             apartamento: nomes.apartamento,
             dataChegada: dataAtual.toISOString(),
             recebidoPor: responsavelRegistro,
-            observacao,
+            // A etiqueta é uma só para o lote; o número de volumes vai no texto
+            // e as demais fotos ficam no link público (QR Code).
+            observacao:
+              volumes > 1
+                ? `${volumes} CORRESPONDÊNCIAS${observacao ? ` — ${observacao}` : ""}`
+                : observacao,
             localRetirada: localArmazenamento,
-            fotoUrl: imagemBase64, // Já está em base64 e comprimida!
+            fotoUrl: fotos[0]?.base64 || "", // Já está em base64 e comprimida!
             logoUrl: "/logo-app-correspondencia.png",
             linkPublico: novoLinkPublico
           });
@@ -426,8 +454,7 @@ Aguardamos a sua retirada`;
     }
 
     setObservacao("");
-    setImagemFile(null);
-    setImagemBase64("");
+    setFotos([]);
     setPdfUrl("");
     setLinkPublico("");
     setMensagemFormatada("");
@@ -534,10 +561,14 @@ Aguardamos a sua retirada`;
 
             <div>
               <label className="flex items-center gap-2 text-sm font-semibold text-gray-700 mb-2">
-                <Camera size={18} className="text-[#057321]" /> Foto da Encomenda (Opcional)
+                <Camera size={18} className="text-[#057321]" /> Fotos das Encomendas (Opcional)
               </label>
               <div className="bg-gray-50 rounded-xl p-4 border border-gray-200 border-dashed hover:border-[#057321] transition-colors">
-                <UploadImagem onUpload={handleUpload} />
+                <UploadImagens fotos={fotos} onChange={setFotos} />
+                <p className="mt-2 text-xs text-gray-500">
+                  Chegaram várias correspondências para o mesmo morador? Tire uma foto de cada uma:
+                  sai um único aviso, com um protocolo só.
+                </p>
               </div>
             </div>
 
