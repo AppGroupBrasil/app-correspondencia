@@ -115,11 +115,17 @@ function RegistrarRetiradaResponsavelPage() {
   const carregarDadosIniciais = async () => {
     setLoading(true);
     try {
+      // Colunas explícitas: `select("*")` trazia campos pesados que a lista não
+      // usa (assinaturas em base64 de dados_retirada, observações longas).
       const { data, error } = await supabase
         .from("correspondencias")
-        .select("*")
+        .select(
+          "id,protocolo,morador_nome,bloco_nome,apartamento,condominio_id,morador_id,status,criado_em,morador_telefone,morador_email,imagem_url,retirado_em,compartilhado_via"
+        )
         .eq("condominio_id", user?.condominioId)
-        .eq("status", "pendente");
+        .eq("status", "pendente")
+        .order("criado_em", { ascending: false })
+        .abortSignal(AbortSignal.timeout(20_000));
 
       if (error) throw error;
       const dados: CorrespondenciaDocument[] = (data || []).map((d: any) => ({

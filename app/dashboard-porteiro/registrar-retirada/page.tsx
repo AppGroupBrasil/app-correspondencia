@@ -563,7 +563,9 @@ function RegistrarRetiradaPorteiroPage() {
         // Se o texto tiver % ou _, cai no eq para não virar busca por padrão.
         const base = supabase
           .from("correspondencias")
-          .select("*")
+          .select(
+            "id,protocolo,morador_nome,bloco_nome,apartamento,condominio_id,morador_id,status,criado_em,morador_telefone,morador_email,imagem_url,retirado_em"
+          )
           .eq("condominio_id", user.condominioId);
 
         const { data, error: err } = await (/[%_]/.test(termo)

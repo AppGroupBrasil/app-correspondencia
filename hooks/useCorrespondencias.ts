@@ -236,17 +236,22 @@ export function useCorrespondencias() {
 
     try {
         setLoading(true);
+        // Colunas explicitas: `select("*")` trazia dados_retirada (jsonb com
+        // assinaturas antigas em base64) que a listagem nunca usa.
         let query = supabase
             .from("correspondencias")
-            .select("*")
-            .eq("condominio_id", condominioId)
-            .order("criado_em", { ascending: false });
-        
+            .select(
+                "id,condominio_id,bloco_id,bloco_nome,morador_id,morador_nome,apartamento,protocolo,observacao,local_armazenamento,status,imagem_url,pdf_url,recibo_url,morador_telefone,morador_email,criado_por,criado_por_nome,compartilhado_via,retirado_em,criado_em"
+            )
+            .eq("condominio_id", condominioId);
+
         if (filtroStatus) {
             query = query.eq("status", filtroStatus);
         }
 
-        const { data, error: queryError } = await query;
+        const { data, error: queryError } = await query
+            .order("criado_em", { ascending: false })
+            .abortSignal(AbortSignal.timeout(20_000));
         if (queryError) throw queryError;
 
         // Mapear snake_case → camelCase para compatibilidade
@@ -271,7 +276,6 @@ export function useCorrespondencias() {
             criadoPorNome: d.criado_por_nome,
             compartilhadoVia: d.compartilhado_via,
             retiradoEm: d.retirado_em,
-            dadosRetirada: d.dados_retirada,
             criadoEm: d.criado_em,
             dataHora: d.criado_em ? new Date(d.criado_em).toLocaleString() : "",
         }));

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useMemo } from "react";
+import { useEffect, useState, useMemo, useCallback } from "react";
 import {
   MessageCircle,
   X,
@@ -19,6 +19,7 @@ import {
 import { useAuth } from "@/hooks/useAuth";
 import { useCorrespondencias } from "@/hooks/useCorrespondencias";
 import { supabase } from "@/app/lib/supabase";
+import { buscarContatosMoradores } from "@/app/lib/contatos-moradores";
 import ModalRetiradaProfissional from "@/components/ModalRetiradaProfissional";
 import withAuth from "@/components/withAuth";
 import Navbar from "@/components/Navbar";
@@ -179,6 +180,8 @@ const TabelaInterna = ({
   blocos,
   unidades,
   carregando,
+  filtroStatus,
+  onFiltroStatus,
   onAbrirAviso,
   onAbrirRetirada,
 }: {
@@ -186,11 +189,12 @@ const TabelaInterna = ({
   blocos: Bloco[];
   unidades: Unidade[];
   carregando: boolean;
+  filtroStatus: string;
+  onFiltroStatus: (v: string) => void;
   onAbrirAviso: (l: Linha) => void;
   onAbrirRetirada: (l: Linha) => void;
 }) => {
   const [busca, setBusca] = useState("");
-  const [filtroStatus, setFiltroStatus] = useState("");
   const [dataInicio, setDataInicio] = useState("");
   const [dataFim, setDataFim] = useState("");
   const [filtroBloco, setFiltroBloco] = useState("todos");
@@ -296,11 +300,11 @@ const TabelaInterna = ({
             <select
               className="w-full pl-10 pr-3 py-2.5 border border-gray-200 rounded-xl bg-white text-sm font-semibold text-gray-700 focus:ring-2 focus:ring-[#057321]/30"
               value={filtroStatus}
-              onChange={(e) => setFiltroStatus(e.target.value)}
+              onChange={(e) => onFiltroStatus(e.target.value)}
             >
-              <option value="">Todos os Status</option>
-              <option value="pendente">Avisos Enviados (Pendentes)</option>
-              <option value="retirada">Avisos Retirados (Histórico)</option>
+              <option value="pendente">Aguardando Retirada (Padrão)</option>
+              <option value="retirada">Já Retiradas (Histórico)</option>
+              <option value="">Todas</option>
             </select>
           </div>
         </div>
@@ -739,32 +743,23 @@ function CorrespondenciasResponsavelPage() {
   const [modalReciboOpen, setModalReciboOpen] = useState(false);
   const [modalRegistroOpen, setModalRegistroOpen] = useState(false);
   const [itemSelecionado, setItemSelecionado] = useState<any>(null);
+  // Padrao: so o que ainda nao foi retirado. O historico sai do filtro.
+  const [filtroStatus, setFiltroStatus] = useState("pendente");
 
-  const carregar = async () => {
+  const carregar = useCallback(async () => {
     // ✅ CORREÇÃO: Verificação de segurança
     if (!user?.condominioId) return;
 
-    // ✅ CORREÇÃO: Passando o ID do condomínio
-    const lista = await listarCorrespondencias(user.condominioId);
+    // O status vai no servidor: retiradas nem chegam ao navegador no padrao.
+    const lista = await listarCorrespondencias(user.condominioId, filtroStatus || undefined);
 
-    const listaCompleta = await Promise.all(
-      lista.map(async (c: any) => {
-        let telefoneMorador = c.moradorTelefone || "";
-        let emailMorador = c.moradorEmail || "";
+    // Contatos faltantes em UMA consulta (antes era uma por correspondencia).
+    const contatos = await buscarContatosMoradores(lista);
 
-        if (c.moradorId && (!telefoneMorador || !emailMorador)) {
-          try {
-            const { data: uData } = await supabase
-              .from("users")
-              .select("whatsapp, telefone, email")
-              .eq("id", c.moradorId)
-              .single();
-            if (uData) {
-              telefoneMorador = uData.whatsapp || uData.telefone || "";
-              emailMorador = uData.email || "";
-            }
-          } catch (e) { console.warn("Erro ao buscar dados do morador:", e); }
-        }
+    const listaCompleta = lista.map((c: any) => {
+        const contato = c.moradorId ? contatos.get(c.moradorId) : undefined;
+        const telefoneMorador = c.moradorTelefone || contato?.telefone || "";
+        const emailMorador = c.moradorEmail || contato?.email || "";
 
         return {
           id: c.id,
@@ -787,11 +782,10 @@ function CorrespondenciasResponsavelPage() {
           moradorTelefone: telefoneMorador,
           moradorEmail: emailMorador,
         } as Linha;
-      })
-    );
+    });
 
     setDados(listaCompleta);
-  };
+  }, [user, listarCorrespondencias, filtroStatus]);
 
   const carregarFiltrosAuxiliares = async () => {
     if (!user?.condominioId) return;
@@ -826,10 +820,11 @@ function CorrespondenciasResponsavelPage() {
   };
 
   useEffect(() => {
-    if (user) {
-      carregar();
-      carregarFiltrosAuxiliares();
-    }
+    if (user) carregar();
+  }, [user, carregar]);
+
+  useEffect(() => {
+    if (user) carregarFiltrosAuxiliares();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user]);
 
@@ -885,6 +880,8 @@ function CorrespondenciasResponsavelPage() {
             blocos={blocos}
             unidades={unidades}
             carregando={loading}
+            filtroStatus={filtroStatus}
+            onFiltroStatus={setFiltroStatus}
             onAbrirAviso={handleAbrirAviso}
             onAbrirRetirada={handleAbrirRetirada}
           />
