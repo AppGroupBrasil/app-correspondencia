@@ -20,6 +20,7 @@ import {
   Building2,
   Camera,
   MapPin,
+  AlertTriangle,
 } from "lucide-react";
 import { gerarEtiquetaPDF } from "@/utils/gerarEtiquetaPDF";
 import BotaoVoltar from "@/components/BotaoVoltar";
@@ -567,10 +568,15 @@ function NovaCorrespondenciaResponsavelPage() {
               </label>
               <div className="bg-gray-50 rounded-xl p-4 border border-gray-200 border-dashed hover:border-[#057321] transition-colors">
                 <UploadImagens fotos={fotos} onChange={setFotos} />
-                <p className="mt-2 text-xs text-gray-500">
-                  Chegaram várias correspondências para o mesmo morador? Tire uma foto de cada uma:
-                  sai um único aviso, com um protocolo só.
-                </p>
+                <div className="mt-3 flex items-start gap-2 rounded-lg border border-amber-200 bg-amber-50 p-3">
+                  <AlertTriangle size={16} className="mt-0.5 shrink-0 text-amber-600" />
+                  <p className="text-xs leading-relaxed text-amber-900">
+                    <span className="font-bold">Sem foto não há múltiplas correspondências.</span>{" "}
+                    Para avisar várias de uma vez ao mesmo morador, tire uma foto de cada
+                    correspondência: sai um único aviso, com um protocolo só. Se nenhuma foto for
+                    tirada, o registro vale por uma correspondência apenas.
+                  </p>
+                </div>
               </div>
             </div>
 
