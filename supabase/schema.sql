@@ -506,6 +506,13 @@ CREATE INDEX idx_corresp_condominio ON public.correspondencias USING btree (cond
 
 
 --
+-- Name: idx_corresp_lista; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_corresp_lista ON public.correspondencias USING btree (condominio_id, status, criado_em DESC);
+
+
+--
 -- Name: idx_corresp_morador; Type: INDEX; Schema: public; Owner: -
 --
 
