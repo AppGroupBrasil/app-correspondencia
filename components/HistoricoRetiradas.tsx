@@ -26,6 +26,7 @@ interface Recibo {
   quemRetirouNome?: string;
   quemRetirouDoc?: string;
   modoRegistro?: "rapido" | "completo";
+  semComprovacao?: boolean;
   reciboEnviadoPara?: string;
 }
 
@@ -285,6 +286,7 @@ export default function HistoricoRetiradas({ voltarUrl, tituloPerfil }: Props) {
             dadosRetirada.nomeQuemRetirou || item.retirado_por_nome || item.morador_nome,
           quemRetirouDoc: dadosRetirada.cpfQuemRetirou || "",
           modoRegistro: dadosRetirada.modoRegistro || "completo",
+          semComprovacao: Boolean(dadosRetirada.semComprovacao),
           reciboEnviadoPara: dadosRetirada.reciboEnviadoPara || "",
         } as Recibo;
       });
@@ -504,6 +506,11 @@ export default function HistoricoRetiradas({ voltarUrl, tituloPerfil }: Props) {
                         ) : (
                           <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-gray-100 text-gray-600 text-xs font-bold border border-gray-200">
                             Registro Completo
+                          </span>
+                        )}
+                        {item.semComprovacao && (
+                          <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-amber-100 text-amber-700 text-xs font-bold border border-amber-200">
+                            Sem foto/assinatura
                           </span>
                         )}
                         {item.reciboEnviadoPara && (

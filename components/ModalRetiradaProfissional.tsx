@@ -1,9 +1,9 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { useAuth } from "@/hooks/useAuth";
 import { supabase } from "@/app/lib/supabase";
-import { X, Save, AlertCircle, ArrowRight, ArrowLeft, Package, Zap, Mail } from "lucide-react";
+import { X, Save, AlertCircle, ArrowRight, ArrowLeft, Package, Zap, Mail, Check } from "lucide-react";
 import AssinaturaDigitalPro from "./AssinaturaDigitalPro";
 import UploadImagem from "./UploadImagem";
 import { gerarReciboPDF } from "@/utils/gerarReciboPDF";
@@ -12,6 +12,8 @@ import ModalSucessoRetirada from "./ModalSucessoRetirada";
 import { formatarTelefone } from "@/utils/telefone";
 import { EmailService } from "@/services/emailService";
 import { totalVolumes } from "@/app/lib/fotos-correspondencia";
+import { useRascunho } from "@/hooks/useRascunho";
+import { liberarRecarga, travarRecarga } from "@/utils/rascunho";
 
 // --- DEFINIÇÃO DE TIPOS INLINE ---
 interface ConfiguracoesRetirada {
@@ -45,6 +47,7 @@ interface DadosRetirada {
   codigoVerificacao: string;
   fotoComprovanteUrl?: string;
   modoRegistro?: "rapido" | "completo";
+  semComprovacao?: boolean;
   reciboEnviadoPara?: string;
 }
 
@@ -56,6 +59,8 @@ interface Props {
   mensagemFormatada?: string;
   modoRapido?: boolean;
 }
+
+const CHAVE_DISPENSA = "appcorresp:dispensa-comprovacao:";
 
 const fileToBase64 = (file: File): Promise<string> => {
   return new Promise((resolve, reject) => {
@@ -203,6 +208,81 @@ export default function ModalRetiradaProfissional({
 
   const [imagemFile, setImagemFile] = useState<File | null>(null);
   const [salvarPadrao, setSalvarPadrao] = useState(false);
+  const [baixaConcluida, setBaixaConcluida] = useState(false);
+
+  // Preferência do porteiro, guardada no aparelho: uma vez marcada, todo registro
+  // rápido baixa sem foto e sem assinatura até ele desmarcar.
+  const [dispensaFixa, setDispensaFixa] = useState(false);
+
+  useEffect(() => {
+    if (!user?.uid) return;
+    try {
+      setDispensaFixa(localStorage.getItem(`${CHAVE_DISPENSA}${user.uid}`) === "1");
+    } catch {
+      /* storage indisponível: segue exigindo assinatura */
+    }
+  }, [user?.uid]);
+
+  const alternarDispensaFixa = () => {
+    const novo = !dispensaFixa;
+    setDispensaFixa(novo);
+    try {
+      if (!user?.uid) return;
+      if (novo) localStorage.setItem(`${CHAVE_DISPENSA}${user.uid}`, "1");
+      else localStorage.removeItem(`${CHAVE_DISPENSA}${user.uid}`);
+    } catch {
+      /* sem persistência: vale só para esta sessão */
+    }
+  };
+
+  // Foto e assinatura são o trecho mais caro de refazer: se o sistema derrubar
+  // o app enquanto a câmera está aberta, reabrir esta correspondência devolve o
+  // que já tinha sido preenchido. Enquanto o modal está aberto, nada recarrega.
+  const chaveRascunho = `retirada:${correspondencia?.id ?? ""}`;
+
+  // Objeto novo a cada render reiniciaria o intervalo de gravação sem parar.
+  const dadosRascunho = useMemo(
+    () => ({
+      nomeQuemRetirou,
+      cpfQuemRetirou,
+      telefoneQuemRetirou,
+      observacoes,
+      assinaturaMorador,
+      etapaAtual,
+    }),
+    [nomeQuemRetirou, cpfQuemRetirou, telefoneQuemRetirou, observacoes, assinaturaMorador, etapaAtual]
+  );
+
+  useRascunho({
+    chave: chaveRascunho,
+    ativo:
+      !baixaConcluida &&
+      Boolean(
+        assinaturaMorador ||
+          cpfQuemRetirou.trim() ||
+          telefoneQuemRetirou.trim() ||
+          observacoes.trim()
+      ),
+    dados: dadosRascunho,
+    restaurar: (salvo) => {
+      if (salvo.nomeQuemRetirou) setNomeQuemRetirou(salvo.nomeQuemRetirou);
+      setCpfQuemRetirou(salvo.cpfQuemRetirou || "");
+      setTelefoneQuemRetirou(salvo.telefoneQuemRetirou || "");
+      setObservacoes(salvo.observacoes || "");
+      if (salvo.assinaturaMorador) setAssinaturaMorador(salvo.assinaturaMorador);
+      if (salvo.etapaAtual) setEtapaAtual(salvo.etapaAtual);
+    },
+    versaoLeve: (atual) => ({ ...atual, assinaturaMorador: "" }),
+  });
+
+  // Trava própria do modal, com identificador separado do rascunho: enquanto
+  // esta tela existir nada recarrega, mesmo depois de o rascunho ser
+  // descartado — a baixa confirmada ainda sobe recibo, foto e e-mail por trás.
+  useEffect(() => {
+    const travaModal = `modal-retirada:${chaveRascunho}`;
+    travarRecarga(travaModal);
+    return () => liberarRecarga(travaModal);
+  }, [chaveRascunho]);
 
   useEffect(() => {
     if (user?.condominioId) carregarConfiguracoes();
@@ -296,8 +376,11 @@ export default function ModalRetiradaProfissional({
     return resultado;
   }
 
-  // No registro rápido a assinatura é o único ato do fluxo: sempre exigida.
-  const exigeAssinaturaMorador = modoRapido || config.assinaturaMoradorObrigatoria;
+  // No registro rápido a assinatura é o único ato do fluxo: sempre exigida,
+  // a menos que o porteiro marque a dispensa. A marcação vale só para o registro
+  // rápido — no fluxo completo continua valendo a regra do condomínio.
+  const dispensaAtiva = modoRapido && dispensaFixa;
+  const exigeAssinaturaMorador = !dispensaAtiva && (modoRapido || config.assinaturaMoradorObrigatoria);
 
   // FUNÇÃO PARA AVANÇAR PARA AS ASSINATURAS
   const avancarParaAssinaturas = () => {
@@ -318,7 +401,16 @@ export default function ModalRetiradaProfissional({
 
   // MODIFICAR A FUNÇÃO handleConfirmar para ser chamada apenas na etapa de assinaturas
   async function handleConfirmarRetirada() {
-    if (!nomeQuemRetirou.trim()) {
+    // Com a dispensa marcada a baixa sai só com a leitura do QR Code. Se a
+    // correspondência não trouxer o nome do morador, o registro sai como não
+    // identificado em vez de travar o porteiro pedindo um dado que ele não tem.
+    const nomeFinal =
+      nomeQuemRetirou.trim() ||
+      (dispensaAtiva
+        ? String(correspondencia?.moradorNome || "").trim() || "Não identificado"
+        : "");
+
+    if (!nomeFinal) {
       setError("Informe o nome de quem está retirando");
       if (modoRapido) setEtapaAtual('assinaturas');
       return;
@@ -332,6 +424,9 @@ export default function ModalRetiradaProfissional({
       setError("Erro de autenticação");
       return;
     }
+
+    // Baixa sem nenhuma comprovação: fica registrado no recibo e no histórico.
+    const semComprovacao = dispensaAtiva && !assinaturaMorador && !imagemFile;
 
     setLoading(true);
     setMessage("Registrando baixa...");
@@ -368,16 +463,20 @@ export default function ModalRetiradaProfissional({
         : Promise.resolve("");
 
       const dadosRetiradaBruto: DadosRetirada = {
-        nomeQuemRetirou: nomeQuemRetirou.trim(),
+        nomeQuemRetirou: nomeFinal,
         cpfQuemRetirou: cpfQuemRetirou.trim() || undefined,
         telefoneQuemRetirou: telefoneQuemRetirou.trim() || undefined,
         nomePorteiro: user?.nome || "Porteiro",
         dataHoraRetirada: new Date().toISOString(),
         assinaturaMorador: assinaturaMorador || undefined,
         assinaturaPorteiro: assinaturaPorteiro || undefined,
-        observacoes: observacoes.trim() || undefined,
+        observacoes: [
+          observacoes.trim(),
+          semComprovacao ? "Baixa registrada sem assinatura e sem foto (dispensadas no registro rápido)." : "",
+        ].filter(Boolean).join(" ") || undefined,
         codigoVerificacao: gerarCodigoVerificacao(),
         modoRegistro: modoRapido ? "rapido" : "completo",
+        semComprovacao: semComprovacao || undefined,
       };
 
       const baseUrl = typeof window !== "undefined" ? window.location.origin : "";
@@ -447,14 +546,16 @@ Obrigado!
 
 ━━━━━━━━━━━━━━━━
 │ Protocolo: ${correspondencia.protocolo}
-│ Retirado por: ${nomeQuemRetirou.trim()}
+│ Retirado por: ${nomeFinal}
 │ Atendido por: ${user?.nome || "Porteiro"}
 │ Retirado em: ${dataHoje}
 ━━━━━━━━━━━━━━━━`;
 
       setMensagemFormatada(msgFinal);
 
-      // Baixa confirmada: libera o porteiro imediatamente.
+      // Baixa confirmada: libera o porteiro imediatamente e descarta o rascunho,
+      // que a partir daqui só serviria para reabrir uma retirada já feita.
+      setBaixaConcluida(true);
       setLoading(false);
       setShowSuccessModal(true);
 
@@ -891,6 +992,7 @@ Obrigado!
                     impedia colher a assinatura de quem retirou. */}
                 <AssinaturaDigitalPro
                   onSave={setAssinaturaMorador}
+                  assinaturaInicial={assinaturaMorador}
                   label={
                     exigeAssinaturaMorador
                       ? "Assinatura de quem retirou *"
@@ -900,7 +1002,11 @@ Obrigado!
                 />
 
                 <div className="space-y-2">
-                  <AssinaturaDigitalPro onSave={setAssinaturaPorteiro} label="Assinatura do Porteiro" />
+                  <AssinaturaDigitalPro
+                    onSave={setAssinaturaPorteiro}
+                    assinaturaInicial={assinaturaPorteiro}
+                    label="Assinatura do Porteiro"
+                  />
                   <div className="flex items-center gap-2 pt-1">
                     <input
                       type="checkbox"
@@ -944,7 +1050,7 @@ Obrigado!
               </div>
 
               {/* Botões da etapa de assinaturas */}
-              <div className="bg-gray-50 p-6 rounded-b-lg flex justify-between gap-3">
+              <div className="bg-gray-50 p-6 rounded-b-lg flex flex-wrap justify-between items-center gap-3">
                 <button
                   onClick={voltarParaObservacoes}
                   className="flex items-center gap-2 px-6 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-100 transition-all"
@@ -953,15 +1059,38 @@ Obrigado!
                 >
                   <ArrowLeft size={20} /> {modoRapido ? "Mais dados" : "Voltar"}
                 </button>
-                <button
-                  onClick={handleConfirmarRetirada}
-                  disabled={loading}
-                  className="flex items-center gap-2 px-6 py-2 bg-[#057321] text-white rounded-lg hover:bg-[#046119] disabled:bg-gray-400 transition-all"
-                  type="button"
-                >
-                  <Save size={20} />
-                  {loading ? "Processando..." : "Confirmar Retirada"}
-                </button>
+                <div className="flex flex-wrap items-center gap-3">
+                  {modoRapido && (
+                    <button
+                      onClick={alternarDispensaFixa}
+                      disabled={loading}
+                      aria-pressed={dispensaFixa}
+                      title={
+                        dispensaFixa
+                          ? "Ativo: as baixas do registro rápido saem só com a leitura do QR Code. Toque para voltar a exigir assinatura."
+                          : "Toque para dispensar foto e assinatura em todos os registros rápidos deste aparelho."
+                      }
+                      className={`flex items-center gap-2 px-6 py-2 rounded-lg font-medium transition-all disabled:opacity-60 ${
+                        dispensaFixa
+                          ? "bg-amber-500 text-white hover:bg-amber-600"
+                          : "border border-amber-400 text-amber-700 hover:bg-amber-50"
+                      }`}
+                      type="button"
+                    >
+                      {dispensaFixa ? <Check size={20} /> : <Zap size={20} />}
+                      Sem foto/assinatura
+                    </button>
+                  )}
+                  <button
+                    onClick={() => handleConfirmarRetirada()}
+                    disabled={loading}
+                    className="flex items-center gap-2 px-6 py-2 bg-[#057321] text-white rounded-lg hover:bg-[#046119] disabled:bg-gray-400 transition-all"
+                    type="button"
+                  >
+                    <Save size={20} />
+                    {loading ? "Processando..." : "Confirmar Retirada"}
+                  </button>
+                </div>
               </div>
             </>
           )}
