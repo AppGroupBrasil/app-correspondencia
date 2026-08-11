@@ -1,8 +1,9 @@
 "use client";
 
-import { useState, useRef, ChangeEvent } from "react";
+import { useState, useRef, useEffect, useId, ChangeEvent } from "react";
 import { Camera, X, Image as ImageIcon, Loader2, CheckCircle } from "lucide-react";
 import { compressImage, formatFileSize, isValidImage, CompressionResult } from "@/utils/imageCompressor";
+import { liberarRecarga, travarRecarga } from "@/utils/rascunho";
 
 interface UploadImagemProps {
   onUpload: (file: File | null, base64?: string) => void;
@@ -18,20 +19,28 @@ export default function UploadImagem({ onUpload }: UploadImagemProps) {
   } | null>(null);
   
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const travaId = useId();
+
+  useEffect(() => () => liberarRecarga(travaId), [travaId]);
 
   const handleFileSelect = async (e: ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
-    if (!file) return;
+    if (!file) {
+      if (!preview) liberarRecarga(travaId);
+      return;
+    }
 
     // Validar se é uma imagem
     if (!isValidImage(file)) {
       alert("Por favor, selecione uma imagem válida (JPEG, PNG, GIF, WebP)");
+      if (!preview) liberarRecarga(travaId);
       return;
     }
 
     // Validar tamanho máximo (100MB)
     if (file.size > 100 * 1024 * 1024) {
       alert("Arquivo muito grande. Máximo permitido: 100MB");
+      if (!preview) liberarRecarga(travaId);
       return;
     }
 
@@ -74,12 +83,16 @@ export default function UploadImagem({ onUpload }: UploadImagemProps) {
     setPreview(null);
     setCompressionInfo(null);
     onUpload(null);
+    liberarRecarga(travaId);
     if (fileInputRef.current) {
       fileInputRef.current.value = "";
     }
   };
 
   const triggerInput = () => {
+    // A câmera joga o app para segundo plano: a partir daqui a página não pode
+    // se recarregar sozinha na volta.
+    travarRecarga(travaId);
     fileInputRef.current?.click();
   };
 

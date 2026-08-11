@@ -39,8 +39,59 @@ export interface CompressionOptions {
 }
 
 /**
+ * Lê apenas as dimensões do arquivo. O <img> resolve o cabeçalho da imagem sem
+ * precisar rasterizar os 50 megapixels da câmera — quem faz isso é o drawImage,
+ * que aqui nunca recebe o original.
+ */
+function lerDimensoes(file: File): Promise<{ width: number; height: number; url: string; img: HTMLImageElement }> {
+  return new Promise((resolve, reject) => {
+    const url = URL.createObjectURL(file);
+    const img = new Image();
+    img.onload = () =>
+      resolve({ width: img.naturalWidth || img.width, height: img.naturalHeight || img.height, url, img });
+    img.onerror = () => {
+      URL.revokeObjectURL(url);
+      reject(new Error('Erro ao carregar imagem'));
+    };
+    img.src = url;
+  });
+}
+
+function liberarImagem(img: HTMLImageElement, url: string) {
+  img.onload = null;
+  img.onerror = null;
+  img.src = '';
+  URL.revokeObjectURL(url);
+}
+
+function blobParaBase64(blob: Blob): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(reader.result as string);
+    reader.onerror = () => reject(new Error('Erro ao converter para base64'));
+    reader.readAsDataURL(blob);
+  });
+}
+
+function canvasParaBlob(canvas: HTMLCanvasElement, formato: string, qualidade: number): Promise<Blob> {
+  return new Promise((resolve, reject) => {
+    canvas.toBlob(
+      (blob) => (blob ? resolve(blob) : reject(new Error('Erro ao comprimir imagem'))),
+      formato,
+      qualidade
+    );
+  });
+}
+
+/**
  * Comprime uma imagem para qualidade de 1/4 A4
  * Executa compressão instantânea no momento do upload
+ *
+ * A foto da câmera chega em resolução máxima do aparelho. Decodificá-la inteira
+ * (dataURL + drawImage do original) chegava a centenas de MB em celular de 50MP
+ * e derrubava o WebView — o app fechava sozinho no meio do registro. Por isso o
+ * redimensionamento acontece dentro do decodificador, via createImageBitmap:
+ * o bitmap já nasce no tamanho final.
  */
 export async function compressImage(
   file: File,
@@ -61,96 +112,85 @@ export async function compressImage(
 
   const originalSize = file.size;
 
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    
-    reader.onload = (event) => {
-      const img = new Image();
-      
-      img.onload = () => {
-        // Calcular novas dimensões mantendo proporção
-        let { width, height } = calculateDimensions(
-          img.width,
-          img.height,
-          maxWidth,
-          maxHeight
-        );
+  const { width: origWidth, height: origHeight, url, img } = await lerDimensoes(file);
+  const { width, height } = calculateDimensions(origWidth, origHeight, maxWidth, maxHeight);
 
-        // Criar canvas para compressão
-        const canvas = document.createElement('canvas');
-        canvas.width = width;
-        canvas.height = height;
-        
-        const ctx = canvas.getContext('2d');
-        if (!ctx) {
-          reject(new Error('Erro ao criar contexto do canvas'));
-          return;
-        }
+  const canvas = document.createElement('canvas');
+  canvas.width = width;
+  canvas.height = height;
 
-        // Fundo branco para transparências
-        ctx.fillStyle = '#FFFFFF';
-        ctx.fillRect(0, 0, width, height);
-        
-        // Desenhar imagem com suavização
-        ctx.imageSmoothingEnabled = true;
-        ctx.imageSmoothingQuality = 'high';
-        ctx.drawImage(img, 0, 0, width, height);
+  const ctx = canvas.getContext('2d');
+  if (!ctx) {
+    liberarImagem(img, url);
+    throw new Error('Erro ao criar contexto do canvas');
+  }
 
-        // Tentar comprimir até atingir tamanho desejado
-        let currentQuality = quality;
-        let blob: Blob | null = null;
-        let base64 = '';
+  // Fundo branco para transparências
+  ctx.fillStyle = '#FFFFFF';
+  ctx.fillRect(0, 0, width, height);
+  ctx.imageSmoothingEnabled = true;
+  ctx.imageSmoothingQuality = 'high';
 
-        const tryCompress = () => {
-          canvas.toBlob(
-            (resultBlob) => {
-              if (!resultBlob) {
-                reject(new Error('Erro ao comprimir imagem'));
-                return;
-              }
+  let bitmap: ImageBitmap | null = null;
+  let desenhou = false;
+  try {
+    if (typeof createImageBitmap === 'function' && (width < origWidth || height < origHeight)) {
+      try {
+        bitmap = await createImageBitmap(file, {
+          resizeWidth: width,
+          resizeHeight: height,
+          resizeQuality: 'high',
+          imageOrientation: 'from-image',
+        });
+        ctx.drawImage(bitmap, 0, 0, width, height);
+        desenhou = true;
+      } catch {
+        // WebView antigo (imageOrientation 'from-image' só existe do Chrome 81
+        // em diante) ou formato que o decodificador recusa: sem isto a foto
+        // falharia inteira, quando o caminho do <img> ainda dá conta.
+      }
+    }
 
-              // Se ainda muito grande e qualidade > 0.3, reduzir mais
-              if (resultBlob.size > maxFileSize && currentQuality > 0.3) {
-                currentQuality -= 0.1;
-                tryCompress();
-                return;
-              }
+    if (!desenhou) {
+      // Imagem já pequena, ou o createImageBitmap não deu conta: cai no <img>.
+      ctx.drawImage(img, 0, 0, width, height);
+    }
+  } finally {
+    bitmap?.close();
+    liberarImagem(img, url);
+  }
 
-              blob = resultBlob;
-              base64 = canvas.toDataURL(outputFormat, currentQuality);
+  try {
+    // Tentar comprimir até atingir tamanho desejado
+    let currentQuality = quality;
+    let blob = await canvasParaBlob(canvas, outputFormat, currentQuality);
+    while (blob.size > maxFileSize && currentQuality > 0.3) {
+      currentQuality -= 0.1;
+      blob = await canvasParaBlob(canvas, outputFormat, currentQuality);
+    }
 
-              // Criar novo arquivo
-              const fileName = file.name.replace(/\.[^/.]+$/, '') + '.jpg';
-              const compressedFile = new File([blob], fileName, {
-                type: outputFormat,
-                lastModified: Date.now(),
-              });
+    const base64 = await blobParaBase64(blob);
+    const fileName = file.name.replace(/\.[^/.]+$/, '') + '.jpg';
+    const compressedFile = new File([blob], fileName, {
+      type: outputFormat,
+      lastModified: Date.now(),
+    });
 
-              resolve({
-                file: compressedFile,
-                base64,
-                originalSize,
-                compressedSize: compressedFile.size,
-                compressionRatio: Math.round((1 - compressedFile.size / originalSize) * 100),
-                width,
-                height,
-              });
-            },
-            outputFormat,
-            currentQuality
-          );
-        };
-
-        tryCompress();
-      };
-
-      img.onerror = () => reject(new Error('Erro ao carregar imagem'));
-      img.src = event.target?.result as string;
+    return {
+      file: compressedFile,
+      base64,
+      originalSize,
+      compressedSize: compressedFile.size,
+      compressionRatio: Math.round((1 - compressedFile.size / originalSize) * 100),
+      width,
+      height,
     };
-
-    reader.onerror = () => reject(new Error('Erro ao ler arquivo'));
-    reader.readAsDataURL(file);
-  });
+  } finally {
+    // Sem isto o WebView segura o buffer do canvas até o próximo GC, e a foto
+    // seguinte parte de uma memória já ocupada.
+    canvas.width = 0;
+    canvas.height = 0;
+  }
 }
 
 /**
@@ -217,6 +257,26 @@ function calculateDimensions(
 }
 
 /**
+ * Refaz o File a partir do base64 já comprimido. Usado ao restaurar um rascunho:
+ * o que sobrevive ao fechamento do app é a string, não o File original.
+ */
+export function base64ParaFile(base64: string, nome: string): File | null {
+  try {
+    const separador = base64.indexOf(',');
+    if (separador === -1) return null;
+
+    const tipo = /data:([^;]+)/.exec(base64.slice(0, separador))?.[1] || 'image/jpeg';
+    const binario = atob(base64.slice(separador + 1));
+    const bytes = new Uint8Array(binario.length);
+    for (let i = 0; i < binario.length; i++) bytes[i] = binario.charCodeAt(i);
+
+    return new File([bytes], nome, { type: tipo, lastModified: Date.now() });
+  } catch {
+    return null;
+  }
+}
+
+/**
  * Verifica se o arquivo é uma imagem válida
  */
 export function isValidImage(file: File): boolean {
@@ -238,6 +298,7 @@ export default {
   compressImageFast,
   compressImageForPDF,
   fileToBase64,
+  base64ParaFile,
   isValidImage,
   formatFileSize,
   CONFIG,

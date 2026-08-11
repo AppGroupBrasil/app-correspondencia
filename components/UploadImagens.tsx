@@ -1,9 +1,10 @@
 "use client";
 
-import { useRef, useState, ChangeEvent } from "react";
+import { useEffect, useId, useRef, useState, ChangeEvent } from "react";
 import { Camera, X, Loader2, Plus, Images, Package } from "lucide-react";
 import { compressImage, isValidImage } from "@/utils/imageCompressor";
 import { MAX_FOTOS } from "@/app/lib/fotos-correspondencia";
+import { liberarRecarga, travarRecarga } from "@/utils/rascunho";
 
 export interface FotoSelecionada {
   id: string;
@@ -26,10 +27,29 @@ export default function UploadImagens({ fotos, onChange, max = MAX_FOTOS }: Uplo
   const [ocupado, setOcupado] = useState(false);
   const inputCamera = useRef<HTMLInputElement>(null);
   const inputGaleria = useRef<HTMLInputElement>(null);
+  const travaId = useId();
+
+  // A câmera manda o app para segundo plano; enquanto houver foto em tela, nada
+  // pode recarregar a página por trás do porteiro.
+  useEffect(() => {
+    if (fotos.length > 0) travarRecarga(travaId);
+    else liberarRecarga(travaId);
+  }, [fotos.length, travaId]);
+
+  useEffect(() => () => liberarRecarga(travaId), [travaId]);
+
+  const abrir = (input: HTMLInputElement | null) => {
+    travarRecarga(travaId);
+    input?.click();
+  };
 
   const processar = async (e: ChangeEvent<HTMLInputElement>) => {
     const selecionados = e.target.files;
-    if (!selecionados || selecionados.length === 0) return;
+    if (!selecionados || selecionados.length === 0) {
+      // Câmera cancelada: nada a proteger se ainda não há foto nenhuma.
+      if (fotos.length === 0) liberarRecarga(travaId);
+      return;
+    }
 
     const restantes = max - fotos.length;
     if (restantes <= 0) {
@@ -102,7 +122,7 @@ export default function UploadImagens({ fotos, onChange, max = MAX_FOTOS }: Uplo
         <>
           <button
             type="button"
-            onClick={() => inputCamera.current?.click()}
+            onClick={() => abrir(inputCamera.current)}
             disabled={ocupado}
             className="w-full group relative flex flex-col items-center justify-center h-48 rounded-xl border-2 border-dashed border-gray-300 bg-gray-50 hover:bg-white hover:border-[#057321] transition-all duration-200 cursor-pointer disabled:opacity-50 disabled:cursor-wait"
           >
@@ -128,7 +148,7 @@ export default function UploadImagens({ fotos, onChange, max = MAX_FOTOS }: Uplo
 
           <button
             type="button"
-            onClick={() => inputGaleria.current?.click()}
+            onClick={() => abrir(inputGaleria.current)}
             disabled={ocupado}
             className="mt-2 w-full flex items-center justify-center gap-2 text-xs font-semibold text-gray-500 hover:text-[#057321] py-2 disabled:opacity-50"
           >
@@ -172,7 +192,7 @@ export default function UploadImagens({ fotos, onChange, max = MAX_FOTOS }: Uplo
             {!cheio && (
               <button
                 type="button"
-                onClick={() => inputCamera.current?.click()}
+                onClick={() => abrir(inputCamera.current)}
                 disabled={ocupado}
                 className="aspect-square rounded-lg border-2 border-dashed border-gray-300 flex flex-col items-center justify-center gap-1 text-gray-500 hover:border-[#057321] hover:text-[#057321] transition-colors disabled:opacity-50 disabled:cursor-wait"
               >
@@ -201,7 +221,7 @@ export default function UploadImagens({ fotos, onChange, max = MAX_FOTOS }: Uplo
             </span>
             <button
               type="button"
-              onClick={() => inputGaleria.current?.click()}
+              onClick={() => abrir(inputGaleria.current)}
               disabled={ocupado || cheio}
               className="flex items-center gap-1 text-xs font-semibold text-gray-500 hover:text-[#057321] disabled:opacity-40"
             >

@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { RefreshCw } from "lucide-react";
 import { BUILD_ID } from "@/app/lib/build-id";
+import { recargaTravada } from "@/utils/rascunho";
 
 const INTERVALO_CHECAGEM = 10 * 60 * 1000;
 const ESPACO_ENTRE_CHECAGENS = 30 * 1000;
@@ -17,6 +18,9 @@ export default function AtualizacaoAutomatica() {
   // Recarregar no meio de um cadastro apagaria foto, assinatura e campos já
   // digitados. Nesses casos o aviso espera o porteiro decidir a hora.
   const semRiscoDePerda = () => {
+    // A volta da câmera dispara visibilitychange e focus — exatamente quando o
+    // registro está pela metade. Quem está no meio do fluxo avisa aqui.
+    if (recargaTravada()) return false;
     if (document.querySelector('[role="dialog"], canvas, video')) return false;
     const campos = Array.from(
       document.querySelectorAll<HTMLInputElement | HTMLTextAreaElement>("input, textarea")

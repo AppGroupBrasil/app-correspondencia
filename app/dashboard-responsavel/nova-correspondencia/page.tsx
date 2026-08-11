@@ -1,9 +1,11 @@
 "use client";
 
-import { useState, useEffect, useRef, useCallback } from "react";
+import { useState, useEffect, useMemo, useRef, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import UploadImagens, { FotoSelecionada } from "@/components/UploadImagens";
 import { nomeArquivoFoto } from "@/app/lib/fotos-correspondencia";
+import { useRascunho } from "@/hooks/useRascunho";
+import { base64ParaFile } from "@/utils/imageCompressor";
 import SelectCondominioBlocoMorador from "@/components/SelectCondominioBlocoMorador";
 import { LoadingOverlay } from "@/components/LoadingOverlay";
 import ModalSucessoEntrada from "@/components/ModalSucessoEntrada";
@@ -27,6 +29,20 @@ import BotaoVoltar from "@/components/BotaoVoltar";
 import { useTemplates } from "@/hooks/useTemplates";
 import { formatPtBrDateTime, buildFinalWhatsappMessage } from "@/utils/messageFormat";
 import MessageTemplateButton from "@/components/MessageTemplateButton";
+
+// O que sobrevive ao app ser morto em segundo plano durante a câmera. O morador
+// fica de fora de propósito: reapresentar uma seleção antiga arriscaria lançar a
+// encomenda no nome errado, e reescolher são dois toques.
+interface RascunhoRegistro {
+  observacao: string;
+  localArmazenamento: string;
+  fotos: { id: string; nome: string; base64: string }[];
+}
+
+// Cada foto em base64 pesa por volta de meio megabyte no armazenamento local, e
+// a cota do navegador fica perto de cinco. Guardar as três primeiras cobre o
+// caso real sem arriscar derrubar o rascunho inteiro por falta de espaço.
+const MAX_FOTOS_RASCUNHO = 3;
 
 // Cache para dados já carregados
 const dataCache = new Map<string, { data: any; timestamp: number }>();
@@ -75,6 +91,49 @@ function NovaCorrespondenciaResponsavelPage() {
   const [pdfUrl, setPdfUrl] = useState("");
   const [linkPublico, setLinkPublico] = useState("");
   const [mensagemFormatada, setMensagemFormatada] = useState("");
+
+  // O rascunho não sabe para quem era a encomenda: sem aviso, a foto de um
+  // registro abandonado apareceria colada no morador seguinte.
+  const [rascunhoRecuperado, setRascunhoRecuperado] = useState(false);
+
+  const descartarRascunho = () => {
+    setFotos([]);
+    setObservacao("");
+    setRascunhoRecuperado(false);
+  };
+
+  const dadosRascunho = useMemo<RascunhoRegistro>(
+    () => ({
+      observacao,
+      localArmazenamento,
+      fotos: fotos
+        .slice(0, MAX_FOTOS_RASCUNHO)
+        .map((foto) => ({ id: foto.id, nome: foto.file.name, base64: foto.base64 })),
+    }),
+    [observacao, localArmazenamento, fotos]
+  );
+
+  useRascunho<RascunhoRegistro>({
+    chave: "nova-correspondencia-responsavel",
+    ativo: !showSuccessModal && (fotos.length > 0 || observacao.trim().length > 0),
+    dados: dadosRascunho,
+    restaurar: (salvo) => {
+      if (salvo.observacao) setObservacao(salvo.observacao);
+      if (salvo.localArmazenamento) setLocalArmazenamento(salvo.localArmazenamento);
+
+      const recuperadas = (salvo.fotos || [])
+        .map((foto) => {
+          const file = base64ParaFile(foto.base64, foto.nome || "foto.jpg");
+          return file ? { id: foto.id, file, base64: foto.base64 } : null;
+        })
+        .filter((foto): foto is FotoSelecionada => foto !== null);
+
+      if (recuperadas.length > 0) setFotos(recuperadas);
+      if (recuperadas.length > 0 || salvo.observacao) setRascunhoRecuperado(true);
+    },
+    // Cota estourada: melhor voltar com os campos digitados do que com nada.
+    versaoLeve: (atual) => ({ ...atual, fotos: [] }),
+  });
 
   const backgroundTaskRef = useRef<Promise<void> | null>(null);
   // Identifica o registro exibido no modal: impede que a etiqueta de um
@@ -454,6 +513,7 @@ function NovaCorrespondenciaResponsavelPage() {
 
     setObservacao("");
     setFotos([]);
+    setRascunhoRecuperado(false);
     setPdfUrl("");
     setLinkPublico("");
     setMensagemFormatada("");
@@ -567,6 +627,23 @@ function NovaCorrespondenciaResponsavelPage() {
                 <Camera size={18} className="text-[#057321]" /> Fotos das Encomendas (Opcional)
               </label>
               <div className="bg-gray-50 rounded-xl p-4 border border-gray-200 border-dashed hover:border-[#057321] transition-colors">
+                {rascunhoRecuperado && (
+                  <div className="mb-3 flex items-start gap-2 rounded-lg border border-blue-200 bg-blue-50 p-3">
+                    <AlertTriangle size={16} className="mt-0.5 shrink-0 text-blue-600" />
+                    <p className="text-xs leading-relaxed text-blue-900">
+                      <span className="font-bold">Registro recuperado.</span> Estas fotos e
+                      observações vieram de um registro que não foi concluído. Confira se são
+                      deste morador.
+                      <button
+                        type="button"
+                        onClick={descartarRascunho}
+                        className="ml-2 font-bold underline"
+                      >
+                        Descartar
+                      </button>
+                    </p>
+                  </div>
+                )}
                 <UploadImagens fotos={fotos} onChange={setFotos} />
                 <div className="mt-3 flex items-start gap-2 rounded-lg border border-amber-200 bg-amber-50 p-3">
                   <AlertTriangle size={16} className="mt-0.5 shrink-0 text-amber-600" />
