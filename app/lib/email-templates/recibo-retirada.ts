@@ -12,11 +12,15 @@ export interface ReciboRetiradaData {
   protocolo?: string;
   unidade?: string;
   reciboUrl?: string; // PDF do recibo (vai anexado no e-mail)
+  // Entrega em lote: os demais protocolos que saíram com a mesma assinatura.
+  protocolosJuntos?: string[];
 }
 
 export const emailReciboRetirada = (
   data: ReciboRetiradaData
 ): string => {
+  const juntos = (data.protocolosJuntos || []).filter(Boolean);
+  const totalItens = juntos.length + 1;
   const content = `
     <h2 style="margin: 0 0 20px 0; color: #111827; font-size: 24px;">
       Comprovante de Retirada 📋
@@ -27,14 +31,19 @@ export const emailReciboRetirada = (
     </p>
 
     <p style="margin: 0 0 24px 0; color: #374151; font-size: 16px; line-height: 1.6;">
-      Este e-mail confirma que uma correspondência foi retirada na portaria do
+      Este e-mail confirma que ${juntos.length > 0
+        ? `<strong>${totalItens} correspondências foram retiradas</strong>`
+        : 'uma correspondência foi retirada'} na portaria do
       <strong>${data.condominioNome}</strong>.
     </p>
 
     ${infoBoxGreen(`
       <strong>Detalhes da Retirada:</strong><br><br>
       ${data.protocolo ? `🔖 <strong>Protocolo:</strong> ${data.protocolo}<br>` : ''}
-      📦 <strong>Item:</strong> ${data.tipoCorrespondencia}<br>
+      ${juntos.length > 0
+        ? `🔖 <strong>Também retirados:</strong> ${juntos.map((p) => `#${p}`).join(', ')}<br>`
+        : ''}
+      📦 <strong>Item:</strong> ${juntos.length > 0 ? `${totalItens} correspondências` : data.tipoCorrespondencia}<br>
       ${data.unidade ? `🏢 <strong>Unidade:</strong> ${data.unidade}<br>` : ''}
       📅 <strong>Data:</strong> ${data.dataRetirada}<br>
       🕐 <strong>Hora:</strong> ${data.horaRetirada}<br>

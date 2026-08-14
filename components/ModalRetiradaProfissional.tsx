@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useRef } from "react";
 import { useAuth } from "@/hooks/useAuth";
 import { supabase } from "@/app/lib/supabase";
 import { X, Save, AlertCircle, ArrowRight, ArrowLeft, Package, Zap, Mail, Check } from "lucide-react";
@@ -14,6 +14,7 @@ import { EmailService } from "@/services/emailService";
 import { totalVolumes } from "@/app/lib/fotos-correspondencia";
 import { useRascunho } from "@/hooks/useRascunho";
 import { liberarRecarga, travarRecarga } from "@/utils/rascunho";
+import { chaveMorador } from "@/utils/agruparPendentes";
 
 // --- DEFINIÇÃO DE TIPOS INLINE ---
 interface ConfiguracoesRetirada {
@@ -55,13 +56,25 @@ interface DadosRetirada {
   protocoloPrincipal?: string;
 }
 
+export interface PendenteDoMorador {
+  id: string;
+  protocolo: string;
+  observacao?: string | null;
+  criado_em?: string;
+}
+
 interface Props {
   correspondencia: any;
   onClose: () => void;
-  onSuccess: () => void;
+  // Recebe os ids que saíram da portaria (o principal + os do lote) para a
+  // lista de pendentes tirar todos de uma vez.
+  onSuccess: (idsBaixados?: string[]) => void;
   embedded?: boolean;
   mensagemFormatada?: string;
   modoRapido?: boolean;
+  // Entrega em lote aberta pela lista agrupada: já vem com as demais
+  // correspondências do morador marcadas, sem nova ida ao banco.
+  pendentesDoMorador?: PendenteDoMorador[];
 }
 
 const CHAVE_DISPENSA = "appcorresp:dispensa-comprovacao:";
@@ -152,6 +165,7 @@ export default function ModalRetiradaProfissional({
   embedded = false,
   mensagemFormatada: mensagemFormatadaProp,
   modoRapido = false,
+  pendentesDoMorador,
 }: Props) {
   const { user } = useAuth();
 
@@ -217,25 +231,59 @@ export default function ModalRetiradaProfissional({
   // O morador quase sempre tem mais de uma encomenda esperando e leva tudo de
   // uma vez. Como a baixa saía num protocolo só, as outras continuavam na lista
   // da portaria — é a encomenda que "volta" depois de entregue.
-  const [outrasPendentes, setOutrasPendentes] = useState<
-    { id: string; protocolo: string; observacao?: string | null; criado_em?: string }[]
-  >([]);
-  const [idsJuntos, setIdsJuntos] = useState<string[]>([]);
+  const [outrasPendentes, setOutrasPendentes] = useState<PendenteDoMorador[]>(
+    pendentesDoMorador || []
+  );
+  // Entrega em lote vem da lista já decidida: tudo marcado, o porteiro só
+  // desmarca o que ficar na portaria.
+  const [idsJuntos, setIdsJuntos] = useState<string[]>(
+    (pendentesDoMorador || []).map((item) => item.id)
+  );
+  const emLote = Boolean(pendentesDoMorador?.length);
+  const idsBaixadosRef = useRef<string[]>([]);
 
   useEffect(() => {
+    // Lote montado pela lista: não há o que buscar.
+    if (pendentesDoMorador?.length) return;
+
     let cancelado = false;
     (async () => {
-      if (!correspondencia?.moradorId || !correspondencia?.id) return;
+      if (!correspondencia?.id || !user?.condominioId) return;
       try {
-        const { data } = await supabase
+        const base = supabase
           .from("correspondencias")
-          .select("id, protocolo, observacao, criado_em")
-          .eq("morador_id", correspondencia.moradorId)
+          .select("id, protocolo, observacao, criado_em, morador_nome, bloco_nome, apartamento")
+          .eq("condominio_id", user.condominioId)
           .eq("status", "pendente")
-          .neq("id", correspondencia.id)
-          .order("criado_em", { ascending: true })
-          .limit(20);
-        if (!cancelado) setOutrasPendentes(data || []);
+          .neq("id", correspondencia.id);
+
+        // Sem morador vinculado (cadastro digitado à mão), nome + unidade é o
+        // que identifica o dono — era o caso em que o agrupamento não achava
+        // nada e o porteiro assinava uma por uma.
+        const apartamento = String(
+          correspondencia.apartamento || correspondencia.unidade || ""
+        ).trim();
+        const moradorNome = String(correspondencia.moradorNome || "").trim();
+
+        const consulta = correspondencia.moradorId
+          ? base.eq("morador_id", correspondencia.moradorId)
+          : moradorNome && apartamento
+            ? base.eq("apartamento", apartamento)
+            : null;
+
+        if (!consulta) return;
+
+        const { data } = await consulta.order("criado_em", { ascending: true }).limit(20);
+
+        // O apartamento sozinho traz o bloco vizinho e o homônimo da unidade
+        // ao lado: só entra na mesma assinatura quem casa nome + bloco + apto.
+        // (Com morador_id vinculado a identidade já está garantida.)
+        const chaveAtual = chaveMorador(correspondencia);
+        const lista = (data || []).filter((linha: any) =>
+          correspondencia.moradorId ? true : chaveMorador(linha) === chaveAtual
+        );
+
+        if (!cancelado) setOutrasPendentes(lista);
       } catch {
         /* sem rede: a baixa individual continua funcionando */
       }
@@ -243,7 +291,8 @@ export default function ModalRetiradaProfissional({
     return () => {
       cancelado = true;
     };
-  }, [correspondencia?.id, correspondencia?.moradorId]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [correspondencia?.id, correspondencia?.moradorId, user?.condominioId]);
 
   const alternarJunto = (id: string) =>
     setIdsJuntos((atual) =>
@@ -506,6 +555,18 @@ export default function ModalRetiradaProfissional({
           })()
         : Promise.resolve("");
 
+      // Recibo, e-mail e mensagem citam os protocolos do lote; se alguma baixa
+      // em conjunto não passar, a lista é refeita antes de gerar o comprovante.
+      let protocolosEntregues = protocolosJuntos;
+      const montarObservacoes = (protocolos: string[]) =>
+        [
+          observacoes.trim(),
+          semComprovacao ? "Baixa registrada sem assinatura e sem foto (dispensadas no registro rápido)." : "",
+          protocolos.length > 0
+            ? `Entregue junto com o(s) protocolo(s) ${protocolos.map((p) => `#${p}`).join(", ")}.`
+            : "",
+        ].filter(Boolean).join(" ") || undefined;
+
       const dadosRetiradaBruto: DadosRetirada = {
         nomeQuemRetirou: nomeFinal,
         cpfQuemRetirou: cpfQuemRetirou.trim() || undefined,
@@ -514,13 +575,7 @@ export default function ModalRetiradaProfissional({
         dataHoraRetirada: new Date().toISOString(),
         assinaturaMorador: assinaturaMorador || undefined,
         assinaturaPorteiro: assinaturaPorteiro || undefined,
-        observacoes: [
-          observacoes.trim(),
-          semComprovacao ? "Baixa registrada sem assinatura e sem foto (dispensadas no registro rápido)." : "",
-          protocolosJuntos.length > 0
-            ? `Entregue junto com o(s) protocolo(s) ${protocolosJuntos.map((p) => `#${p}`).join(", ")}.`
-            : "",
-        ].filter(Boolean).join(" ") || undefined,
+        observacoes: montarObservacoes(protocolosJuntos),
         codigoVerificacao: gerarCodigoVerificacao(),
         modoRegistro: modoRapido ? "rapido" : "completo",
         semComprovacao: semComprovacao || undefined,
@@ -573,6 +628,8 @@ export default function ModalRetiradaProfissional({
         );
       }
 
+      idsBaixadosRef.current = [correspondencia.id];
+
       // Baixa em conjunto: as demais encomendas que o morador levou na mesma
       // hora saem da lista agora, com a mesma assinatura. Também é aguardada —
       // é justamente a etapa que faltava para a encomenda não "voltar".
@@ -604,6 +661,23 @@ export default function ModalRetiradaProfissional({
             `Baixa em conjunto: ${(linhasJuntas || []).length} de ${idsJuntos.length} atualizadas.`
           );
         }
+
+        // Só sai da lista o que o banco confirmou ter baixado.
+        idsBaixadosRef.current = [
+          correspondencia.id,
+          ...(linhasJuntas || []).map((linha: any) => linha.id),
+        ];
+
+        if ((linhasJuntas || []).length < idsJuntos.length) {
+          // Comprovante não pode citar protocolo que continuou pendente.
+          const confirmados = new Set(idsBaixadosRef.current);
+          protocolosEntregues = outrasPendentes
+            .filter((item) => item.id !== correspondencia.id && confirmados.has(item.id))
+            .map((item) => String(item.protocolo));
+          dadosRetiradaBruto.observacoes = montarObservacoes(protocolosEntregues);
+          dadosRetiradaBruto.retiradaEmConjunto =
+            protocolosEntregues.length > 0 ? protocolosEntregues : undefined;
+        }
       }
 
       setProgress(100);
@@ -627,8 +701,8 @@ Obrigado!
 
 ━━━━━━━━━━━━━━━━
 │ Protocolo: ${correspondencia.protocolo}${
-        protocolosJuntos.length > 0
-          ? `\n│ Também retirados: ${protocolosJuntos.map((p) => `#${p}`).join(", ")}`
+        protocolosEntregues.length > 0
+          ? `\n│ Também retirados: ${protocolosEntregues.map((p) => `#${p}`).join(", ")}`
           : ""
       }
 │ Retirado por: ${nomeFinal}
@@ -693,6 +767,8 @@ Obrigado!
                     responsavelEntrega: dadosRetiradaBruto.nomePorteiro,
                     condominioNome: correspondencia.condominioNome || "Condomínio",
                     protocolo: String(correspondencia.protocolo || ""),
+                    protocolosJuntos:
+                      protocolosEntregues.length > 0 ? protocolosEntregues : undefined,
                     unidade: [correspondencia.blocoNome, correspondencia.apartamento]
                       .filter(Boolean)
                       .join(" - "),
@@ -728,6 +804,28 @@ Obrigado!
                 })
               )
               .eq("id", correspondencia.id);
+
+            // O mesmo PDF vale para o lote inteiro (ele lista todos os
+            // protocolos). Sem isso, abrir o recibo das demais mostrava
+            // "nenhum anexo de recibo digital encontrado".
+            const idsDoLote = idsBaixadosRef.current.filter(
+              (id) => id !== correspondencia.id
+            );
+            if (idsDoLote.length > 0) {
+              await supabase
+                .from("correspondencias")
+                .update(
+                  removerUndefined({
+                    recibo_url: publicPdfUrl || undefined,
+                    dados_retirada: removerUndefined({
+                      ...dadosRetiradaBruto,
+                      retiradaEmConjunto: undefined,
+                      protocoloPrincipal: String(correspondencia.protocolo || ""),
+                    }),
+                  })
+                )
+                .in("id", idsDoLote);
+            }
           })().catch((gravacaoErr) => {
             // Handler imediato: o `await` desta promise só acontece depois do
             // e-mail (que pode levar segundos com a retentativa), e sem ele a
@@ -738,12 +836,27 @@ Obrigado!
           // Histórico em `retiradas` é secundário — best-effort.
           // Colunas em snake_case: o objeto interno é camelCase e o insert
           // rejeitaria as chaves desconhecidas.
+          // Uma linha por correspondência entregue: o histórico é consultado
+          // por protocolo, e um registro só deixaria as do lote sem rastro.
+          // Pelos ids que o banco confirmou, não pelos marcados na tela: se a
+          // baixa em conjunto falhou, o histórico não pode dizer que saiu.
+          const linhasHistorico = [
+            { id: correspondencia.id, protocolo: String(correspondencia.protocolo || "") },
+            ...outrasPendentes
+              .filter(
+                (item) =>
+                  item.id !== correspondencia.id &&
+                  idsBaixadosRef.current.includes(item.id)
+              )
+              .map((item) => ({ id: item.id, protocolo: String(item.protocolo || "") })),
+          ];
+
           supabase
             .from("retiradas")
             .insert(
-              removerUndefined({
-                correspondencia_id: correspondencia.id,
-                protocolo: correspondencia.protocolo,
+              linhasHistorico.map((linha) => removerUndefined({
+                correspondencia_id: linha.id,
+                protocolo: linha.protocolo,
                 condominio_id: user?.condominioId || "",
                 nome_quem_retirou: dadosRetiradaBruto.nomeQuemRetirou,
                 cpf_quem_retirou: dadosRetiradaBruto.cpfQuemRetirou,
@@ -755,10 +868,11 @@ Obrigado!
                 foto_comprovante_url: dadosRetiradaBruto.fotoComprovanteUrl,
                 observacoes: dadosRetiradaBruto.observacoes,
                 codigo_verificacao: dadosRetiradaBruto.codigoVerificacao,
-                recibo_url: publicPdfUrl || undefined,
+                // `retiradas` não tem recibo_url: a coluna que existe é a de
+                // `correspondencias`, e mandá-la aqui rejeitava o insert inteiro.
                 status: "concluida",
                 criado_em: new Date().toISOString(),
-              })
+              }))
             )
             .then(({ error: histError }) => {
               if (histError) console.error("Erro ao registrar histórico de retirada:", histError);
@@ -796,7 +910,7 @@ Obrigado!
   };
 
   const handleCloseSuccess = () => {
-    onSuccess();
+    onSuccess(idsBaixadosRef.current);
   };
 
   if (showSuccessModal) {
@@ -885,12 +999,18 @@ Obrigado!
                 <Package className="mt-0.5 flex-shrink-0 text-amber-600" size={20} />
                 <div className="flex-1">
                   <p className="text-sm font-bold text-amber-900">
-                    Este morador tem mais {outrasPendentes.length}{" "}
-                    {outrasPendentes.length === 1 ? "encomenda pendente" : "encomendas pendentes"}.
+                    {emLote
+                      ? `Entrega em lote: ${idsJuntos.length + 1} de ${outrasPendentes.length + 1} correspondências.`
+                      : `Este morador tem mais ${outrasPendentes.length} ${
+                          outrasPendentes.length === 1
+                            ? "encomenda pendente"
+                            : "encomendas pendentes"
+                        }.`}
                   </p>
                   <p className="mt-0.5 text-xs text-amber-800">
-                    Marque as que estão sendo entregues agora: elas saem da portaria com esta
-                    mesma assinatura.
+                    {emLote
+                      ? "Todas já estão marcadas. Desmarque as que ficam na portaria — uma assinatura dá baixa nas marcadas."
+                      : "Marque as que estão sendo entregues agora: elas saem da portaria com esta mesma assinatura."}
                   </p>
 
                   <div className="mt-3 space-y-1.5">

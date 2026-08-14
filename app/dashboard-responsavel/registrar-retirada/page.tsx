@@ -3,7 +3,12 @@
 import { useState, useEffect, useRef, useMemo, useCallback } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import withAuth from "@/components/withAuth";
-import ModalRetiradaProfissional, { prefetchPreferenciasRetirada } from "@/components/ModalRetiradaProfissional";
+import ModalRetiradaProfissional, {
+  prefetchPreferenciasRetirada,
+  type PendenteDoMorador,
+} from "@/components/ModalRetiradaProfissional";
+import GrupoMoradorCard from "@/components/GrupoMoradorCard";
+import { agruparPorMorador, type GrupoMorador } from "@/utils/agruparPendentes";
 import { supabase } from "@/app/lib/supabase";
 import { totalVolumes } from "@/app/lib/fotos-correspondencia";
 import {
@@ -86,6 +91,9 @@ function RegistrarRetiradaResponsavelPage() {
   const [filtroPendenteMorador, setFiltroPendenteMorador] = useState("");
   const [selectedIdsPendentes, setSelectedIdsPendentes] = useState<string[]>([]);
   const [mostrarFiltrosPendentes, setMostrarFiltrosPendentes] = useState(false);
+  const [gruposAbertos, setGruposAbertos] = useState<Set<string>>(new Set());
+  // Demais correspondências do morador que entram na mesma assinatura.
+  const [loteDoMorador, setLoteDoMorador] = useState<PendenteDoMorador[]>([]);
 
   const normalizeText = (text: string) =>
     String(text).toLowerCase().normalize("NFD").replaceAll(/[\u0300-\u036f]/g, "");
@@ -217,6 +225,36 @@ function RegistrarRetiradaResponsavelPage() {
     } else {
       setSelectedIdsPendentes(pendentesFiltrados.map((i) => i.id));
     }
+  };
+
+  // Um cartão por morador/unidade: a assinatura vale para o grupo inteiro,
+  // nunca para itens de moradores diferentes.
+  const gruposPendentes = useMemo(
+    () => agruparPorMorador(pendentesFiltrados),
+    [pendentesFiltrados]
+  );
+
+  const alternarGrupo = (chave: string) =>
+    setGruposAbertos((prev) => {
+      const novo = new Set(prev);
+      if (novo.has(chave)) novo.delete(chave);
+      else novo.add(chave);
+      return novo;
+    });
+
+  const entregarGrupo = async (grupo: GrupoMorador<CorrespondenciaDocument>) => {
+    const [principal, ...demais] = grupo.itens;
+    if (!principal) return;
+    setLoteDoMorador(
+      demais.map((item) => ({
+        id: item.id,
+        protocolo: String(item.protocolo || ""),
+        criado_em: item.criadoEm ? String(item.criadoEm) : undefined,
+      }))
+    );
+    setCorrespondenciaSelecionada(principal);
+    await prepararMensagemRetirada(principal);
+    setShowModal(true);
   };
 
   const exportarExcel = () => {
@@ -393,6 +431,7 @@ function RegistrarRetiradaResponsavelPage() {
     const match = todosPendentes.find((p) => String(p.protocolo) === termo);
     if (match) {
       (async () => {
+        setLoteDoMorador([]);
         setCorrespondenciaSelecionada(match);
         await prepararMensagemRetirada(match);
         setShowModal(true);
@@ -401,18 +440,23 @@ function RegistrarRetiradaResponsavelPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [busca, todosPendentes]);
 
-  const handleRetiradaSuccess = () => {
+  // idsBaixados vem do modal: o principal + os do lote que o banco confirmou.
+  const handleRetiradaSuccess = (idsBaixados?: string[]) => {
     setShowModal(false);
     setCorrespondenciaSelecionada(null);
     setMensagemRetirada("");
     setBusca("");
-    if (correspondenciaSelecionada) {
-      setTodosPendentes((prev) =>
-        prev.filter((i) => i.id !== correspondenciaSelecionada?.id)
-      );
+    const ids = idsBaixados?.length
+      ? idsBaixados
+      : correspondenciaSelecionada
+        ? [correspondenciaSelecionada.id]
+        : [];
+    if (ids.length > 0) {
+      setTodosPendentes((prev) => prev.filter((i) => !ids.includes(i.id)));
     }
     setError("");
     setSelectedIdsPendentes([]);
+    setLoteDoMorador([]);
     setTimeout(() => inputRef.current?.focus(), 100);
   };
 
@@ -671,7 +715,8 @@ function RegistrarRetiradaResponsavelPage() {
                   </button>
                 </div>
 
-                {pendentesFiltrados.map((item) => {
+                {gruposPendentes.map((grupo) => {
+                  const cartoes = grupo.itens.map((item) => {
                   const isSelected = selectedIdsPendentes.includes(item.id);
 
                   let avisoCount = 0;
@@ -728,6 +773,8 @@ function RegistrarRetiradaResponsavelPage() {
                       <button
                         type="button"
                         onClick={async () => {
+                          // Retirada avulsa: o lote só vem do botão do grupo.
+                          setLoteDoMorador([]);
                           setCorrespondenciaSelecionada(item);
                           await prepararMensagemRetirada(item);
                           setShowModal(true);
@@ -827,6 +874,25 @@ function RegistrarRetiradaResponsavelPage() {
                       </button>
                     </div>
                   );
+                  });
+
+                  // Morador com uma pendência só continua no cartão simples.
+                  if (grupo.itens.length === 1) return cartoes;
+
+                  return (
+                    <GrupoMoradorCard
+                      key={grupo.chave}
+                      moradorNome={grupo.moradorNome}
+                      unidade={grupo.unidade}
+                      quantidade={grupo.itens.length}
+                      protocolos={grupo.itens.map((item) => String(item.protocolo))}
+                      aberto={gruposAbertos.has(grupo.chave)}
+                      onAlternar={() => alternarGrupo(grupo.chave)}
+                      onEntregarTodas={() => void entregarGrupo(grupo)}
+                    >
+                      {cartoes}
+                    </GrupoMoradorCard>
+                  );
                 })}
               </div>
             ) : (
@@ -876,10 +942,12 @@ function RegistrarRetiradaResponsavelPage() {
             <ModalRetiradaProfissional
               correspondencia={correspondenciaSelecionada as any}
               mensagemFormatada={mensagemRetirada}
+              pendentesDoMorador={loteDoMorador.length > 0 ? loteDoMorador : undefined}
               onClose={() => {
                 setShowModal(false);
                 setCorrespondenciaSelecionada(null);
                 setMensagemRetirada("");
+                setLoteDoMorador([]);
                 setTimeout(() => inputRef.current?.focus(), 100);
               }}
               onSuccess={handleRetiradaSuccess}

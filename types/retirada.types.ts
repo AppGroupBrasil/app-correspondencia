@@ -34,6 +34,10 @@ export interface DadosRetirada {
   assinaturaPorteiro?: string;
   codigoVerificacao: string;
   fotoComprovanteUrl?: string;
+  // Entrega de várias correspondências com uma assinatura só: o recibo precisa
+  // listar todos os protocolos que saíram, senão não prova a entrega das outras.
+  retiradaEmConjunto?: string[];
+  protocoloPrincipal?: string;
 }
 
 /**

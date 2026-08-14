@@ -221,12 +221,6 @@ export async function gerarReciboPDF({
   doc.setFont("helvetica", "bold");
   doc.text("DADOS DA CORRESPONDÊNCIA", margin + 3, yPosition + 5);
   yPosition += 7;
-  doc.setDrawColor(5, 115, 33);
-  doc.setLineWidth(0.2);
-  doc.rect(margin, yPosition, contentWidth, 38); 
-  yPosition += 5;
-  doc.setTextColor(0, 0, 0);
-  doc.setFontSize(9);
 
   const dataEntrada = correspondencia.dataChegada || correspondencia.criadoEm || correspondencia.dataHora || new Date();
   const dataEntradaFmt = formatarData(dataEntrada);
@@ -235,10 +229,29 @@ export async function gerarReciboPDF({
   // então precisa dizer quantas peças saíram com aquela assinatura.
   const volumesEntregues = totalVolumes(correspondencia.imagemUrl);
 
-  const infoCorrespondencia = [
-    ["Protocolo:", correspondencia.protocolo || "N/A"],
+  // Entrega em lote: uma assinatura só vale para as outras encomendas se o
+  // recibo trouxer o protocolo de cada uma delas.
+  const protocolosJuntos = Array.isArray(dadosRetirada.retiradaEmConjunto)
+    ? dadosRetirada.retiradaEmConjunto.filter(Boolean).map(String)
+    : [];
+  const protocoloPrincipal = String(correspondencia.protocolo || "N/A");
+  const linhasProtocolos =
+    protocolosJuntos.length > 0
+      ? doc.splitTextToSize(
+          [protocoloPrincipal, ...protocolosJuntos].map((p) => `#${p}`).join(", "),
+          contentWidth - 43
+        )
+      : [protocoloPrincipal];
+
+  const infoCorrespondencia: [string, string | string[]][] = [
+    [
+      protocolosJuntos.length > 0
+        ? `Protocolos (${protocolosJuntos.length + 1}):`
+        : "Protocolo:",
+      linhasProtocolos,
+    ],
     ...(volumesEntregues > 1
-      ? [["Volumes:", `${volumesEntregues} correspondências`]]
+      ? ([["Volumes:", `${volumesEntregues} correspondências`]] as [string, string][])
       : []),
     ["Remetente:", correspondencia.remetente || "Portaria"],
     ["Destinatário:", correspondencia.moradorNome || "Morador"],
@@ -246,15 +259,27 @@ export async function gerarReciboPDF({
     ["Chegou em:", dataEntradaFmt],
   ];
 
+  // A caixa cresce com a lista de protocolos: com altura fixa o texto vazava.
+  const boxHeightCorresp =
+    38 + (linhasProtocolos.length - 1) * lineHeight;
+
+  doc.setDrawColor(5, 115, 33);
+  doc.setLineWidth(0.2);
+  doc.rect(margin, yPosition, contentWidth, boxHeightCorresp);
+  yPosition += 5;
+  doc.setTextColor(0, 0, 0);
+  doc.setFontSize(9);
+
   infoCorrespondencia.forEach(([label, value]) => {
     doc.setFont("helvetica", "bold");
     doc.text(label, margin + 3, yPosition);
     doc.setFont("helvetica", "normal");
-    doc.text(String(value), margin + 40, yPosition);
-    yPosition += lineHeight;
+    const linhas = Array.isArray(value) ? value : [String(value)];
+    doc.text(linhas, margin + 40, yPosition);
+    yPosition += lineHeight * linhas.length;
   });
 
-  yPosition = headerHeight + 10 + 7 + 38 + 8;
+  yPosition = headerHeight + 10 + 7 + boxHeightCorresp + 8;
 
   // DADOS DA RETIRADA
   doc.setFillColor(5, 115, 33);
@@ -289,7 +314,7 @@ export async function gerarReciboPDF({
     yPosition += lineHeight * lines.length;
   });
 
-  yPosition = (headerHeight + 10 + 7 + 38 + 8) + 7 + boxHeightRet + 8;
+  yPosition = (headerHeight + 10 + 7 + boxHeightCorresp + 8) + 7 + boxHeightRet + 8;
 
   // ASSINATURAS
   yPosition = desenharAssinaturas(doc, yPosition, pageWidth, pageHeight, margin, assinaturaMoradorBase64, assinaturaPorteiroBase64);

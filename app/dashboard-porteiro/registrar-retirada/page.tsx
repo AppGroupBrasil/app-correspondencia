@@ -4,7 +4,12 @@ import { useState, useEffect, useRef, useMemo, useCallback } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Html5Qrcode } from "html5-qrcode";
 import withAuth from "@/components/withAuth";
-import ModalRetiradaProfissional, { prefetchPreferenciasRetirada } from "@/components/ModalRetiradaProfissional";
+import ModalRetiradaProfissional, {
+  prefetchPreferenciasRetirada,
+  type PendenteDoMorador,
+} from "@/components/ModalRetiradaProfissional";
+import GrupoMoradorCard from "@/components/GrupoMoradorCard";
+import { agruparPorMorador, type GrupoMorador } from "@/utils/agruparPendentes";
 import { supabase, comApiKeyStorage } from "@/app/lib/supabase";
 import { totalVolumes } from "@/app/lib/fotos-correspondencia";
 import {
@@ -147,6 +152,9 @@ function RegistrarRetiradaPorteiroPage() {
 
   const [mostrarFiltrosPendentes, setMostrarFiltrosPendentes] = useState(false);
   const [selectedIdsPendentes, setSelectedIdsPendentes] = useState<string[]>([]);
+  const [gruposAbertos, setGruposAbertos] = useState<Set<string>>(new Set());
+  // Demais correspondências do morador que entram na mesma assinatura.
+  const [loteDoMorador, setLoteDoMorador] = useState<PendenteDoMorador[]>([]);
 
   // --- REGISTRO RÁPIDO (protocolo -> dados -> assinatura) ---
   const [protocoloRapido, setProtocoloRapido] = useState("");
@@ -298,6 +306,34 @@ function RegistrarRetiradaPorteiroPage() {
       return matchBusca && matchData;
     });
   }, [todosPendentes, busca, filtrosAplicados]);
+
+  // Morador com várias pendências vira um cartão só: uma assinatura entrega
+  // tudo, em vez de repetir o ritual protocolo a protocolo.
+  const gruposPendentes = useMemo(
+    () => agruparPorMorador(pendentesFiltrados),
+    [pendentesFiltrados]
+  );
+
+  const alternarGrupo = (chave: string) =>
+    setGruposAbertos((atual) => {
+      const novo = new Set(atual);
+      if (novo.has(chave)) novo.delete(chave);
+      else novo.add(chave);
+      return novo;
+    });
+
+  const entregarGrupo = async (grupo: GrupoMorador<CorrespondenciaDocument>) => {
+    const [principal, ...demais] = grupo.itens;
+    if (!principal) return;
+    setLoteDoMorador(
+      demais.map((item) => ({
+        id: item.id,
+        protocolo: String(item.protocolo || ""),
+        criado_em: item.criadoEm ? String(item.criadoEm) : undefined,
+      }))
+    );
+    await abrirRetirada(principal, false);
+  };
 
   // --- SELEÇÃO ---
   const toggleSelect = (id: string) => {
@@ -530,6 +566,8 @@ function RegistrarRetiradaPorteiroPage() {
   );
 
   const handleSelecionarItem = async (item: CorrespondenciaDocument) => {
+      // Retirada avulsa: o lote só existe quando veio do botão do grupo.
+      setLoteDoMorador([]);
       await abrirRetirada(item, false);
   };
 
@@ -553,6 +591,8 @@ function RegistrarRetiradaPorteiroPage() {
 
       setErroRapido("");
       setBuscandoRapido(true);
+      // Registro rápido é sempre de um item só: zera lote de grupo anterior.
+      setLoteDoMorador([]);
       try {
         // O QR entrega o id da correspondência. Buscar por ele em vez do
         // protocolo tira do caminho a ambiguidade de números repetidos.
@@ -640,22 +680,27 @@ function RegistrarRetiradaPorteiroPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [busca, todosPendentes]);
 
-  const handleRetiradaSuccess = () => {
+  // idsBaixados vem do modal: o principal + os do lote que o banco confirmou.
+  const handleRetiradaSuccess = (idsBaixados?: string[]) => {
     setShowModal(false);
     setCorrespondenciaSelecionada(null);
     setMensagemRetirada("");
     setBusca("");
-    const estavaNaLista = correspondenciaSelecionada
-      ? todosPendentes.some((i) => i.id === correspondenciaSelecionada.id)
-      : false;
-    if (correspondenciaSelecionada) {
-      setTodosPendentes((prev) => prev.filter((i) => i.id !== correspondenciaSelecionada.id));
+    const ids = idsBaixados?.length
+      ? idsBaixados
+      : correspondenciaSelecionada
+        ? [correspondenciaSelecionada.id]
+        : [];
+    const estavaNaLista = ids.some((id) => todosPendentes.some((i) => i.id === id));
+    if (ids.length > 0) {
+      setTodosPendentes((prev) => prev.filter((i) => !ids.includes(i.id)));
     }
     // Item achado pela busca remota (cadastrado em outro terminal):
     // recarrega para o contador de pendentes não ficar defasado.
     if (!estavaNaLista) void carregarPendencias();
     setError("");
     setSelectedIdsPendentes([]);
+    setLoteDoMorador([]);
     const eraRapido = modoRapido;
     setModoRapido(false);
     setProtocoloRapido("");
@@ -860,7 +905,8 @@ function RegistrarRetiradaPorteiroPage() {
                 </div>
 
                 <div className="grid gap-4">
-                  {pendentesFiltrados.map((item) => {
+                  {gruposPendentes.map((grupo) => {
+                    const cartoes = grupo.itens.map((item) => {
                     const isSelected = selectedIdsPendentes.includes(item.id);
                     return (
                       <div key={item.id} className={`bg-white p-5 rounded-xl border transition-all relative ${isSelected ? "border-green-500 bg-green-50 ring-1 ring-green-500" : "border-gray-200 hover:shadow-md"}`}>
@@ -903,6 +949,26 @@ function RegistrarRetiradaPorteiroPage() {
                         </button>
                       </div>
                     );
+                    });
+
+                    // Morador com uma pendência só continua no cartão simples:
+                    // agrupar o que não tem lote só acrescentaria um toque.
+                    if (grupo.itens.length === 1) return cartoes;
+
+                    return (
+                      <GrupoMoradorCard
+                        key={grupo.chave}
+                        moradorNome={grupo.moradorNome}
+                        unidade={grupo.unidade}
+                        quantidade={grupo.itens.length}
+                        protocolos={grupo.itens.map((item) => String(item.protocolo))}
+                        aberto={gruposAbertos.has(grupo.chave)}
+                        onAlternar={() => alternarGrupo(grupo.chave)}
+                        onEntregarTodas={() => void entregarGrupo(grupo)}
+                      >
+                        {cartoes}
+                      </GrupoMoradorCard>
+                    );
                   })}
                 </div>
               </div>
@@ -931,13 +997,15 @@ function RegistrarRetiradaPorteiroPage() {
 
           {showModal && correspondenciaSelecionada && (
             <ModalRetiradaProfissional
-              correspondencia={correspondenciaSelecionada as any} 
+              correspondencia={correspondenciaSelecionada as any}
               mensagemFormatada={mensagemRetirada}
               modoRapido={modoRapido}
+              pendentesDoMorador={loteDoMorador.length > 0 ? loteDoMorador : undefined}
               onClose={() => {
                 setShowModal(false);
                 setCorrespondenciaSelecionada(null);
                 setMensagemRetirada("");
+                setLoteDoMorador([]);
                 const eraRapido = modoRapido;
                 setModoRapido(false);
                 setTimeout(() => {

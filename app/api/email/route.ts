@@ -198,9 +198,12 @@ export async function POST(request: NextRequest) {
 
       case 'recibo-retirada': {
         const reciboDados = dados;
-        subject = reciboDados.protocolo
-          ? `📋 Comprovante de retirada - Protocolo ${reciboDados.protocolo}`
-          : '📋 Comprovante de retirada';
+        const totalJuntos = (reciboDados.protocolosJuntos || []).filter(Boolean).length;
+        subject = totalJuntos > 0
+          ? `📋 Comprovante de retirada - ${totalJuntos + 1} correspondências`
+          : reciboDados.protocolo
+            ? `📋 Comprovante de retirada - Protocolo ${reciboDados.protocolo}`
+            : '📋 Comprovante de retirada';
         htmlContent = emailReciboRetirada(reciboDados);
 
         if (reciboDados.reciboUrl && isAllowedAttachmentUrl(reciboDados.reciboUrl)) {
