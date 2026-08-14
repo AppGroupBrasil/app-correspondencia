@@ -97,6 +97,10 @@ function NovaCorrespondenciaPorteiroPage() {
   const descartarRascunho = () => {
     setFotos([]);
     setObservacao("");
+    // Remontar os seletores esvazia a tela, mas o destinatário escolhido antes
+    // continuaria valendo por baixo — e a próxima encomenda sairia no nome dele.
+    setSelectedBloco("");
+    setSelectedMorador("");
     setRascunhoRecuperado(false);
     setNomeRascunho("");
     setRestaurarSelecao(null);
@@ -574,7 +578,8 @@ Aguardamos a sua retirada`;
     setPdfUrl("");
     setLinkPublico("");
     setMensagemFormatada("");
-    setSelectedMorador(""); 
+    setSelectedBloco("");
+    setSelectedMorador("");
     setShowSuccessModal(false);
   };
 

@@ -113,9 +113,9 @@ export default function UploadImagem({ onUpload }: UploadImagemProps) {
       }
       await processarArquivo(arquivo);
     } catch (erro) {
-      console.error("Erro na câmera:", erro);
-      alert("Não foi possível abrir a câmera. Tente novamente.");
-      if (!preview) liberarRecarga(travaId);
+      // Permissão negada ou plugin indisponível: cai no seletor do sistema.
+      console.error("Erro na câmera nativa, usando o seletor do sistema:", erro);
+      fileInputRef.current?.click();
     }
   };
 

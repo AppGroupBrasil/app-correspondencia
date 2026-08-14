@@ -66,9 +66,10 @@ export default function UploadImagens({ fotos, onChange, max = MAX_FOTOS }: Uplo
       }
       await adicionar([arquivo]);
     } catch (erro) {
-      console.error("Erro na câmera:", erro);
-      alert("Não foi possível abrir a câmera. Tente novamente.");
-      if (fotos.length === 0) liberarRecarga(travaId);
+      // Permissão negada ou plugin indisponível: cai no seletor do sistema em
+      // vez de deixar o porteiro sem conseguir registrar.
+      console.error("Erro na câmera nativa, usando o seletor do sistema:", erro);
+      abrir(inputCamera.current);
     }
   };
 

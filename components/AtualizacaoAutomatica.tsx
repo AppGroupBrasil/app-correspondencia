@@ -23,7 +23,7 @@ export default function AtualizacaoAutomatica() {
     if (recargaTravada()) return false;
     // Registrar encomenda e dar baixa são as duas telas onde recarregar joga
     // fora o trabalho do porteiro. Nelas a versão nova só entra pelo botão.
-    if (/\/(nova-correspondencia|registrar-retirada|retirada)/.test(location.pathname)) return false;
+    if (/\/(nova-correspondencia|registrar-retirada)/.test(location.pathname)) return false;
     if (document.querySelector("canvas, video, dialog[open]")) return false;
     const campos = Array.from(
       document.querySelectorAll<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>(
