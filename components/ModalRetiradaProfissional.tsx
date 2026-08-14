@@ -49,6 +49,10 @@ interface DadosRetirada {
   modoRegistro?: "rapido" | "completo";
   semComprovacao?: boolean;
   reciboEnviadoPara?: string;
+  // Entrega de várias encomendas do mesmo morador de uma vez: guarda os
+  // protocolos que saíram juntos, dos dois lados.
+  retiradaEmConjunto?: string[];
+  protocoloPrincipal?: string;
 }
 
 interface Props {
@@ -209,6 +213,46 @@ export default function ModalRetiradaProfissional({
   const [imagemFile, setImagemFile] = useState<File | null>(null);
   const [salvarPadrao, setSalvarPadrao] = useState(false);
   const [baixaConcluida, setBaixaConcluida] = useState(false);
+
+  // O morador quase sempre tem mais de uma encomenda esperando e leva tudo de
+  // uma vez. Como a baixa saía num protocolo só, as outras continuavam na lista
+  // da portaria — é a encomenda que "volta" depois de entregue.
+  const [outrasPendentes, setOutrasPendentes] = useState<
+    { id: string; protocolo: string; observacao?: string | null; criado_em?: string }[]
+  >([]);
+  const [idsJuntos, setIdsJuntos] = useState<string[]>([]);
+
+  useEffect(() => {
+    let cancelado = false;
+    (async () => {
+      if (!correspondencia?.moradorId || !correspondencia?.id) return;
+      try {
+        const { data } = await supabase
+          .from("correspondencias")
+          .select("id, protocolo, observacao, criado_em")
+          .eq("morador_id", correspondencia.moradorId)
+          .eq("status", "pendente")
+          .neq("id", correspondencia.id)
+          .order("criado_em", { ascending: true })
+          .limit(20);
+        if (!cancelado) setOutrasPendentes(data || []);
+      } catch {
+        /* sem rede: a baixa individual continua funcionando */
+      }
+    })();
+    return () => {
+      cancelado = true;
+    };
+  }, [correspondencia?.id, correspondencia?.moradorId]);
+
+  const alternarJunto = (id: string) =>
+    setIdsJuntos((atual) =>
+      atual.includes(id) ? atual.filter((item) => item !== id) : [...atual, id]
+    );
+
+  const protocolosJuntos = outrasPendentes
+    .filter((item) => idsJuntos.includes(item.id))
+    .map((item) => String(item.protocolo));
 
   // Preferência do porteiro, guardada no aparelho: uma vez marcada, todo registro
   // rápido baixa sem foto e sem assinatura até ele desmarcar.
@@ -473,10 +517,14 @@ export default function ModalRetiradaProfissional({
         observacoes: [
           observacoes.trim(),
           semComprovacao ? "Baixa registrada sem assinatura e sem foto (dispensadas no registro rápido)." : "",
+          protocolosJuntos.length > 0
+            ? `Entregue junto com o(s) protocolo(s) ${protocolosJuntos.map((p) => `#${p}`).join(", ")}.`
+            : "",
         ].filter(Boolean).join(" ") || undefined,
         codigoVerificacao: gerarCodigoVerificacao(),
         modoRegistro: modoRapido ? "rapido" : "completo",
         semComprovacao: semComprovacao || undefined,
+        retiradaEmConjunto: protocolosJuntos.length > 0 ? protocolosJuntos : undefined,
       };
 
       const baseUrl = typeof window !== "undefined" ? window.location.origin : "";
@@ -525,6 +573,39 @@ export default function ModalRetiradaProfissional({
         );
       }
 
+      // Baixa em conjunto: as demais encomendas que o morador levou na mesma
+      // hora saem da lista agora, com a mesma assinatura. Também é aguardada —
+      // é justamente a etapa que faltava para a encomenda não "voltar".
+      if (idsJuntos.length > 0) {
+        setMessage("Baixando as demais encomendas...");
+        const { data: linhasJuntas, error: erroJunto } = await supabase
+          .from("correspondencias")
+          .update({
+            status: "retirada",
+            retirado_em: new Date().toISOString(),
+            dados_retirada: removerUndefined({
+              ...dadosRetiradaBruto,
+              retiradaEmConjunto: undefined,
+              protocoloPrincipal: String(correspondencia.protocolo || ""),
+            }),
+          })
+          .in("id", idsJuntos)
+          .eq("status", "pendente")
+          .select("id");
+
+        if (erroJunto) {
+          console.error("Erro ao baixar as encomendas em conjunto:", erroJunto);
+          alert(
+            "A baixa desta correspondência foi registrada, mas as demais encomendas " +
+              "do morador não puderam ser baixadas. Confira a lista de pendentes."
+          );
+        } else if ((linhasJuntas || []).length < idsJuntos.length) {
+          console.warn(
+            `Baixa em conjunto: ${(linhasJuntas || []).length} de ${idsJuntos.length} atualizadas.`
+          );
+        }
+      }
+
       setProgress(100);
 
       const dataHoje = new Date().toLocaleString("pt-BR", {
@@ -545,7 +626,11 @@ ${volumes > 1 ? `Suas ${volumes} correspondências foram retiradas com sucesso.`
 Obrigado!
 
 ━━━━━━━━━━━━━━━━
-│ Protocolo: ${correspondencia.protocolo}
+│ Protocolo: ${correspondencia.protocolo}${
+        protocolosJuntos.length > 0
+          ? `\n│ Também retirados: ${protocolosJuntos.map((p) => `#${p}`).join(", ")}`
+          : ""
+      }
 │ Retirado por: ${nomeFinal}
 │ Atendido por: ${user?.nome || "Porteiro"}
 │ Retirado em: ${dataHoje}
@@ -791,6 +876,72 @@ Obrigado!
             <div className="bg-red-50 border border-red-200 rounded-lg p-4 flex items-start gap-3">
               <AlertCircle className="text-red-600 flex-shrink-0" size={20} />
               <p className="text-sm text-red-800">{error}</p>
+            </div>
+          )}
+
+          {outrasPendentes.length > 0 && (
+            <div className="rounded-lg border-2 border-amber-300 bg-amber-50 p-4">
+              <div className="flex items-start gap-3">
+                <Package className="mt-0.5 flex-shrink-0 text-amber-600" size={20} />
+                <div className="flex-1">
+                  <p className="text-sm font-bold text-amber-900">
+                    Este morador tem mais {outrasPendentes.length}{" "}
+                    {outrasPendentes.length === 1 ? "encomenda pendente" : "encomendas pendentes"}.
+                  </p>
+                  <p className="mt-0.5 text-xs text-amber-800">
+                    Marque as que estão sendo entregues agora: elas saem da portaria com esta
+                    mesma assinatura.
+                  </p>
+
+                  <div className="mt-3 space-y-1.5">
+                    {outrasPendentes.map((item) => (
+                      <label
+                        key={item.id}
+                        className="flex cursor-pointer items-start gap-2 rounded-lg border border-amber-200 bg-white px-3 py-2"
+                      >
+                        <input
+                          type="checkbox"
+                          checked={idsJuntos.includes(item.id)}
+                          onChange={() => alternarJunto(item.id)}
+                          disabled={loading}
+                          className="mt-0.5 h-4 w-4 accent-[#057321]"
+                        />
+                        <span className="text-xs leading-snug text-gray-800">
+                          <span className="font-bold">#{item.protocolo}</span>
+                          {item.criado_em && (
+                            <span className="text-gray-500">
+                              {" "}
+                              · {new Date(item.criado_em).toLocaleDateString("pt-BR")}
+                            </span>
+                          )}
+                          {item.observacao && <span className="block text-gray-600">{item.observacao}</span>}
+                        </span>
+                      </label>
+                    ))}
+                  </div>
+
+                  <div className="mt-2 flex gap-3">
+                    <button
+                      type="button"
+                      onClick={() => setIdsJuntos(outrasPendentes.map((item) => item.id))}
+                      disabled={loading}
+                      className="text-xs font-bold text-[#057321] underline"
+                    >
+                      Marcar todas
+                    </button>
+                    {idsJuntos.length > 0 && (
+                      <button
+                        type="button"
+                        onClick={() => setIdsJuntos([])}
+                        disabled={loading}
+                        className="text-xs font-bold text-gray-500 underline"
+                      >
+                        Limpar
+                      </button>
+                    )}
+                  </div>
+                </div>
+              </div>
             </div>
           )}
 

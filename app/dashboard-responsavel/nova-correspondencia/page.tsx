@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import UploadImagens, { FotoSelecionada } from "@/components/UploadImagens";
 import { nomeArquivoFoto } from "@/app/lib/fotos-correspondencia";
 import { useRascunho } from "@/hooks/useRascunho";
+import { gerarProtocoloUnico } from "@/utils/protocolo";
 import { base64ParaFile } from "@/utils/imageCompressor";
 import SelectCondominioBlocoMorador from "@/components/SelectCondominioBlocoMorador";
 import { LoadingOverlay } from "@/components/LoadingOverlay";
@@ -278,7 +279,7 @@ function NovaCorrespondenciaResponsavelPage() {
 
     try {
       // PASSO 1: Gerar protocolo e link IMEDIATAMENTE
-      const novoProtocolo = `${Math.floor(Date.now() / 1000).toString().slice(-6)}`;
+      const novoProtocolo = await gerarProtocoloUnico(efetivoCondominioId);
       const docId = crypto.randomUUID();
       const baseUrl = process.env.NEXT_PUBLIC_APP_URL || (typeof window !== "undefined" ? window.location.origin : "");
       const novoLinkPublico = `${baseUrl}/ver/${docId}`;

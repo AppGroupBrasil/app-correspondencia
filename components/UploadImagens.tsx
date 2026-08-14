@@ -5,6 +5,7 @@ import { Camera, X, Loader2, Plus, Images, Package } from "lucide-react";
 import { compressImage, isValidImage } from "@/utils/imageCompressor";
 import { MAX_FOTOS } from "@/app/lib/fotos-correspondencia";
 import { liberarRecarga, travarRecarga } from "@/utils/rascunho";
+import { ehAppNativo, tirarFotoNativa } from "@/utils/cameraNativa";
 
 export interface FotoSelecionada {
   id: string;
@@ -43,30 +44,39 @@ export default function UploadImagens({ fotos, onChange, max = MAX_FOTOS }: Uplo
     input?.click();
   };
 
-  const processar = async (e: ChangeEvent<HTMLInputElement>) => {
-    const selecionados = e.target.files;
-    if (!selecionados || selecionados.length === 0) {
-      // Câmera cancelada: nada a proteger se ainda não há foto nenhuma.
-      if (fotos.length === 0) liberarRecarga(travaId);
+  // No aplicativo, a foto vem da câmera nativa já reduzida. O input com
+  // capture continua servindo o navegador do computador.
+  const abrirCamera = async () => {
+    if (!ehAppNativo()) {
+      abrir(inputCamera.current);
       return;
     }
 
-    const restantes = max - fotos.length;
-    if (restantes <= 0) {
+    if (fotos.length >= max) {
       alert(`Limite de ${max} fotos por registro.`);
-      e.target.value = "";
       return;
     }
 
-    const lista = Array.from(selecionados).slice(0, restantes);
-    if (selecionados.length > restantes) {
-      alert(`Só cabem mais ${restantes} foto(s) neste registro.`);
+    travarRecarga(travaId);
+    try {
+      const arquivo = await tirarFotoNativa();
+      if (!arquivo) {
+        if (fotos.length === 0) liberarRecarga(travaId);
+        return;
+      }
+      await adicionar([arquivo]);
+    } catch (erro) {
+      console.error("Erro na câmera:", erro);
+      alert("Não foi possível abrir a câmera. Tente novamente.");
+      if (fotos.length === 0) liberarRecarga(travaId);
     }
+  };
 
+  const adicionar = async (arquivos: File[]) => {
     setOcupado(true);
     const novas: FotoSelecionada[] = [];
 
-    for (const file of lista) {
+    for (const file of arquivos) {
       if (!isValidImage(file)) continue;
       if (file.size > 100 * 1024 * 1024) {
         alert(`"${file.name}" é maior que 100MB e foi ignorado.`);
@@ -92,6 +102,29 @@ export default function UploadImagens({ fotos, onChange, max = MAX_FOTOS }: Uplo
 
     if (novas.length > 0) onChange([...fotos, ...novas]);
     setOcupado(false);
+  };
+
+  const processar = async (e: ChangeEvent<HTMLInputElement>) => {
+    const selecionados = e.target.files;
+    if (!selecionados || selecionados.length === 0) {
+      // Câmera cancelada: nada a proteger se ainda não há foto nenhuma.
+      if (fotos.length === 0) liberarRecarga(travaId);
+      return;
+    }
+
+    const restantes = max - fotos.length;
+    if (restantes <= 0) {
+      alert(`Limite de ${max} fotos por registro.`);
+      e.target.value = "";
+      return;
+    }
+
+    const lista = Array.from(selecionados).slice(0, restantes);
+    if (selecionados.length > restantes) {
+      alert(`Só cabem mais ${restantes} foto(s) neste registro.`);
+    }
+
+    await adicionar(lista);
     e.target.value = "";
   };
 
@@ -122,7 +155,7 @@ export default function UploadImagens({ fotos, onChange, max = MAX_FOTOS }: Uplo
         <>
           <button
             type="button"
-            onClick={() => abrir(inputCamera.current)}
+            onClick={() => void abrirCamera()}
             disabled={ocupado}
             className="w-full group relative flex flex-col items-center justify-center h-48 rounded-xl border-2 border-dashed border-gray-300 bg-gray-50 hover:bg-white hover:border-[#057321] transition-all duration-200 cursor-pointer disabled:opacity-50 disabled:cursor-wait"
           >
@@ -192,7 +225,7 @@ export default function UploadImagens({ fotos, onChange, max = MAX_FOTOS }: Uplo
             {!cheio && (
               <button
                 type="button"
-                onClick={() => abrir(inputCamera.current)}
+                onClick={() => void abrirCamera()}
                 disabled={ocupado}
                 className="aspect-square rounded-lg border-2 border-dashed border-gray-300 flex flex-col items-center justify-center gap-1 text-gray-500 hover:border-[#057321] hover:text-[#057321] transition-colors disabled:opacity-50 disabled:cursor-wait"
               >

@@ -4,6 +4,7 @@ import { useState, useRef, useEffect, useId, ChangeEvent } from "react";
 import { Camera, X, Image as ImageIcon, Loader2, CheckCircle } from "lucide-react";
 import { compressImage, formatFileSize, isValidImage, CompressionResult } from "@/utils/imageCompressor";
 import { liberarRecarga, travarRecarga } from "@/utils/rascunho";
+import { ehAppNativo, tirarFotoNativa } from "@/utils/cameraNativa";
 
 interface UploadImagemProps {
   onUpload: (file: File | null, base64?: string) => void;
@@ -29,7 +30,10 @@ export default function UploadImagem({ onUpload }: UploadImagemProps) {
       if (!preview) liberarRecarga(travaId);
       return;
     }
+    await processarArquivo(file);
+  };
 
+  const processarArquivo = async (file: File) => {
     // Validar se é uma imagem
     if (!isValidImage(file)) {
       alert("Por favor, selecione uma imagem válida (JPEG, PNG, GIF, WebP)");
@@ -89,11 +93,30 @@ export default function UploadImagem({ onUpload }: UploadImagemProps) {
     }
   };
 
-  const triggerInput = () => {
+  const triggerInput = async () => {
     // A câmera joga o app para segundo plano: a partir daqui a página não pode
     // se recarregar sozinha na volta.
     travarRecarga(travaId);
-    fileInputRef.current?.click();
+
+    // No aplicativo a foto vem da câmera nativa já reduzida; o input com
+    // capture continua servindo o navegador.
+    if (!ehAppNativo()) {
+      fileInputRef.current?.click();
+      return;
+    }
+
+    try {
+      const arquivo = await tirarFotoNativa();
+      if (!arquivo) {
+        if (!preview) liberarRecarga(travaId);
+        return;
+      }
+      await processarArquivo(arquivo);
+    } catch (erro) {
+      console.error("Erro na câmera:", erro);
+      alert("Não foi possível abrir a câmera. Tente novamente.");
+      if (!preview) liberarRecarga(travaId);
+    }
   };
 
   return (
@@ -109,7 +132,7 @@ export default function UploadImagem({ onUpload }: UploadImagemProps) {
 
       {!preview ? (
         <button
-          onClick={triggerInput}
+          onClick={() => void triggerInput()}
           disabled={isCompressing}
           className="w-full group relative flex flex-col items-center justify-center h-48 rounded-xl border-2 border-dashed border-gray-300 bg-gray-50 hover:bg-white hover:border-[#057321] transition-all duration-200 cursor-pointer disabled:opacity-50 disabled:cursor-wait"
         >

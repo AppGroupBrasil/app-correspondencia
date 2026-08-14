@@ -10,6 +10,9 @@ interface Props {
     blocoId: string;
     moradorId: string;
   }) => void;
+  // Volta de um registro interrompido: bloco e morador já escolhidos entram de
+  // novo assim que as listas carregam, uma única vez.
+  restaurar?: { blocoId?: string; moradorId?: string } | null;
 }
 
 interface Condominio {
@@ -32,7 +35,7 @@ interface Morador {
   [key: string]: any;
 }
 
-export default function SelectCondominioBlocoMorador({ onSelect }: Props) {
+export default function SelectCondominioBlocoMorador({ onSelect, restaurar }: Props) {
   const { role, condominioId: userCondominioId } = useAuth() as any;
   
   const [condominios, setCondominios] = useState<Condominio[]>([]);
@@ -169,6 +172,25 @@ export default function SelectCondominioBlocoMorador({ onSelect }: Props) {
       carregarMoradores(selectedBloco, selectedCondominio);
     }
   }, [selectedBloco, selectedCondominio, carregarMoradores]);
+
+  // Restauração de bloco/morador: cada um entra assim que a sua lista chega, e
+  // só na primeira vez — depois disso quem manda é o porteiro.
+  const blocoRestaurado = useRef(false);
+  const moradorRestaurado = useRef(false);
+
+  useEffect(() => {
+    if (blocoRestaurado.current || !restaurar?.blocoId || blocos.length === 0) return;
+    if (!blocos.some((bloco) => bloco.id === restaurar.blocoId)) return;
+    blocoRestaurado.current = true;
+    setSelectedBloco(restaurar.blocoId);
+  }, [blocos, restaurar]);
+
+  useEffect(() => {
+    if (moradorRestaurado.current || !restaurar?.moradorId || moradores.length === 0) return;
+    if (!moradores.some((morador) => morador.id === restaurar.moradorId)) return;
+    moradorRestaurado.current = true;
+    setSelectedMorador(restaurar.moradorId);
+  }, [moradores, restaurar]);
 
   useEffect(() => {
     if (typeof onSelectRef.current === 'function') {

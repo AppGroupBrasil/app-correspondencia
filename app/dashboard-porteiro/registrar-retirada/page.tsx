@@ -421,11 +421,13 @@ function RegistrarRetiradaPorteiroPage() {
   const startHtml5Scanner = (cameraId: string) => {
     // Quem abriu o scanner define o destino do código lido:
     // painel de Registro Rápido ou campo de busca.
-    const finalizarScan = (protocolo: string) => {
+    // O protocolo aparece na tela, mas quem manda na busca é o id do QR: dois
+    // registros podem repetir o número, o id não.
+    const finalizarScan = (protocolo: string, id?: string) => {
       if (scanParaRapidoRef.current) {
         scanParaRapidoRef.current = false;
         setProtocoloRapido(protocolo);
-        registroRapidoRef.current(protocolo);
+        registroRapidoRef.current(id || protocolo);
       } else {
         setBusca(protocolo);
       }
@@ -453,7 +455,7 @@ function RegistrarRetiradaPorteiroPage() {
           const candidato = extrairCandidato(decodedText);
           const local = todosPendentes.find((p) => p.id === candidato);
           if (local) {
-            finalizarScan(String(local.protocolo));
+            finalizarScan(String(local.protocolo), local.id);
             return;
           }
           if (UUID_REGEX.test(candidato) && user?.condominioId) {
@@ -466,7 +468,7 @@ function RegistrarRetiradaPorteiroPage() {
                 .maybeSingle();
               if (data?.protocolo) {
                 await carregarPendencias();
-                finalizarScan(String(data.protocolo));
+                finalizarScan(String(data.protocolo), candidato);
                 return;
               }
             } catch (e) { console.warn("Falha ao buscar por id do QR:", e); }
@@ -552,8 +554,13 @@ function RegistrarRetiradaPorteiroPage() {
       setErroRapido("");
       setBuscandoRapido(true);
       try {
-        const local = todosPendentes.find(
-          (p) => String(p.protocolo).trim().toLowerCase() === termo.toLowerCase()
+        // O QR entrega o id da correspondência. Buscar por ele em vez do
+        // protocolo tira do caminho a ambiguidade de números repetidos.
+        const porId = UUID_REGEX.test(termo);
+        const local = todosPendentes.find((p) =>
+          porId
+            ? p.id === termo
+            : String(p.protocolo).trim().toLowerCase() === termo.toLowerCase()
         );
         if (local) {
           await abrirRetirada(local, true);
@@ -569,9 +576,11 @@ function RegistrarRetiradaPorteiroPage() {
           )
           .eq("condominio_id", user.condominioId);
 
-        const { data, error: err } = await (/[%_]/.test(termo)
-          ? base.eq("protocolo", termo)
-          : base.ilike("protocolo", termo)
+        const { data, error: err } = await (porId
+          ? base.eq("id", termo)
+          : /[%_]/.test(termo)
+            ? base.eq("protocolo", termo)
+            : base.ilike("protocolo", termo)
         )
           .order("criado_em", { ascending: false })
           .limit(5);
@@ -581,8 +590,13 @@ function RegistrarRetiradaPorteiroPage() {
         // Protocolo repetido: a pendente tem prioridade sobre uma baixa antiga.
         const encontrada =
           data?.find((c) => c.status === "pendente") || data?.[0];
+        const rotulo = porId ? String(encontrada?.protocolo || "") : termo;
         if (!encontrada) {
-          setErroRapido(`Protocolo #${termo} não encontrado neste condomínio.`);
+          setErroRapido(
+            porId
+              ? "Correspondência do QR Code não encontrada neste condomínio."
+              : `Protocolo #${termo} não encontrado neste condomínio.`
+          );
           return;
         }
         if (encontrada.status === "retirada") {
@@ -593,7 +607,7 @@ function RegistrarRetiradaPorteiroPage() {
               })
             : "";
           setErroRapido(
-            `Protocolo #${termo} já consta como RETIRADO${quando ? ` em ${quando}` : ""}.`
+            `Protocolo #${rotulo} já consta como RETIRADO${quando ? ` em ${quando}` : ""}.`
           );
           return;
         }

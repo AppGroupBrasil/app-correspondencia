@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import UploadImagens, { FotoSelecionada } from "@/components/UploadImagens";
 import { nomeArquivoFoto } from "@/app/lib/fotos-correspondencia";
 import { useRascunho } from "@/hooks/useRascunho";
+import { buscarRegistroRecente, gerarProtocoloUnico } from "@/utils/protocolo";
 import { base64ParaFile } from "@/utils/imageCompressor";
 import SelectCondominioBlocoMorador from "@/components/SelectCondominioBlocoMorador";
 import { LoadingOverlay } from "@/components/LoadingOverlay"; 
@@ -18,13 +19,17 @@ import { gerarEtiquetaPDF } from "@/utils/gerarEtiquetaPDF";
 import BotaoVoltar from "@/components/BotaoVoltar";
 import { EmailService } from "@/services/emailService";
 
-// O que sobrevive ao app ser morto em segundo plano durante a câmera. O morador
-// fica de fora de propósito: reapresentar uma seleção antiga arriscaria lançar a
-// encomenda no nome errado, e reescolher são dois toques.
+// O que sobrevive ao app ser morto em segundo plano durante a câmera. O
+// destinatário volta junto — sem ele o porteiro recomeçava o registro do zero e
+// acabava lançando a mesma encomenda duas vezes —, sempre com o aviso em tela
+// para conferir o nome antes de confirmar.
 interface RascunhoRegistro {
   observacao: string;
   localArmazenamento: string;
   fotos: { id: string; nome: string; base64: string }[];
+  blocoId?: string;
+  moradorId?: string;
+  moradorNome?: string;
 }
 
 // Cada foto em base64 pesa por volta de meio megabyte no armazenamento local, e
@@ -79,11 +84,23 @@ function NovaCorrespondenciaPorteiroPage() {
   // O rascunho não sabe para quem era a encomenda: sem aviso, a foto de um
   // registro abandonado apareceria colada no morador seguinte.
   const [rascunhoRecuperado, setRascunhoRecuperado] = useState(false);
+  const [nomeRascunho, setNomeRascunho] = useState("");
+  const [restaurarSelecao, setRestaurarSelecao] = useState<{
+    blocoId?: string;
+    moradorId?: string;
+  } | null>(null);
+  // Trocar esta chave remonta os seletores. Sem isso o nome do morador anterior
+  // continuava aparecendo depois de registrar, com o formulário já vazio por
+  // baixo — e o porteiro só descobria ao ser barrado no "Registrar Entrada".
+  const [chaveSelecao, setChaveSelecao] = useState(0);
 
   const descartarRascunho = () => {
     setFotos([]);
     setObservacao("");
     setRascunhoRecuperado(false);
+    setNomeRascunho("");
+    setRestaurarSelecao(null);
+    setChaveSelecao((valor) => valor + 1);
   };
 
   const dadosRascunho = useMemo<RascunhoRegistro>(
@@ -93,13 +110,18 @@ function NovaCorrespondenciaPorteiroPage() {
       fotos: fotos
         .slice(0, MAX_FOTOS_RASCUNHO)
         .map((foto) => ({ id: foto.id, nome: foto.file.name, base64: foto.base64 })),
+      blocoId: selectedBloco,
+      moradorId: selectedMorador,
+      moradorNome,
     }),
-    [observacao, localArmazenamento, fotos]
+    [observacao, localArmazenamento, fotos, selectedBloco, selectedMorador, moradorNome]
   );
 
   useRascunho<RascunhoRegistro>({
     chave: "nova-correspondencia-porteiro",
-    ativo: !showSuccessModal && (fotos.length > 0 || observacao.trim().length > 0),
+    ativo:
+      !showSuccessModal &&
+      (fotos.length > 0 || observacao.trim().length > 0 || Boolean(selectedMorador)),
     dados: dadosRascunho,
     restaurar: (salvo) => {
       if (salvo.observacao) setObservacao(salvo.observacao);
@@ -113,7 +135,13 @@ function NovaCorrespondenciaPorteiroPage() {
         .filter((foto): foto is FotoSelecionada => foto !== null);
 
       if (recuperadas.length > 0) setFotos(recuperadas);
-      if (recuperadas.length > 0 || salvo.observacao) setRascunhoRecuperado(true);
+      if (salvo.moradorId) {
+        setRestaurarSelecao({ blocoId: salvo.blocoId, moradorId: salvo.moradorId });
+        setNomeRascunho(salvo.moradorNome || "");
+      }
+      if (recuperadas.length > 0 || salvo.observacao || salvo.moradorId) {
+        setRascunhoRecuperado(true);
+      }
     },
     // Cota estourada: melhor voltar com os campos digitados do que com nada.
     versaoLeve: (atual) => ({ ...atual, fotos: [] }),
@@ -265,12 +293,37 @@ function NovaCorrespondenciaPorteiroPage() {
     }
 
     setLoading(true);
-    setMessage("Iniciando registro...");
+    setMessage("Conferindo registros recentes...");
     setProgress(10);
 
     try {
+      // Registro repetido: quando o app reinicia no meio do cadastro o porteiro
+      // lança a mesma encomenda de novo, e a cópia continua pendente para
+      // sempre depois que a encomenda de verdade é entregue.
+      const recente = await buscarRegistroRecente(efetivoCondominioId, selectedMorador, 10);
+      if (recente) {
+        const minutos = Math.max(
+          1,
+          Math.round((Date.now() - new Date(recente.criado_em).getTime()) / 60000)
+        );
+        const detalhe = recente.observacao ? ` — ${recente.observacao}` : "";
+        const seguir = window.confirm(
+          `Este morador já teve uma encomenda registrada há ${minutos} min ` +
+            `(protocolo ${recente.protocolo}${detalhe}).\n\n` +
+            `É uma encomenda diferente daquela?\n\n` +
+            `OK = sim, registrar assim mesmo\n` +
+            `Cancelar = é a mesma, já está registrada`
+        );
+        if (!seguir) {
+          setLoading(false);
+          setProgress(0);
+          return;
+        }
+      }
+
       // PASSO 1: Gerar protocolo e link IMEDIATAMENTE
-      const novoProtocolo = `${Math.floor(Date.now() / 1000).toString().slice(-6)}`;
+      setMessage("Iniciando registro...");
+      const novoProtocolo = await gerarProtocoloUnico(efetivoCondominioId);
       const docId = crypto.randomUUID();
       const baseUrl = typeof window !== 'undefined' ? window.location.origin : '';
       const novoLinkPublico = `${baseUrl}/ver/${docId}`;
@@ -515,6 +568,9 @@ Aguardamos a sua retirada`;
     setObservacao("");
     setFotos([]);
     setRascunhoRecuperado(false);
+    setNomeRascunho("");
+    setRestaurarSelecao(null);
+    setChaveSelecao((valor) => valor + 1);
     setPdfUrl("");
     setLinkPublico("");
     setMensagemFormatada("");
@@ -580,13 +636,25 @@ Aguardamos a sua retirada`;
               <label className="flex items-center gap-2 text-base font-bold text-gray-800 mb-3">
                 <Package size={20} className="text-[#057321]" /> Destinatário
               </label>
-              <SelectCondominioBlocoMorador 
-                onSelect={({ condominioId, blocoId, moradorId }) => { 
-                  setSelectedCondominio(condominioId); 
-                  setSelectedBloco(blocoId); 
-                  setSelectedMorador(moradorId); 
-                }} 
+              <SelectCondominioBlocoMorador
+                key={chaveSelecao}
+                restaurar={restaurarSelecao}
+                onSelect={({ condominioId, blocoId, moradorId }) => {
+                  setSelectedCondominio(condominioId);
+                  setSelectedBloco(blocoId);
+                  setSelectedMorador(moradorId);
+                }}
               />
+              {rascunhoRecuperado && nomeRascunho && (
+                <div className="mt-3 flex items-start gap-2 rounded-lg border border-blue-300 bg-blue-50 p-3">
+                  <AlertTriangle size={16} className="mt-0.5 shrink-0 text-blue-600" />
+                  <p className="text-xs leading-relaxed text-blue-900">
+                    <span className="font-bold">Registro recuperado.</span> O app foi interrompido
+                    no meio deste registro. Confirme que a encomenda é mesmo de{" "}
+                    <span className="font-bold">{nomeRascunho}</span> antes de concluir.
+                  </p>
+                </div>
+              )}
             </div>
 
             <div>

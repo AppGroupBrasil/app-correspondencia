@@ -21,9 +21,14 @@ export default function AtualizacaoAutomatica() {
     // A volta da câmera dispara visibilitychange e focus — exatamente quando o
     // registro está pela metade. Quem está no meio do fluxo avisa aqui.
     if (recargaTravada()) return false;
-    if (document.querySelector('[role="dialog"], canvas, video')) return false;
+    // Registrar encomenda e dar baixa são as duas telas onde recarregar joga
+    // fora o trabalho do porteiro. Nelas a versão nova só entra pelo botão.
+    if (/\/(nova-correspondencia|registrar-retirada|retirada)/.test(location.pathname)) return false;
+    if (document.querySelector("canvas, video, dialog[open]")) return false;
     const campos = Array.from(
-      document.querySelectorAll<HTMLInputElement | HTMLTextAreaElement>("input, textarea")
+      document.querySelectorAll<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>(
+        "input, textarea, select"
+      )
     );
     return !campos.some((campo) => {
       const tipo = (campo as HTMLInputElement).type;
