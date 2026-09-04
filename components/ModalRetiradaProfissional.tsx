@@ -5,13 +5,13 @@ import { useAuth } from "@/hooks/useAuth";
 import { supabase } from "@/app/lib/supabase";
 import { X, Save, AlertCircle, ArrowRight, ArrowLeft, Package, Zap, Mail, Check } from "lucide-react";
 import AssinaturaDigitalPro from "./AssinaturaDigitalPro";
-import UploadImagem from "./UploadImagem";
+import UploadImagens, { FotoSelecionada } from "./UploadImagens";
 import { gerarReciboPDF } from "@/utils/gerarReciboPDF";
 import { LoadingOverlay } from "@/components/LoadingOverlay";
 import ModalSucessoRetirada from "./ModalSucessoRetirada";
 import { formatarTelefone } from "@/utils/telefone";
 import { EmailService } from "@/services/emailService";
-import { totalVolumes } from "@/app/lib/fotos-correspondencia";
+import { nomeArquivoRetirada, totalVolumes } from "@/app/lib/fotos-correspondencia";
 import { useRascunho } from "@/hooks/useRascunho";
 import { liberarRecarga, travarRecarga } from "@/utils/rascunho";
 import { chaveMorador } from "@/utils/agruparPendentes";
@@ -224,7 +224,9 @@ export default function ModalRetiradaProfissional({
   const [assinaturaMorador, setAssinaturaMorador] = useState<string>("");
   const [assinaturaPorteiro, setAssinaturaPorteiro] = useState<string>("");
 
-  const [imagemFile, setImagemFile] = useState<File | null>(null);
+  // O morador costuma levar 4 ou 5 encomendas de uma vez: uma foto por volume,
+  // cada etiqueta legível, em vez de uma foto só da pilha inteira.
+  const [fotos, setFotos] = useState<FotoSelecionada[]>([]);
   const [salvarPadrao, setSalvarPadrao] = useState(false);
   const [baixaConcluida, setBaixaConcluida] = useState(false);
 
@@ -456,11 +458,6 @@ export default function ModalRetiradaProfissional({
     return Math.random().toString(36).substring(2, 10).toUpperCase();
   }
 
-  // FUNÇÃO handleUpload ADICIONADA
-  const handleUpload = (file: File | null) => {
-    setImagemFile(file);
-  };
-
   function removerUndefined(obj: any): any {
     const resultado: any = {};
     Object.keys(obj).forEach((key) => {
@@ -519,7 +516,7 @@ export default function ModalRetiradaProfissional({
     }
 
     // Baixa sem nenhuma comprovação: fica registrado no recibo e no histórico.
-    const semComprovacao = dispensaAtiva && !assinaturaMorador && !imagemFile;
+    const semComprovacao = dispensaAtiva && !assinaturaMorador && fotos.length === 0;
 
     setLoading(true);
     setMessage("Registrando baixa...");
@@ -538,17 +535,34 @@ export default function ModalRetiradaProfissional({
 
       const timestamp = Date.now();
 
-      // A foto já chega comprimida do UploadImagem — sobe ao storage em background,
-      // sem recomprimir e sem bloquear a baixa. Só transmissão de rede.
-      const fotoUploadPromise: Promise<string> = imagemFile
+      // As fotos já chegam comprimidas do UploadImagens — sobem ao storage em
+      // background, sem recomprimir e sem bloquear a baixa. Só transmissão de
+      // rede. Grava-se apenas a primeira URL: o nome do arquivo carrega "2de5"
+      // e as demais são derivadas dele, sem coluna nova no banco.
+      const totalFotos = fotos.length;
+      const fotoUploadPromise: Promise<string> = totalFotos > 0
         ? (async () => {
             try {
-              const fotoFileName = `retirada_${correspondencia.protocolo}_${timestamp}.jpg`;
-              const { error: fotoError } = await supabase.storage
-                .from("retiradas")
-                .upload(fotoFileName, imagemFile, { contentType: "image/jpeg" });
-              if (fotoError) return "";
-              return supabase.storage.from("retiradas").getPublicUrl(fotoFileName).data.publicUrl;
+              const enviadas = await Promise.all(
+                fotos.map(async (foto, indice) => {
+                  const fotoFileName = nomeArquivoRetirada(
+                    String(correspondencia.protocolo || ""),
+                    timestamp,
+                    indice + 1,
+                    totalFotos
+                  );
+                  const { error: fotoError } = await supabase.storage
+                    .from("retiradas")
+                    .upload(fotoFileName, foto.file, { contentType: "image/jpeg" });
+                  if (fotoError) {
+                    console.error(`Falha ao subir a foto ${indice + 1} da retirada:`, fotoError);
+                    return "";
+                  }
+                  return supabase.storage.from("retiradas").getPublicUrl(fotoFileName).data.publicUrl;
+                })
+              );
+              // Se a primeira falhar, qualquer outra serve de âncora do lote.
+              return enviadas.find(Boolean) || "";
             } catch {
               return "";
             }
@@ -724,14 +738,20 @@ Obrigado!
           // Base64 local só para renderizar a foto no PDF (evita ida à rede);
           // no banco fica a URL do storage. Ler o arquivo local não depende do
           // upload: o PDF é gerado enquanto a foto ainda sobe.
-          let fotoParaPdf = "";
-          if (imagemFile) {
-            try { fotoParaPdf = await fileToBase64(imagemFile); } catch {}
-          }
+          const fotosParaPdf = (
+            await Promise.all(
+              fotos.map(async (foto) => {
+                if (foto.base64) return foto.base64;
+                try { return await fileToBase64(foto.file); } catch { return ""; }
+              })
+            )
+          ).filter(Boolean);
+          const fotoParaPdf = fotosParaPdf[0] || "";
 
           const pdfBlob = await gerarReciboPDF({
             correspondencia,
             dadosRetirada: { ...dadosRetiradaBruto, fotoComprovanteUrl: fotoParaPdf },
+            fotosComprovante: fotosParaPdf,
             nomeCondominio: correspondencia.condominioNome || "Condomínio",
             logoUrl: "/logo-app-correspondencia.png",
             linkPublicoRecibo: linkRecibo,
@@ -1129,9 +1149,18 @@ Obrigado!
 
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Foto da Retirada (opcional)
+                    Fotos da Retirada (opcional)
                   </label>
-                  <UploadImagem onUpload={handleUpload} />
+                  <UploadImagens
+                    fotos={fotos}
+                    onChange={setFotos}
+                    textoBotao="Tirar Foto da Retirada"
+                    textoAdicionar={"Mais\numa foto"}
+                    rotuloFoto="Foto da retirada"
+                    rotuloContagem={(quantidade) =>
+                      quantidade === 1 ? "1 foto da retirada" : `${quantidade} fotos desta retirada`
+                    }
+                  />
                 </div>
 
                 <div>

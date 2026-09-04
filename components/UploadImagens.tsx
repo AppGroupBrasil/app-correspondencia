@@ -17,6 +17,12 @@ interface UploadImagensProps {
   fotos: FotoSelecionada[];
   onChange: (fotos: FotoSelecionada[]) => void;
   max?: number;
+  // Os textos padrão são os da chegada da correspondência; a retirada reaproveita
+  // o mesmo componente trocando só o que aparece escrito.
+  textoBotao?: string;
+  textoAdicionar?: string;
+  rotuloFoto?: string;
+  rotuloContagem?: (quantidade: number) => string;
 }
 
 /**
@@ -24,7 +30,16 @@ interface UploadImagensProps {
  * fluxo de sempre (câmera direto); as seguintes entram pelo "+", para o
  * porteiro registrar 4 ou 5 encomendas do mesmo morador de uma vez só.
  */
-export default function UploadImagens({ fotos, onChange, max = MAX_FOTOS }: UploadImagensProps) {
+export default function UploadImagens({
+  fotos,
+  onChange,
+  max = MAX_FOTOS,
+  textoBotao = "Tirar Foto da Encomenda",
+  textoAdicionar = "Outra\ncorrespondência",
+  rotuloFoto = "Correspondência",
+  rotuloContagem = (quantidade) =>
+    quantidade === 1 ? "1 correspondência" : `${quantidade} correspondências neste registro`,
+}: UploadImagensProps) {
   const [ocupado, setOcupado] = useState(false);
   const inputCamera = useRef<HTMLInputElement>(null);
   const inputGaleria = useRef<HTMLInputElement>(null);
@@ -173,7 +188,7 @@ export default function UploadImagens({ fotos, onChange, max = MAX_FOTOS }: Uplo
                   <Camera className="text-[#057321] w-8 h-8" />
                 </div>
                 <span className="text-sm font-semibold text-gray-700 group-hover:text-[#057321]">
-                  Tirar Foto da Encomenda
+                  {textoBotao}
                 </span>
                 <span className="text-xs text-gray-500 mt-1">(Otimização automática)</span>
               </>
@@ -201,7 +216,7 @@ export default function UploadImagens({ fotos, onChange, max = MAX_FOTOS }: Uplo
                 {foto.base64 ? (
                   <img
                     src={foto.base64}
-                    alt={`Correspondência ${indice + 1}`}
+                    alt={`${rotuloFoto} ${indice + 1}`}
                     className="w-full h-full object-cover"
                   />
                 ) : (
@@ -236,9 +251,11 @@ export default function UploadImagens({ fotos, onChange, max = MAX_FOTOS }: Uplo
                   <>
                     <Plus size={20} />
                     <span className="text-[10px] font-semibold leading-tight text-center px-1">
-                      Outra
-                      <br />
-                      correspondência
+                      {textoAdicionar.split("\n").map((linha, i) => (
+                        <span key={i} className="block">
+                          {linha}
+                        </span>
+                      ))}
                     </span>
                   </>
                 )}
@@ -249,9 +266,7 @@ export default function UploadImagens({ fotos, onChange, max = MAX_FOTOS }: Uplo
           <div className="mt-3 flex items-center justify-between gap-2 border-t border-gray-100 pt-2">
             <span className="flex items-center gap-1.5 text-xs font-semibold text-[#057321]">
               <Package size={14} />
-              {fotos.length === 1
-                ? "1 correspondência"
-                : `${fotos.length} correspondências neste registro`}
+              {rotuloContagem(fotos.length)}
             </span>
             <button
               type="button"

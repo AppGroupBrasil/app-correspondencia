@@ -8,14 +8,34 @@ const PADRAO_LOTE = /_(\d+)de(\d+)\.(jpg|jpeg|png|webp)$/i;
 
 export const MAX_FOTOS = 8;
 
+function nomeComLote(
+  prefixo: string,
+  protocolo: string,
+  carimbo: number,
+  indice: number,
+  total: number
+): string {
+  if (total <= 1) return `${prefixo}_${protocolo}_${carimbo}.jpg`;
+  return `${prefixo}_${protocolo}_${carimbo}_${indice}de${total}.jpg`;
+}
+
 export function nomeArquivoFoto(
   protocolo: string,
   carimbo: number,
   indice: number,
   total: number
 ): string {
-  if (total <= 1) return `foto_${protocolo}_${carimbo}.jpg`;
-  return `foto_${protocolo}_${carimbo}_${indice}de${total}.jpg`;
+  return nomeComLote("foto", protocolo, carimbo, indice, total);
+}
+
+/** Fotos da entrega ao morador: mesmo lote no nome, outro bucket (retiradas). */
+export function nomeArquivoRetirada(
+  protocolo: string,
+  carimbo: number,
+  indice: number,
+  total: number
+): string {
+  return nomeComLote("retirada", protocolo, carimbo, indice, total);
 }
 
 // A URL pode chegar com ?apikey=... (comApiKeyStorage): o sufixo do lote é

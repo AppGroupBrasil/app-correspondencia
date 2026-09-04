@@ -1,7 +1,7 @@
 import { jsPDF } from "jspdf";
 import QRCode from "qrcode";
 import type { DadosRetirada } from "@/types/retirada.types";
-import { totalVolumes } from "@/app/lib/fotos-correspondencia";
+import { derivarFotos, MAX_FOTOS, totalVolumes } from "@/app/lib/fotos-correspondencia";
 
 interface GerarReciboPDFParams {
   correspondencia: any;
@@ -9,6 +9,9 @@ interface GerarReciboPDFParams {
   nomeCondominio?: string;
   logoUrl?: string;
   linkPublicoRecibo?: string;
+  // Fotos da retirada já em base64 (recibo gerado logo após a baixa, sem ida à
+  // rede). Sem isso, saem do nome do arquivo gravado em fotoComprovanteUrl.
+  fotosComprovante?: string[];
   onProgress?: (progress: number) => void;
 }
 
@@ -93,12 +96,20 @@ function desenharAssinaturas(
 
 interface ValidacaoParams {
   doc: jsPDF; yPos: number; pageHeight: number; margin: number; contentWidth: number;
-  fotoBase64: string; qrCodeBase64: string; codigoVerificacao: string; fotoUrl?: string;
+  fotosBase64: string[]; qrCodeBase64: string; codigoVerificacao: string; fotoUrl?: string;
+}
+
+// Quantas colunas o mosaico usa para caber n fotos na metade esquerda do quadro.
+function colunasDoMosaico(quantidade: number): number {
+  if (quantidade <= 2) return quantidade;
+  if (quantidade <= 4) return 2;
+  if (quantidade <= 6) return 3;
+  return 4;
 }
 
 function desenharValidacao({
   doc, yPos, pageHeight, margin, contentWidth,
-  fotoBase64, qrCodeBase64, codigoVerificacao, fotoUrl
+  fotosBase64, qrCodeBase64, codigoVerificacao, fotoUrl
 }: ValidacaoParams): void {
   const validationFrameHeight = 55;
   if (yPos + validationFrameHeight > pageHeight - 10) { doc.addPage(); yPos = 15; }
@@ -109,16 +120,22 @@ function desenharValidacao({
   doc.setFontSize(9);
   doc.setFont("helvetica", "bold");
   doc.setTextColor(50, 50, 50);
-  doc.text("REGISTRO VISUAL E VALIDAÇÃO", margin + 3, yPos + 4.5);
+  doc.text(
+    fotosBase64.length > 1
+      ? `REGISTRO VISUAL E VALIDAÇÃO (${fotosBase64.length} FOTOS)`
+      : "REGISTRO VISUAL E VALIDAÇÃO",
+    margin + 3,
+    yPos + 4.5
+  );
 
   const frameYStart = yPos + 6;
   const frameHeightInner = validationFrameHeight - 6;
   const columnWidth = contentWidth / 2;
   doc.line(margin + columnWidth, frameYStart, margin + columnWidth, yPos + validationFrameHeight);
 
-  if (fotoBase64) {
+  if (fotosBase64.length === 1) {
     try {
-      const imgProps = doc.getImageProperties(fotoBase64);
+      const imgProps = doc.getImageProperties(fotosBase64[0]);
       const maxBoxW = columnWidth - 10;
       const maxBoxH = frameHeightInner - 8;
       const scale = Math.min(maxBoxW / imgProps.width, maxBoxH / imgProps.height);
@@ -126,10 +143,44 @@ function desenharValidacao({
       const finalH = imgProps.height * scale;
       const xImg = margin + (columnWidth - finalW) / 2;
       const yImg = frameYStart + (frameHeightInner - finalH) / 2;
-      doc.addImage(fotoBase64, "JPEG", xImg, yImg, finalW, finalH);
+      doc.addImage(fotosBase64[0], "JPEG", xImg, yImg, finalW, finalH);
     } catch (e) {
       console.warn("Erro ao adicionar foto ao PDF:", e);
     }
+  } else if (fotosBase64.length > 1) {
+    // Várias correspondências entregues de uma vez: mosaico numerado, para o
+    // recibo mostrar cada etiqueta em vez de uma pilha de encomendas.
+    const colunas = colunasDoMosaico(fotosBase64.length);
+    const linhas = Math.ceil(fotosBase64.length / colunas);
+    const larguraCelula = (columnWidth - 6) / colunas;
+    const alturaCelula = (frameHeightInner - 4) / linhas;
+
+    fotosBase64.forEach((foto, indice) => {
+      const coluna = indice % colunas;
+      const linha = Math.floor(indice / colunas);
+      const xCelula = margin + 3 + coluna * larguraCelula;
+      const yCelula = frameYStart + 2 + linha * alturaCelula;
+      try {
+        const imgProps = doc.getImageProperties(foto);
+        const maxBoxW = larguraCelula - 2;
+        const maxBoxH = alturaCelula - 2;
+        const scale = Math.min(maxBoxW / imgProps.width, maxBoxH / imgProps.height);
+        const finalW = imgProps.width * scale;
+        const finalH = imgProps.height * scale;
+        const xImg = xCelula + (larguraCelula - finalW) / 2;
+        const yImg = yCelula + (alturaCelula - finalH) / 2;
+        doc.addImage(foto, "JPEG", xImg, yImg, finalW, finalH);
+        // Selo com fundo branco: o número tem de aparecer também sobre foto escura.
+        doc.setFillColor(255, 255, 255);
+        doc.rect(xImg, yImg + finalH - 3, 3, 3, "F");
+        doc.setFontSize(6);
+        doc.setFont("helvetica", "bold");
+        doc.setTextColor(40, 40, 40);
+        doc.text(String(indice + 1), xImg + 0.9, yImg + finalH - 0.8);
+      } catch (e) {
+        console.warn(`Erro ao adicionar a foto ${indice + 1} ao PDF:`, e);
+      }
+    });
   } else {
     doc.setFontSize(8);
     doc.setTextColor(150, 150, 150);
@@ -156,6 +207,7 @@ export async function gerarReciboPDF({
   nomeCondominio = "Condomínio",
   logoUrl,
   linkPublicoRecibo,
+  fotosComprovante,
   onProgress,
 }: GerarReciboPDFParams): Promise<Blob> {
   
@@ -170,23 +222,44 @@ export async function gerarReciboPDF({
       v: dadosRetirada.codigoVerificacao,
     });
 
+  // Uma retirada pode levar várias correspondências e, por isso, várias fotos.
+  // Elas vêm prontas do modal ou saem do nome do arquivo (lote "2de5").
+  const fotosDaRetirada = (
+    fotosComprovante && fotosComprovante.length > 0
+      ? fotosComprovante
+      : derivarFotos(dadosRetirada.fotoComprovanteUrl)
+  )
+    .filter(Boolean)
+    .slice(0, MAX_FOTOS);
+
   const tasks = [
     { id: 'logo', fn: () => logoUrl ? fetchAndCompressImage(logoUrl, false) : Promise.resolve("") },
-    { id: 'foto', fn: () => dadosRetirada.fotoComprovanteUrl ? fetchAndCompressImage(dadosRetirada.fotoComprovanteUrl, true) : Promise.resolve("") },
     { id: 'assMorador', fn: () => dadosRetirada.assinaturaMorador ? fetchAndCompressImage(dadosRetirada.assinaturaMorador, false) : Promise.resolve("") },
     { id: 'assPorteiro', fn: () => dadosRetirada.assinaturaPorteiro ? fetchAndCompressImage(dadosRetirada.assinaturaPorteiro, false) : Promise.resolve("") },
     { id: 'qr', fn: () => QRCode.toDataURL(qrCodeData, { width: 250, margin: 1, errorCorrectionLevel: 'L' }) },
   ];
 
   let completedCount = 0;
-  const results = await Promise.all(tasks.map(async (task) => {
-    const res = await task.fn();
-    completedCount++;
-    if (onProgress) onProgress(5 + Math.round((completedCount / tasks.length) * 85));
-    return res;
-  }));
+  const totalEtapas = tasks.length + 1;
+  const [results, fotosCarregadas] = await Promise.all([
+    Promise.all(tasks.map(async (task) => {
+      const res = await task.fn();
+      completedCount++;
+      if (onProgress) onProgress(5 + Math.round((completedCount / totalEtapas) * 85));
+      return res;
+    })),
+    (async () => {
+      const carregadas = await Promise.all(
+        fotosDaRetirada.map((url) => fetchAndCompressImage(url, true))
+      );
+      completedCount++;
+      if (onProgress) onProgress(5 + Math.round((completedCount / totalEtapas) * 85));
+      return carregadas.filter(Boolean);
+    })(),
+  ]);
 
-  const [logoBase64, fotoBase64, assinaturaMoradorBase64, assinaturaPorteiroBase64, qrCodeBase64] = results;
+  const [logoBase64, assinaturaMoradorBase64, assinaturaPorteiroBase64, qrCodeBase64] = results;
+  const fotosBase64 = fotosCarregadas;
 
   if (onProgress) onProgress(95);
 
@@ -320,7 +393,7 @@ export async function gerarReciboPDF({
   yPosition = desenharAssinaturas(doc, yPosition, pageWidth, pageHeight, margin, assinaturaMoradorBase64, assinaturaPorteiroBase64);
 
   // VALIDAÇÃO
-  desenharValidacao({ doc, yPos: yPosition, pageHeight, margin, contentWidth, fotoBase64, qrCodeBase64, codigoVerificacao: dadosRetirada.codigoVerificacao, fotoUrl: dadosRetirada.fotoComprovanteUrl });
+  desenharValidacao({ doc, yPos: yPosition, pageHeight, margin, contentWidth, fotosBase64, qrCodeBase64, codigoVerificacao: dadosRetirada.codigoVerificacao, fotoUrl: dadosRetirada.fotoComprovanteUrl });
 
   doc.setFontSize(7);
   doc.setFont("helvetica", "normal");
