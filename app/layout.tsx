@@ -148,11 +148,6 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
                 "priceCurrency": "BRL",
                 "description": "Teste grátis por 30 dias"
               },
-              "aggregateRating": {
-                "@type": "AggregateRating",
-                "ratingValue": "4.8",
-                "ratingCount": "150"
-              },
               "featureList": [
                 "Notificações automáticas por e-mail",
                 "Assinatura digital na retirada",
