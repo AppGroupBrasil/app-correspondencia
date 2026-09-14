@@ -80,9 +80,8 @@ export const metadata: Metadata = {
   manifest: "/manifest.json",
   icons: {
     icon: [
-      { url: "/logo-app-correspondencia.png", type: "image/png" },
-      { url: "/favicon.ico", sizes: "any" },
       { url: "/icon-192.png", sizes: "192x192", type: "image/png" },
+      { url: "/favicon.ico", sizes: "any" },
       { url: "/icon-512.png", sizes: "512x512", type: "image/png" },
     ],
     apple: [
@@ -156,6 +155,25 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
                 "Múltiplos perfis de acesso",
                 "Dashboard inteligente"
               ]
+            }),
+          }}
+        />
+        <script
+          type="application/ld+json"
+          dangerouslySetInnerHTML={{
+            __html: JSON.stringify({
+              "@context": "https://schema.org",
+              "@type": "WebSite",
+              "name": "App Correspondência",
+              "alternateName": "AppCorrespondencia",
+              "url": `${baseUrl}/`,
+              "inLanguage": "pt-BR",
+              "publisher": {
+                "@type": "Organization",
+                "name": "App Group Brasil",
+                "url": "https://appgroupbrasil.com.br/",
+                "logo": "https://appgroupbrasil.com.br/app-group-brasil-logo.png"
+              }
             }),
           }}
         />
